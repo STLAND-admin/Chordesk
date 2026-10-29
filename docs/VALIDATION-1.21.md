@@ -22,3 +22,11 @@
 - 本版左右切桌面，需要至少两个桌面及默认 Control＋左右方向键快捷键；投递计数不代表切换已完成。
 - 从未授权的新 Mac 上完整执行两项授权、缓存复查、自动重启、服务开启；本机已有授权，不撤销权限来冒充首次用户。
 - 用户已确认上一版接电息屏后可重连恢复画面、同学 Mac 能调逻辑分辨率；不能扩展为本版新流程或真正睡眠唤醒已确认。
+
+## 分发与隐私
+
+- Mac 0.18 DMG：Apple Silicon、最低 macOS 15.2、本地 ad hoc 签名、未公证。严格签名、九文件白名单和 DMG 校验通过；Release 源码路径映射不包含本机用户目录。
+- 包对应源码 `1f2547249ddfe1201dd3ae37a454fe7f3f36beba`。DMG SHA-256：`36ab139111b7c0fabc9ea5018321464ef1ee6a1d360d36f39508d90b615d06c0`。
+- [Mac 0.18 试用包](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.0-test)包含 DMG、SHA256SUMS、BUILD-INFO、INSTALL-zh-CN.txt。GitHub 会归一化中文附件文件名，公开附件使用 ASCII 名称；DMG 内仍有中文安装说明。
+- 原 Git 历史、旧 Release 和权限保留于私有 `STLAND-admin/Chordesk-private-history`；本地另有私有历史分支和忽略的 Git bundle。公开 `STLAND-admin/Chordesk` 是独立仓库，从经检查的同一代码树创建新根提交，作者/提交者均使用 GitHub noreply 邮箱。不要向公开仓库执行 `push --all`、`--mirror` 或推送私有历史分支。
+- 最初新功能版 1.21 安装和启动成功；随后补齐组合手势设置说明文字时 CoreDevice 返回 4016，最终说明文字尚待设备恢复后覆盖同步。功能代码一致，不能把后一安装命令说成成功。

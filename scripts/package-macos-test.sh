@@ -40,7 +40,7 @@ hdiutil create -volname 'Chordesk Test' -srcfolder "$test_stage/image" -format U
 hdiutil verify "$test_stage/$test_name"
 mkdir -p "$test_output"
 mv "$test_stage/$test_name" "$test_output/"
-cp docs/MAC-PEER-TEST.txt "$test_output/先读我-安装与配对.txt"
+cp docs/MAC-PEER-TEST.txt "$test_output/INSTALL-zh-CN.txt"
 test_commit=$(git rev-parse HEAD)
 {
     printf '%s\n' "Chordesk Mac $test_version / build $test_build" 'Architecture: arm64' \
