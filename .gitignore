@@ -1,0 +1,26 @@
+.DS_Store
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+.build/
+*.app/
+*.xcresult/
+*.mobileprovision
+*.p12
+*.p8
+# The website already has its own independent Git repository.
+showcase/
+# Local correspondence and case notes, separate from application source.
+APPLE-FEEDBACK-REQUEST.md
+
+# Separate product, not part of Chordesk.
+PortalAtlas/
+*.key
+*.pem
+.env
+.env.*
+release-artifacts/
+*.xcarchive/
+*.ipa
+*.dmg

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Chordesk</title>
+  <desc id="desc">Two interleaved glass surfaces in mist blue and warm grey, connected by a curved bridge with a touch aperture. The front and back work together like a chord.</desc>
+  <defs>
+    <radialGradient id="canvas" cx="50%" cy="44%" r="74%">
+      <stop stop-color="#1a232e"/><stop offset="1" stop-color="#030508"/>
+    </radialGradient>
+    <linearGradient id="warm" x1="437" y1="372" x2="840" y2="847" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d5c9bd"/><stop offset=".35" stop-color="#f7ede2"/><stop offset=".66" stop-color="#e4dbd3"/><stop offset="1" stop-color="#c2bcc0"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="210" y1="218" x2="593" y2="714" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#aebfd0"/><stop offset=".22" stop-color="#e5eff7"/><stop offset=".52" stop-color="#c9dce9"/><stop offset=".81" stop-color="#a3b5c4"/><stop offset="1" stop-color="#dde8ef"/>
+    </linearGradient>
+    <linearGradient id="bridge" x1="446" y1="402" x2="810" y2="781" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a9b7c5"/><stop offset=".26" stop-color="#dedbd4"/><stop offset=".48" stop-color="#ebe1d6"/><stop offset=".75" stop-color="#d9d5d5"/><stop offset="1" stop-color="#e9e3df"/>
+    </linearGradient>
+    <linearGradient id="touchDepth" x1="481" y1="439" x2="584" y2="518" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9caab9"/><stop offset="1" stop-color="#dededb"/>
+    </linearGradient>
+    <linearGradient id="blueEdge" x1="197" y1="250" x2="604" y2="628" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#93aec7"/><stop offset=".38" stop-color="#e7f4ff"/><stop offset=".7" stop-color="#99afbf"/><stop offset="1" stop-color="#f7fcff"/>
+    </linearGradient>
+    <linearGradient id="warmEdge" x1="474" y1="383" x2="832" y2="806" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fffdf7"/><stop offset=".46" stop-color="#c7bdb2"/><stop offset=".73" stop-color="#f9f4ed"/><stop offset="1" stop-color="#c7bec0"/>
+    </linearGradient>
+    <radialGradient id="blueBloom" cx="38%" cy="27%" r="71%">
+      <stop stop-color="#f5fbff" stop-opacity=".72"/><stop offset=".56" stop-color="#ebf5fc" stop-opacity=".12"/><stop offset="1" stop-color="#eaf4fb" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="warmBloom" cx="80%" cy="25%" r="65%">
+      <stop stop-color="#fffaee" stop-opacity=".82"/><stop offset="1" stop-color="#fff8ef" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="ambient" x="-20%" y="-15%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="7" stdDeviation="10" flood-color="#607181" flood-opacity=".08"/>
+    </filter>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="19"/></filter>
+    <filter id="rim" x="-8%" y="-8%" width="116%" height="116%"><feGaussianBlur stdDeviation="2.8"/></filter>
+    <path id="back" d="M429 444 C429 385 476 361 542 340 L745 269 C795 252 831 278 831 326 L831 699 C831 752 804 786 754 803 L516 885 C459 905 429 878 429 828 Z"/>
+    <path id="front" d="M195 322 C195 271 226 232 289 210 L521 132 C567 116 594 146 594 194 L594 321 C534 341 478 352 446 384 C411 419 417 466 445 494 C470 520 512 535 548 555 C611 589 610 647 532 675 L283 760 C226 780 195 750 195 685 Z"/>
+    <path id="link" d="M594 321 C594 382 606 416 654 449 L766 516 C813 544 831 574 831 615 L831 699 C831 752 804 786 754 803 L516 885 C459 905 429 878 429 828 L429 710 L532 675 C610 647 611 589 548 555 C512 535 470 520 445 494 C417 466 411 419 446 384 C478 352 534 341 594 321 Z"/>
+    <path id="aperture" d="M480 441 C491 429 507 429 522 437 L574 464 C592 474 601 490 591 507 C581 524 564 526 546 517 L493 489 C475 480 471 456 480 441 Z"/>
+    <clipPath id="frontClip"><use href="#front"/></clipPath>
+    <clipPath id="backClip"><use href="#back"/></clipPath>
+    <clipPath id="linkClip"><use href="#link"/></clipPath>
+    <mask id="touchOpening" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="white"/><use href="#aperture" fill="black"/></mask>
+  </defs>
+  <rect id="background" width="1024" height="1024" fill="url(#canvas)"/>
+  <g id="chordesk-symbol" filter="url(#ambient)" stroke-linecap="round" stroke-linejoin="round">
+    <g id="rear-surface">
+      <use href="#back" fill="url(#warm)" stroke="url(#warmEdge)" stroke-width="2.4"/>
+      <g clip-path="url(#backClip)">
+        <rect x="420" y="250" width="420" height="650" fill="url(#warmBloom)"/>
+        <path d="M805 306 L810 715 Q814 771 748 794 L511 877" fill="none" stroke="#fffdf7" stroke-opacity=".48" stroke-width="4" filter="url(#rim)"/>
+      </g>
+    </g>
+    <g id="front-surface">
+      <use href="#front" fill="url(#blue)" stroke="url(#blueEdge)" stroke-width="2.4"/>
+      <g clip-path="url(#frontClip)">
+        <rect x="190" y="125" width="430" height="660" fill="url(#blueBloom)"/>
+        <path d="M206 653 L206 683 Q207 759 278 748 L518 668" fill="none" stroke="#f6fcff" stroke-opacity=".54" stroke-width="6" filter="url(#rim)"/>
+        <path d="M204 324 C208 272 236 244 291 224 L521 143 Q574 128 583 181" fill="none" stroke="#f1f9ff" stroke-opacity=".54" stroke-width="4" filter="url(#rim)"/>
+        <path d="M466 505 C530 537 566 574 548 623 Q533 650 481 671" fill="none" stroke="#63788c" stroke-opacity=".3" stroke-width="47" filter="url(#soft)"/>
+      </g>
+    </g>
+    <use href="#aperture" fill="url(#touchDepth)"/>
+    <g id="connecting-bridge" mask="url(#touchOpening)">
+      <use href="#link" fill="url(#bridge)"/>
+      <g clip-path="url(#linkClip)">
+        <path d="M590 324 C594 394 609 420 655 455 L770 523 Q824 558 826 612" fill="none" stroke="#fffaf0" stroke-opacity=".45" stroke-width="4" filter="url(#rim)"/>
+        <path d="M447 390 C417 428 431 475 466 501 L546 544 Q605 578 600 617" fill="none" stroke="#f4f9fd" stroke-opacity=".62" stroke-width="7" filter="url(#rim)"/>
+        <path d="M470 397 Q490 376 575 349" fill="none" stroke="#788b9f" stroke-opacity=".28" stroke-width="28" filter="url(#soft)"/>
+        <path d="M436 723 L436 825 Q435 894 513 879 L754 797 Q825 777 825 699" fill="none" stroke="#fff9f0" stroke-opacity=".48" stroke-width="4" filter="url(#rim)"/>
+        <use href="#aperture" fill="none" stroke="#f7f8f4" stroke-width="7" stroke-opacity=".54" filter="url(#rim)"/>
+      </g>
+      <path d="M594 321 C594 382 606 416 654 449 L766 516 C813 544 831 574 831 615" fill="none" stroke="#fcf6ed" stroke-width="1.9" stroke-opacity=".78"/>
+      <path d="M532 675 C610 647 611 589 548 555 C512 535 470 520 445 494 C417 466 411 419 446 384 C478 352 534 341 594 321" fill="none" stroke="url(#blueEdge)" stroke-width="2"/>
+    </g>
+    <use href="#aperture" fill="none" stroke="#eef3f5" stroke-width="1.5" stroke-opacity=".87"/>
+  </g>
+</svg>
