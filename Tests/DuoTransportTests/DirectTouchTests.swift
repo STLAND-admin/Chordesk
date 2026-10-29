@@ -58,7 +58,7 @@ final class DirectTouchTests: XCTestCase {
         swipe.cancel()
         XCTAssertNil(swipe.move(to: shifted(0, 0, dx: 100), rearContacts: 1))
     }
-    func testDesktopShortcutBalancesControlAndDoesNotAffectNextPointer() throws {
+    func testOrdinaryKeyboardShortcutBalancesControlAndDoesNotAffectNextPointer() throws {
         let factory = RemoteEventFactory()
         for key: CGKeyCode in [123, 124] {
             let events = try XCTUnwrap(factory.keyboard(code: key, modifiers: 8))

@@ -19,7 +19,7 @@ fi
 release_stage=$(mktemp -d /private/tmp/ChordeskRelease.XXXXXX)
 release_app="$release_stage/Chordesk.app"
 DUO_BUILD_CONFIGURATION=release DUO_BUILD_PATH="$release_stage/build" DUO_APP_BUNDLE="$release_app" DUO_SIGNING_IDENTITY="$release_identity" ./scripts/build-workbench.sh
-codesign --force --options runtime --timestamp --sign "$release_identity" "$release_app"
+codesign --force --options runtime --entitlements scripts/Chordesk-Mac.entitlements --timestamp --sign "$release_identity" "$release_app"
 codesign --verify --deep --strict "$release_app"
 release_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$release_app/Contents/Info.plist")
 release_arch=$(uname -m)

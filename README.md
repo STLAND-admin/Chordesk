@@ -12,7 +12,7 @@
 
 ### Mac
 
-下载 [Mac 0.18.0 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.0-test)，打开 DMG，把 Chordesk 拖入“应用程序”。
+下载 [Mac 0.18.1 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test)，打开 DMG，把 Chordesk 拖入“应用程序”。
 
 - Apple Silicon，macOS 15.2 或更新。测试包未公证，首次打开需由接收者按系统提示允许；[安装说明](docs/MAC-PEER-TEST.txt)。
 - 首次点“开始服务”，按引导完成屏幕录制和控制两项权限；检查完整后自动重启 App 一次，默认开启内置屏服务。关闭窗口后保留菜单栏后台运行。
@@ -40,11 +40,13 @@
 | 背面双指长按 | 临时切到正面触控板，松开恢复 |
 | 右侧灰色按钮 | 菜单、模式、切屏和键盘，排列在同一列 |
 
+左右切桌面还需在 Mac「设置 → 桌面切换」允许 **System Events 自动化**，并启用系统 Control＋左右方向键；这是独立的可选权限，不影响普通远控。
+
 背面有效区可自由移动和缩放；文字输入支持 iPhone 系统／第三方输入法。非 Duo 有按钮切换入口，但尚未针对其他机型验证。
 
 ## 当前范围
 
-- iOS **1.21 / build 25**，Mac **0.18.0 / build 25**；新增左右切桌面、可用分辨率按钮与首次授权引导。本版新手势和新 Mac 首次授权仍需真机复测。[验证记录](docs/VALIDATION-1.21.md)
+- iOS **1.21 / build 25**，Mac **0.18.1 / build 26**；修正 Spaces 切换执行路径；iOS 1.21 无需重装。新路径和新 Mac 首次授权流程的实际验证范围见记录。[验证记录](docs/VALIDATION-0.18.1.md)
 - 当前仅局域网，TLS 配对；公网、账号与中继尚未实现。[公网规划](PUBLIC-NETWORK-PLAN.md)
 - 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
 - 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)

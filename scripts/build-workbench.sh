@@ -45,10 +45,11 @@ cat > "$app_dir/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>Chordesk</string>
 <key>CFBundleIconFile</key><string>Chordesk</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.18.0</string>
-<key>CFBundleVersion</key><string>25</string>
+<key>CFBundleShortVersionString</key><string>0.18.1</string>
+<key>CFBundleVersion</key><string>26</string>
 <key>LSMinimumSystemVersion</key><string>15.2</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
+<key>NSAppleEventsUsageDescription</key><string>通过系统自带的 System Events 执行左右切换 Mac 桌面的快捷键。仅从本机设置请求授权。</string>
 <key>NSLocalNetworkUsageDescription</key><string>让你配对的 iPhone 在局域网中查看并控制所选 Mac 显示器。</string>
 </dict></plist>
 PLIST

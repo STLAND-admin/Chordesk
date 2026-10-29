@@ -69,7 +69,7 @@ struct LANHostView: View {
         }
         .sheet(isPresented: $showingSettings) { settings }
         .sheet(isPresented: $showingAbout) { ChordAboutView() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await permissionSetup.check(host) } }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await permissionSetup.check(host); host.refreshDesktopPermission() } }
     }
 
     private var settings: some View {
@@ -89,6 +89,24 @@ struct LANHostView: View {
                 }
                 DisclosureGroup("系统权限", isExpanded: $showingPermissions) {
                     HostPermissionChecklist(setup: permissionSetup, host: host)
+                }
+                DisclosureGroup("桌面切换") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(host.desktopAutomationAllowed ? "System Events 自动化：已允许" : "System Events 自动化：待允许",
+                              systemImage: host.desktopAutomationAllowed ? "checkmark.circle" : "lock")
+                        Text(host.desktopMessage).font(.callout)
+                        Button("允许桌面切换（System Events）") { Task { await host.requestDesktopPermission() } }
+                            .disabled(host.desktopAutomationAllowed || host.desktopPermissionBusy)
+                            .accessibilityIdentifier("desktop-permission-request")
+                        Button("重新检查授权") { host.refreshDesktopPermission() }
+                        HStack {
+                            Button("测试上一个桌面") { Task { await host.testDesktopSwitch(.previousDesktop) } }
+                            Button("测试下一个桌面") { Task { await host.testDesktopSwitch(.nextDesktop) } }
+                        }.disabled(!host.desktopAutomationAllowed || host.desktopPermissionBusy || host.desktopSwitchBusy)
+                        Text("系统桌面变化通知：\(host.desktopChangeCount) 次（包含本机操作，不等于命令成功次数）").font(.caption)
+                        Text("只向系统自带的 System Events 发送固定 Control＋左右方向键。授权需在这台 Mac 确认；手机不会自动弹出授权或重放失败指令。请先创建至少两个桌面，并启用相应系统快捷键。普通远控仍只需要前面的两项权限。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 DisclosureGroup("画质与传输") {
                     Picker("画质", selection: Binding(get: { host.videoQuality }, set: { value in Task { await host.setVideoQuality(value) } })) {
@@ -135,7 +153,7 @@ struct LANHostView: View {
                 }
             }.formStyle(.grouped).navigationTitle("Chordesk 设置").tint(.gray)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingSettings = false } } }
-                .task { showingPermissions = permissionSetup.visible; host.refreshMicrophoneDevices(); await host.refreshDisplays(); await host.refreshScaleOptions() }
+                .task { host.refreshDesktopPermission(); showingPermissions = permissionSetup.visible; host.refreshMicrophoneDevices(); await host.refreshDisplays(); await host.refreshScaleOptions() }
                 .onChange(of: host.selectedDisplay) { _, _ in Task { await host.refreshScaleOptions() } }
                 .confirmationDialog("重置配对密钥？", isPresented: $showingPairingResetConfirmation, titleVisibility: .visible) {
                     Button("重置并解除旧设备绑定", role: .destructive) { host.resetPairingCredential() }

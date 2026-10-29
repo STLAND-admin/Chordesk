@@ -90,6 +90,34 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     @Published private(set) var eventPostingAllowed = false
     @Published private(set) var frameCount = 0
     @Published private(set) var lastInput = "尚未收到操作"
+    @Published private(set) var desktopAutomationAllowed = false
+    @Published private(set) var desktopPermissionBusy = false
+    @Published private(set) var desktopSwitchBusy = false
+    @Published private(set) var desktopMessage = "桌面切换使用 System Events，需要单独允许自动化"
+    @Published private(set) var desktopChangeCount = 0
+    func refreshDesktopPermission() {
+        desktopAutomationAllowed = DesktopSwitchCommand.permission() == noErr
+    }
+    func requestDesktopPermission() async {
+        guard !desktopPermissionBusy else { return }
+        desktopPermissionBusy = true
+        defer { desktopPermissionBusy = false }
+        let result = await DesktopSwitcher.requestPermission()
+        desktopAutomationAllowed = result == noErr
+        desktopMessage = result == noErr ? "System Events 已允许；重新触发桌面切换即可" : DesktopSwitchResult.error(Int(result)).message
+        sendStatus()
+    }
+    func testDesktopSwitch(_ action: WindowOverviewAction) async {
+        guard !desktopSwitchBusy, !desktopPermissionBusy, action.isDesktopSwitch else { return }
+        desktopSwitchBusy = true
+        defer { desktopSwitchBusy = false }
+        input.release()
+        let result = await DesktopSwitcher.perform(action) {
+            AXIsProcessTrusted() && CGPreflightPostEventAccess() && !self.systemSleeping
+        }
+        desktopMessage = result.message
+        refreshDesktopPermission()
+    }
     @Published private(set) var clientName = ""
     @Published private(set) var addresses: [String] = []
     @Published var selectedAddress = ""
@@ -268,6 +296,9 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         refreshMicrophoneDevices()
         refreshInputPermissions()
         let center = NSWorkspace.shared.notificationCenter
+        observers.append(center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.desktopChangeCount += 1 }
+        })
         observers.append(center.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -879,7 +910,21 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         guard controlAllowed else { lastInput = description + " · 控制已关闭"; sendStatus(); return }
         let token = generation, controlToken = controlRevision, queueToken = inputQueueEpoch
         let result: LANInputResult
-        if let action = event.windowOverview { result = await input.windowOverview(action) }
+        if let action = event.windowOverview, action.isDesktopSwitch {
+            input.release()
+            let revision = captureRevision
+            let desktop = await DesktopSwitcher.perform(action) {
+                self.generation == token && self.controlRevision == controlToken && self.inputQueueEpoch == queueToken
+                    && self.captureRevision == revision && self.controlAllowed && self.connected && self.sharing
+                    && !self.switchingDisplay && !self.scaleBusy && !self.systemSleeping
+                    && AXIsProcessTrusted() && CGPreflightPostEventAccess()
+            }
+            guard token == generation, controlToken == controlRevision, queueToken == inputQueueEpoch else { return }
+            desktopMessage = desktop.message
+            refreshDesktopPermission()
+            result = desktop == .submitted ? .posted : .desktopSwitchFailed
+            if desktop != .submitted { status = desktop.message; sendStatus() }
+        } else if let action = event.windowOverview { result = await input.windowOverview(action) }
         else { result = input.handle(event) }
         guard token == generation, controlToken == controlRevision, queueToken == inputQueueEpoch,
               controlAllowed, connected else { return }
@@ -1017,7 +1062,7 @@ private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
 /// Real remote desktop input is explicitly enabled on the Mac for the paired peer.
 /// No input listener is installed; events are released on timeout or disconnect.
 private enum LANInputResult {
-    case posted, permissionDenied, invalidDisplay, unsupported, creationFailed, overviewLaunchFailed
+    case posted, permissionDenied, invalidDisplay, unsupported, creationFailed, overviewLaunchFailed, desktopSwitchFailed
 
     var description: String {
         switch self {
@@ -1027,6 +1072,7 @@ private enum LANInputResult {
         case .unsupported: "不支持的操作"
         case .creationFailed: "无法创建输入事件"
         case .overviewLaunchFailed: "系统未能启动 Mission Control"
+        case .desktopSwitchFailed: "桌面切换未执行／未确认，请看桌面切换设置"
         }
     }
 }
@@ -1048,11 +1094,8 @@ private final class LANMacInput {
         guard bounds.width > 0, bounds.height > 0 else { return .invalidDisplay }
         release()
         if action == .hide { return key("esc", modifiers: 0) }
-        if action.isDesktopSwitch {
-            // Public, user-configurable macOS Spaces shortcut. Balance Control down/up;
-            // do not inject private multitouch or select Spaces through private APIs.
-            return key(action == .previousDesktop ? "left" : "right", modifiers: 8)
-        }
+        // Spaces use the separately gated System Events path in LANHost.
+        guard !action.isDesktopSwitch else { return .unsupported }
         // Launch Apple's installed application through public NSWorkspace. System
         // global shortcuts may ignore posted keyboard events even when ordinary
         // application keys work. Never accept an application path from the phone.

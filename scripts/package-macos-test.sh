@@ -13,7 +13,7 @@ if [[ $# -gt 0 || "$(uname -m)" != arm64 ]]; then
     printf '%s\n' 'This peer-test package is currently prepared only on Apple Silicon, with no arguments.' >&2
     exit 1
 fi
-test_output="${CHORDESK_TEST_OUTPUT:-$PWD/release-artifacts/mac-test-0.18.0-build25-arm64}"
+test_output="${CHORDESK_TEST_OUTPUT:-$PWD/release-artifacts/mac-test-0.18.1-build26-arm64}"
 if [[ "$test_output" != /* || -e "$test_output" ]]; then
     printf '%s\n' 'Choose a new absolute CHORDESK_TEST_OUTPUT directory; existing artifacts are not overwritten.' >&2
     exit 1
