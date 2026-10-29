@@ -6,7 +6,7 @@
 
 为 iPhone Duo 设计的远程桌面：正面拇指触控和输入，背面手指像按和弦一样切换操作模式。包含 **iOS 控制端** 和 **Mac 主机端**。
 
-[概念与 3D 演示](https://stland-admin.github.io/Chordesk-site/) · [操作指南](OPERATION-GUIDE.md)
+[概念与 3D 演示](https://stland-admin.github.io/Chordesk-site/) · [操作指南](OPERATION-GUIDE.md) · [开发计划](ROADMAP.md)
 
 ## 安装
 
@@ -43,6 +43,14 @@
 左右切桌面还需在 Mac「设置 → 桌面切换」允许 **System Events 自动化**，并启用系统 Control＋左右方向键；这是独立的可选权限，不影响普通远控。
 
 背面有效区可自由移动和缩放；文字输入支持 iPhone 系统／第三方输入法。非 Duo 有按钮切换入口，但尚未针对其他机型验证。
+
+## 后续开发
+
+- [ ] **优先优化键盘遮挡**：评估键盘上方的 Liquid Glass 输入预览，让 Codex 等远端输入框的内容保持可见。
+- [ ] **评估 RDP 与客户端渲染**：验证 Mac 主机可行性及清晰度、带宽、延迟收益，再决定是否替换当前画面传输。
+- [ ] **公网与非 Duo 测试**：验证外网连接、换网重连，以及普通 iPhone 的按钮／菜单操作与布局。
+
+以上均为待办，具体任务和验收条件见[公开开发计划](ROADMAP.md)。
 
 ## 当前范围
 

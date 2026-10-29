@@ -6,9 +6,11 @@
 
 2026-10-29 用户另行明确授权生成无付费会员的同学试用包：`scripts/package-macos-test.sh` 独立生成 Apple Silicon Release、本地 ad hoc 签名、未公证 DMG。接收者手动为该 App 放行并授予屏幕录制／辅助功能，不需要 Xcode；受管理的 Mac 可能禁止。具体说明见 [Mac 同学试用说明](MAC-PEER-TEST.txt)。此流程不修改本机稳定开发包，也不等于 Developer ID、公证或 TestFlight 分发。
 
-## Duo 专用范围
+## 当前验证范围与后续机型
 
 当前仅为 Duo 开发和测试，开发签名安装到已登记 Duo。没有背面场景时保留菜单切换作为降级路径，不宣称非 Duo 兼容。
+
+2026-10-30 已将非 Duo iPhone 的按钮／菜单操作和布局验证纳入[后续开发计划](../ROADMAP.md)。完成实际测试后再扩大兼容声明和招募范围；本轮没有新增设备测试或改变分发方式。
 
 TestFlight 初期采用定向邀请，招募时确认 Duo 设备；不开放无条件公开链接。[TestFlight](https://developer.apple.com/testflight/)允许公开链接按设备类型和 OS 设置测试者条件，但具体是否提供 Duo 单独条件，要在已激活的 App Store Connect 中核对；邀请本身不是只能在某一个型号安装的保证。
 
@@ -30,7 +32,7 @@ TestFlight 初期采用定向邀请，招募时确认 Duo 设备；不开放无�
 
 在干净 Mac 测试首次启动、屏幕录制／辅助功能申请、配对、断线释放和卸载流程。不要把本机开发证书、钥匙串、配对密钥或已有系统授权打进安装包。正式签名／ID 迁移需计划重新授权，不许悄悄退回 ad hoc。
 
-GitHub Releases 可承载经过签名、公证的 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前仓库为私有，未上传安装包、未上传 App Store、未建立自动发行流水线。
+GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码仓库和 Mac 试用 Release 已公开，试用包仍为未公证的 ad hoc 签名；正式签名公证包、App Store／TestFlight 上传及自动发行流水线尚未完成。
 
 ## 公网与扩容
 
