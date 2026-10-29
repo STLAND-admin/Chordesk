@@ -46,7 +46,7 @@
 
 ## 当前范围
 
-- iOS **1.21 / build 25**，Mac **0.18.1 / build 26**；修正 Spaces 切换执行路径；iOS 1.21 无需重装。新路径和新 Mac 首次授权流程的实际验证范围见记录。[验证记录](docs/VALIDATION-0.18.1.md)
+- iOS **1.21 / build 25**，Mac **0.18.1 / build 26**；用户已真机确认手机菜单与背面组合手势均可切换 Spaces，iOS 1.21 无需重装。其他设备及新 Mac 首次授权流程的验证范围见记录。[验证记录](docs/VALIDATION-0.18.1.md)
 - 当前仅局域网，TLS 配对；公网、账号与中继尚未实现。[公网规划](PUBLIC-NETWORK-PLAN.md)
 - 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
 - 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)
