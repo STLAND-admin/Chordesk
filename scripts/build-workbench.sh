@@ -12,27 +12,17 @@ fi
 swift build --configuration "$duo_configuration" --scratch-path "$duo_scratch_path" "${duo_compile_args[@]}"
 duo_binary_path=$(swift build --configuration "$duo_configuration" --scratch-path "$duo_scratch_path" --show-bin-path)
 app_bundle="${DUO_APP_BUNDLE:-$duo_scratch_path/Chordesk.app}"
-legacy_launch_link=""
 if [[ "${1:-}" == "--install" ]]; then
     app_bundle="$HOME/Applications/Chordesk.app"
     legacy_bundle="$HOME/Applications/DuoWorkbench.app"
-    # Existing development installs retain their signed path and TCC identity.
-    # Expose the branded entry instead of leaving DuoWorkbench visible in Finder.
+    # Dock resolves symbolic launch links to the actual .app filename. Always
+    # install a real Chordesk.app; do not silently create a second legacy host.
     if [[ -d "$legacy_bundle" && ! -L "$legacy_bundle" ]]; then
-        if [[ -L "$app_bundle" ]]; then
-            link_target=$(readlink "$app_bundle")
-            if [[ "$link_target" != "DuoWorkbench.app" && "$link_target" != "$legacy_bundle" ]]; then
-                printf '%s\n' 'Refusing to replace an unrelated Chordesk launch link.' >&2
-                exit 1
-            fi
-        elif [[ -e "$app_bundle" ]]; then
-            printf '%s\n' 'Both Chordesk and a legacy install exist; choose one before installing.' >&2
-            exit 1
-        fi
-        legacy_launch_link="$app_bundle"
-        app_bundle="$legacy_bundle"
-    elif [[ -L "$app_bundle" ]]; then
-        printf '%s\n' 'Refusing to replace an unresolved Chordesk launch link.' >&2
+        printf '%s\n' 'Quit the legacy host and migrate its signed bundle to Chordesk.app first; see docs/DEVELOPMENT.md.' >&2
+        exit 1
+    fi
+    if [[ -L "$app_bundle" ]]; then
+        printf '%s\n' 'Chordesk.app must be the actual application bundle, not a launch link.' >&2
         exit 1
     fi
 elif [[ $# -gt 0 ]]; then
@@ -84,12 +74,4 @@ if ! mv "$prepared_bundle" "$app_bundle"; then
     exit 1
 fi
 codesign --verify --strict "$app_bundle"
-if [[ -n "$legacy_launch_link" ]]; then
-    if [[ ! -L "$legacy_launch_link" ]]; then
-        ln -s "DuoWorkbench.app" "$legacy_launch_link"
-    fi
-    # Finder hides only the legacy entry; its contents and signature stay intact.
-    chflags hidden "$app_bundle"
-    printf '%s\n' "Launch: $legacy_launch_link"
-fi
 printf '%s\n' "Built: $app_bundle"

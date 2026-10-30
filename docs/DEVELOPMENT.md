@@ -14,7 +14,9 @@ DUO_SIGNING_IDENTITY="Apple Development" ./scripts/build-workbench.sh
 ./scripts/build-workbench.sh --install
 ```
 
-从 `~/Applications/Chordesk.app` 打开主机。新安装使用这个路径；已有开发安装继续保留 `~/Applications/DuoWorkbench.app` 的实际签名包，安装脚本会创建名为 `Chordesk.app` 的兼容启动链接并隐藏 Finder 中的旧入口。这样可统一可见名称，同时保留原安装路径、bundle ID、签名及配对／权限配置。不要把旧开发目录中的历史 `.app` 当成当前版本。
+从 `~/Applications/Chordesk.app` 打开主机；这里必须是真实应用包。仅给旧 `DuoWorkbench.app` 增加 Chordesk 符号链接不能修正 Dock 的悬停名称。
+
+早期开发安装需先退出主机，再将原来已签名的 `DuoWorkbench.app` 整包重命名为 `Chordesk.app`。若 Chordesk 原先是指向旧包的符号链接，只移开这个链接，不覆盖任何已有实体包；可在旧路径留下指向新包的兼容链接。取消实体包的 Finder 隐藏属性，从新路径启动，并复查系统权限。迁移只改变包路径，不改内部文件、bundle ID、签名或配对数据，不重置权限。安装脚本遇到尚未迁移的旧实体包会停止，避免生成两个不同版本的主机。不要把旧开发目录中的历史 `.app` 当成当前版本。
 
 ```sh
 # 先退出占用 49173 端口的主机；测试不会投递真实输入或调整实体屏。
