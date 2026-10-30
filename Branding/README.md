@@ -2,15 +2,15 @@
 
 2026-10-29 用户已选定新产品名 **Chordesk** 和 **B「前后双面」**图标。蓝灰与暖灰两片曲面通过中间弯曲连接处协作，表达背面手指与正面拇指的和弦控制。低饱和 Liquid Glass 方向独立于 STLAND 字标。
 
-<img src="Chordesk-dark.svg" width="240" alt="Chordesk B 方案黑底 SVG 图标">
+<img src="Chordesk-transparent.svg" width="240" alt="Chordesk B 方案透明背景 SVG 图标">
 
 ## 当前素材
 
 | 文件 | 用途 |
 | --- | --- |
 | [Chordesk.svg](Chordesk.svg) | 1024 × 1024 viewBox 的原始浅底可编辑矢量主稿。 |
-| [黑底 SVG](Chordesk-dark.svg) / [PNG](Chordesk-dark.png) | 黑底版本；仓库 README 和两端 App 图标使用此方向。 |
-| [透明 SVG](Chordesk-transparent.svg) / [PNG](Chordesk-transparent.png) | 无背景、保留 alpha 的玻璃图形，适合叠加于其他底色；两端关于页使用此版本。 |
+| [黑底 SVG](Chordesk-dark.svg) / [PNG](Chordesk-dark.png) | 黑底版本；两端 App 图标使用此方向。 |
+| [透明 SVG](Chordesk-transparent.svg) / [PNG](Chordesk-transparent.png) | 无背景、保留 alpha 的玻璃图形；中英文 README、品牌页和两端关于页使用此版本。仓库展示透出 GitHub 页面本身的底色，适配明暗主题，不再出现独立黑色背景方块。 |
 | [Chordesk.png](Chordesk.png) | 从 SVG 渲染的 1024 × 1024 PNG 预览，兼容需要位图的展示场景。 |
 | [原始 B 方案](Chordesk-concepts/2026-10-29/B-dual-surfaces.png) | 内置 image_gen 生成的视觉参考，保留供比对。 |
 | [候选对比](Chordesk-concepts/2026-10-29/index.html) | 设计探索记录，B 已选定。 |

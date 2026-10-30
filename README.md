@@ -1,65 +1,69 @@
-<p align="center"><img src="Branding/Chordesk-dark.svg" width="150" alt="Chordesk"></p>
+<p align="center"><img src="Branding/Chordesk-transparent.svg" width="150" alt="Chordesk"></p>
 
 # Chordesk
 
-**前后协作，像按和弦一样控制。**
+English · [简体中文](README.zh-CN.md)
 
-为 iPhone Duo 设计的远程桌面：正面拇指触控和输入，背面手指像按和弦一样切换操作模式。包含 **iOS 控制端** 和 **Mac 主机端**。
+**Two sides. One chord. Your desktop.**
 
-[概念与 3D 演示](https://stland-admin.github.io/Chordesk-site/) · [操作指南](OPERATION-GUIDE.md) · [开发计划](ROADMAP.md)
+A remote desktop app designed for iPhone Duo. Use your thumbs for touch and typing on the front, while fingers on the back switch interaction modes like holding a chord. Includes an **iOS client** and a **Mac host**.
 
-## 安装
+[Concept & 3D demo](https://stland-admin.github.io/Chordesk-site/) · [Operation guide](OPERATION-GUIDE.md) · [Roadmap](ROADMAP.md)
+
+The demo and detailed guides are currently in Chinese.
+
+## Install
 
 ### Mac
 
-下载 [Mac 0.18.1 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test)，打开 DMG，把 Chordesk 拖入“应用程序”。
+Download the [Mac 0.18.1 test release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test), open the DMG, and drag Chordesk into Applications.
 
-- Apple Silicon，macOS 15.2 或更新。测试包未公证，首次打开需由接收者按系统提示允许；[安装说明](docs/MAC-PEER-TEST.txt)。
-- 首次点“开始服务”，按引导完成屏幕录制和控制两项权限；检查完整后自动重启 App 一次，默认开启内置屏服务。关闭窗口后保留菜单栏后台运行。
-- 本仓库与试用 Release 公开，可把下载链接直接发给测试者。历史私有仓库独立保留，公开提交不包含原作者的私人邮箱。
+- Apple Silicon, macOS 15.2 or later. This test build is **not notarized**; follow macOS prompts to allow it on first launch. [Installation guide](docs/MAC-PEER-TEST.txt).
+- Click **Start service (开始服务)** and follow the screen recording and control permission setup. Once permission checks pass, the app restarts once and starts sharing the built-in display by default. Closing the window keeps the service running in the menu bar.
+- The source repository and test releases are public. You can share the download link directly with testers.
 
 ### iPhone Duo
 
-当前使用 **Xcode 本地编译安装**，尚无 TestFlight 下载链接。
+Currently installed by **building locally in Xcode**. A TestFlight build is not available yet.
 
-1. 安装 Xcode 27.1 或更新，打开 `iPhoneDuoDemo.xcodeproj`。
-2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
-3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
+1. Install Xcode 27.1 or later and open `iPhoneDuoDemo.xcodeproj`.
+2. Select the `iPhoneDuoDemo` target. Under Signing & Capabilities, choose your own Team and a Bundle Identifier you can sign.
+3. Connect Duo over USB, enable Developer Mode and trust the Mac as prompted, then select the device and run. A free Personal Team can be used for testing, but requires periodic re-signing.
 
-已有安装更新时保持原 Bundle Identifier 和 Team。开发者会员与审核准备完成后，通过 **TestFlight** 分发；[分发准备](docs/DISTRIBUTION.md)。
+Keep the same Bundle Identifier and Team when updating an existing installation. **TestFlight** distribution is planned once developer membership and review requirements are met. [Distribution plan](docs/DISTRIBUTION.md).
 
-## 怎么用
+## How it works
 
-两端连接同一局域网，首次扫描 Mac 二维码，之后从手机的已配对列表选择电脑。可保存多台 Mac，每次连接一台；IP 变化暂需重新扫码更新地址。
+Connect both devices to the same local network. Scan the Mac's QR code once, then reconnect from the saved computer list on your phone. Multiple Macs can be remembered, with one connected at a time. If a Mac's IP address changes, scan its QR code again to update the address.
 
-| 操作 | 效果 |
+| Gesture or control | Action |
 | --- | --- |
-| 正面单指操作 | 默认直接触控；长按拖动选字 |
-| 背面一指＋正面双指上下滑 | 打开／退出 Mac 窗口总览 |
-| 背面一指＋正面双指左／右滑 | 下一个／上一个 Mac 桌面（Spaces） |
-| 背面双指长按 | 临时切到正面触控板，松开恢复 |
-| 右侧灰色按钮 | 菜单、模式、切屏和键盘，排列在同一列 |
+| One finger on the front | Direct touch by default; hold and drag to select text |
+| Hold one finger on the back + swipe two fingers up/down on the front | Open/close Mission Control |
+| Hold one finger on the back + swipe two fingers left/right on the front | Next/previous Mac desktop (Space) |
+| Hold two fingers on the back | Temporarily switch the front to trackpad mode; release to return |
+| Gray buttons along the right edge | Menu, interaction mode, display selection, and keyboard in one column |
 
-左右切桌面还需在 Mac「设置 → 桌面切换」允许 **System Events 自动化**，并启用系统 Control＋左右方向键；这是独立的可选权限，不影响普通远控。
+Switching Spaces also requires **System Events automation permission** in the Mac host's Settings → Desktop switching (设置 → 桌面切换), plus the macOS Control + Left/Right shortcuts. This optional permission is separate from basic remote control.
 
-背面有效区可自由移动和缩放；文字输入支持 iPhone 系统／第三方输入法。非 Duo 有按钮切换入口，但尚未针对其他机型验证。
+The rear activation area can be moved and resized. Text entry supports the iPhone's system and third-party keyboards. Other iPhones have an on-screen mode switch, but have not yet been tested.
 
-## 后续开发
+## Roadmap
 
-- [ ] **优先优化键盘遮挡**：评估键盘上方的 Liquid Glass 输入预览，让 Codex 等远端输入框的内容保持可见。
-- [ ] **评估 RDP 与客户端渲染**：验证 Mac 主机可行性及清晰度、带宽、延迟收益，再决定是否替换当前画面传输。
-- [ ] **公网与非 Duo 测试**：验证外网连接、换网重连，以及普通 iPhone 的按钮／菜单操作与布局。
+- [ ] **Keyboard visibility first:** explore a Liquid Glass preview above the keyboard so remote input fields, such as those in Codex, remain visible while typing.
+- [ ] **RDP and client-side rendering:** validate Mac host feasibility and compare clarity, bandwidth, and latency before deciding whether to replace the current image transport.
+- [ ] **Internet access and non-Duo testing:** validate remote networks, reconnection, and on-screen controls and layouts on other iPhones.
 
-以上均为待办，具体任务和验收条件见[公开开发计划](ROADMAP.md)。
+These are planned tasks. See the [public roadmap](ROADMAP.md) for details and acceptance criteria.
 
-## 当前范围
+## Current scope
 
-- iOS **1.21 / build 25**，Mac **0.18.1 / build 26**；用户已真机确认手机菜单与背面组合手势均可切换 Spaces，iOS 1.21 无需重装。其他设备及新 Mac 首次授权流程的验证范围见记录。[验证记录](docs/VALIDATION-0.18.1.md)
-- 当前仅局域网，TLS 配对；公网、账号与中继尚未实现。[公网规划](PUBLIC-NETWORK-PLAN.md)
-- 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
-- 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)
-- 背面实验使用相机辅助 API；相机帧不显示、不保存、不传输，不代表已获得通用外屏接口或上架许可。
+- iOS **1.21 / build 25**, Mac **0.18.1 / build 26**. Phone menus and rear-finger gestures for switching Spaces have been confirmed on the user's devices. iOS 1.21 does not need reinstalling for this Mac fix. [Validation record](docs/VALIDATION-0.18.1.md).
+- **Local network only**, with TLS pairing. Internet access, accounts, and relay services are not implemented. [Network plan](PUBLIC-NETWORK-PLAN.md).
+- Display scaling targets **1600 × 900 logical resolution**, using existing safe display modes. Some custom HiDPI modes still need the optional BetterDisplay fallback. [Dependencies](docs/DEPENDENCIES.md).
+- Microphone forwarding is off by default. Using Duo as a microphone for Mac apps currently requires a virtual audio device; an integrated driver is not implemented. [Audio details](docs/REMOTE-MICROPHONE.md).
+- Rear-screen interaction uses the experimental camera accessory path. Camera frames are not displayed, saved, or transmitted. This does not establish a general-purpose rear-screen API or App Store approval.
 
-[开发与构建](docs/DEVELOPMENT.md) · [开发历史](docs/DEVELOPMENT-HISTORY.md) · [品牌素材](Branding/README.md)
+[Development & builds](docs/DEVELOPMENT.md) · [Development history](docs/DEVELOPMENT-HISTORY.md) · [Brand assets](Branding/README.md)
 
-STLAND 出品
+Made by STLAND
