@@ -16,6 +16,8 @@
 
 ## 当前原型边界
 
+- **2026-10-30 18:51 / TestFlight 首次外部送审**：用户明确要求推进 Chordesk 审核，分发给 Duo 与普通 iPhone 测试者，覆盖历史“仅本地导出／仅 Duo 测试”限制。1.22.1 / build 28 已上传、Apple 处理完成、用户确认系统加密分类后保存出口合规信息，已正式提交 Beta App Review；App Store Connect 构建列表明确显示“正在等待审核”。关联 `Chordesk 内部验证`、`Duo 手势体验`、`iPhone 兼容性测试` 三组，未添加测试员或公开邀请链接，关闭自动通知。不是已审核通过，也未提交正式 App Store 发行。审核联系人经用户确认沿用另一 App，仅存 Apple 后台，不写入公开 Git。审核备注如实披露 CameraCaptureAccessory 的非摄影用途、相机帧丢弃、麦克风可选及未公证 Mac 主机。普通 iPhone 18 Pro / iOS 27.0 模拟器两项 UI 检查通过（手动模式按钮、忘记 Mac），采用合成 fixture；未验证普通 iPhone 真机或所有系统，Duo 长闲置恢复仍待回归。产物、状态与证据见 docs/IOS-RELEASE-1.22.md。
+
 - **2026-10-30 / Mac 本地品牌入口修正**：用户确认仅增加 Chordesk 符号链接后，Dock 悬停仍显示 DuoWorkbench，不能视为名称已修复。按本次要求将已签名实体包迁移到 `~/Applications/Chordesk.app`，旧路径最多保留反向兼容链接；此规则覆盖历史保留旧实体路径的要求。不修改包内容、bundle ID、签名或配对数据，不重置权限，迁移后重新启动并复查。`build-workbench.sh --install` 始终安装真实 Chordesk.app；遇到未迁移旧实体包或 Chordesk 符号链接时停止，不能猜测覆盖。内部 Swift target／可执行文件名继续兼容。已验证包内容校验值不变、严格签名通过，主机界面显示共享运行及屏幕／控制权限已允许；用户明确回复 Dock 悬停“已显示 Chordesk”。此反馈不扩大为改名后的远控全手势复测，详见 docs/VALIDATION-MAC-NAME.md。
 
 - **2026-10-30 / iOS 1.22.1 build 28**：独立配对行按钮及确认 alert 修复“忘记变连接”；背面灯按公开 reserved regions 置于独立顶部条，桌面和输入映射共同避开；相机中断、服务重置及辅助界面异常采用有授权前提、最多三次的恢复，正常闲置不重启，前台远控期间防空闲息屏。27 项逻辑、3 项针对性 UI 回归通过，实体 Duo 安装、版本查询和启动成功。用户反馈旧版失效时灯全灭；本次硬件恢复尚未验证，不宣称唯一根因或已完全解决。见 docs/VALIDATION-1.22.1.md。用户选择配合真机录制 Guide，不能把模拟手势当硬件录像；录制和发布状态单独记录。

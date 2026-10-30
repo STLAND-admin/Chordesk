@@ -28,7 +28,7 @@
 2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
 3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
 
-已有安装更新时保持原 Bundle Identifier 和 Team。Apple Developer Program 已通过，iOS **1.22.1 / build 28** 正在准备发行；目前尚无 TestFlight 或 App Store 下载。TestFlight 不是提交 App Store 的前置步骤；[分发准备](docs/DISTRIBUTION.md)。
+已有安装更新时保持原 Bundle Identifier 和 Team。iOS **1.22.1 / build 28** 已于 2026-10-30 提交外部 TestFlight 审核，当前为**正在等待审核**。Duo 和普通 iPhone 测试组已准备好，目前尚无公开邀请链接或 App Store 版本。[审核状态](docs/IOS-RELEASE-1.22.md)。
 
 ## 怎么用
 
@@ -44,7 +44,7 @@
 
 左右切桌面还需在 Mac「设置 → 桌面切换」允许 **System Events 自动化**，并启用系统 Control＋左右方向键；这是独立的可选权限，不影响普通远控。
 
-背面有效区可自由移动和缩放；文字输入支持 iPhone 系统／第三方输入法。非 Duo 有按钮切换入口，但尚未针对其他机型验证。
+背面有效区可自由移动和缩放；文字输入支持 iPhone 系统／第三方输入法。普通 iPhone 使用屏幕按钮切换；iPhone 18 Pro／iOS 27.0 模拟器已通过两项针对性 UI 检查，普通 iPhone 真机兼容性仍待首轮验证。
 
 ## 后续开发
 

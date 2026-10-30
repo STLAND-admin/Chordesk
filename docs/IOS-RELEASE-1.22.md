@@ -1,14 +1,29 @@
 # Chordesk iOS 1.22 · 发行准备
 
-## 2026-10-30 更新：1.22.1 / build 28 TestFlight 候选
+## 2026-10-30 18:51（北京时间）：1.22.1 / build 28 正在等待审核
+
+- 用户本轮明确授权推进 **外部 TestFlight Beta App Review**，覆盖历史“仅本地导出、不上传／提交”的范围限制；没有提交正式 App Store 发行。
+- Xcode 于 18:39 返回 `Upload succeeded`／`EXPORT SUCCEEDED`。Apple 处理后显示 build 28；用户确认系统加密分类后，出口合规问卷已保存，缺少合规证明提示消失。
+- 已保存 Beta 描述、反馈邮箱、审核联系人、英文审核备注、中英文测试重点、官网／隐私地址及真实演示视频。审核联系人按用户明确授权沿用其另一 App 的联系人，仅保存在 Apple 后台，不复制到公开仓库。
+- 已创建 `Chordesk 内部验证`、`Duo 手势体验`、`iPhone 兼容性测试` 三个组，并关联同一个 build 28。内部组关闭自动分发；送审时取消自动通知测试员。三个组均未邀请测试员，也未创建公开邀请链接。
+- 已点击“提交以供审核”，随后构建列表明确显示 **正在等待审核**，详情页出现“从审核中移除”。这表示已送审，**不表示审核通过或已可供外部安装**。
+- App Store Connect：[构建与审核状态](https://appstoreconnect.apple.com/apps/6828753865/testflight/ios)（需 App 所有者登录）。首次外部测试审核通过后再按设备分组定向邀请；普通 iPhone 无需背屏，可用屏幕按钮切换。
+
+### 本轮普通 iPhone 验证
+
+- iPhone 18 Pro／iOS 27.0 模拟器，两项针对性 UI 测试通过：`testPointerButtonSwitchesWithShortTapAndCanBeHidden`、`testForgetMacDoesNotConnectAndOnlyDeletesConfirmedHost`。
+- 使用 DEBUG 合成画面和配对 fixture，不能视为真实远控链路、普通 iPhone 硬件或全部系统版本已验证。普通 iPhone 真机兼容性、Duo 长时间闲置后的背面恢复继续列为测试重点。
+- 结果：`/private/tmp/Chordesk-iPhone-TF-Check.xcresult`；上传日志：`release-artifacts/ios-1.22.1-build28/upload-2026-10-30.log`。日志、IPA 与签名材料均不提交公开 Git。
+
+### 已上传产物
 
 - 已用现有正式发行证书和同一 Bundle ID / Team 归档、导出 **1.22.1 / build 28**。本节取代下文旧 build 27 的产物选择；不改变已部署的开发签名版本。
 - Archive：`release-artifacts/ios-1.22.1-build28/Chordesk.xcarchive`。
 - IPA：`release-artifacts/ios-1.22.1-build28/AppStoreExport/iPhoneDuoDemo.ipa`，2,369,324 字节；SHA-256：`220779ce9fa38ce19cafad4b1222f367879e26bf9b914ecb4457c8be953f8ffb`。
 - 干净解包副本的 `codesign --verify --deep --strict` 通过。正式 profile：`Chordesk App Store 2026`；`get-task-allow=false`、`beta-reports-active=true`、无设备名单，版本、iOS 27.1 SDK、隐私清单均已核对。工作目录解包副本受 Finder 扩展属性污染时不能误判为原 IPA 无效；原 ZIP 无 `__MACOSX` 项，独立临时目录重新解包验证通过。
-- 用户已指定 TestFlight 反馈邮箱，已在 App Store Connect 与中文 Beta 描述、英文审核备注、官网／隐私政策链接一起保存；不将该邮箱写入公开 Git 历史。审核联系姓名／电话尚待在 Apple 后台补齐。
+- 用户指定的 TestFlight 反馈邮箱已在 App Store Connect 保存；审核联系姓名／电话／邮箱本轮也已补齐，不将这些字段写入公开 Git 历史。
 - [真实演示视频](https://stland-admin.github.io/Chordesk-site/?lang=en#demo)已发布，展示手机和 Mac 的实际操作。视频无声，保留完整启动／配对过程；不能将其视为背面长期闲置恢复的完整回归结果。
-- 当前为**本地候选包与审核材料准备**，尚未上传 build 28、提交 TestFlight Beta App Review 或邀请测试者。已创建并核对 [Chordesk App Store Connect 记录](https://appstoreconnect.apple.com/apps/6828753865/distribution/info)（Apple ID `6828753865`，主要语言简体中文，SKU `chordesk-ios`），使用原 Bundle ID。
+- 已创建并核对 [Chordesk App Store Connect 记录](https://appstoreconnect.apple.com/apps/6828753865/distribution/info)（Apple ID `6828753865`，主要语言简体中文，SKU `chordesk-ios`），使用原 Bundle ID；当前提交状态以上方实时核对记录为准。
 
 ### 本轮测试重点（可用于 What to Test）
 
@@ -23,7 +38,7 @@
 
 **Beta App Description (English)**
 
-Chordesk brings your Mac desktop to your iPhone over a local network. Touch, scroll, select, and type with the iPhone keyboard. On iPhone Duo, simple holds on the rear surface change the meaning of front gestures, like playing a chord: one rear finger qualifies window and desktop gestures; holding two rear fingers temporarily turns the front into a trackpad. A companion Apple Silicon Mac running macOS 15.2 or later is required. This beta focuses on Duo; other iPhones have not yet been validated. Internet access is not included.
+Chordesk brings your Mac desktop to your iPhone over a local network. Touch, scroll, select, and type with the iPhone keyboard. On iPhone Duo, simple holds on the rear surface change the meaning of front gestures, like playing a chord: one rear finger qualifies window and desktop gestures; holding two rear fingers temporarily turns the front into a trackpad. A companion Apple Silicon Mac running macOS 15.2 or later is required. This beta includes Duo gesture testing and initial regular-iPhone hardware compatibility testing using the on-screen mode switch. Internet access is not included.
 
 **What to Test (English)**
 
@@ -35,19 +50,19 @@ Use the [Mac 0.18.1 Apple Silicon host](https://github.com/STLAND-admin/Chordesk
 
 The optional experimental Duo rear interface uses the public CameraCaptureAccessory API while a foreground camera capture session remains active. Camera frames are immediately discarded: no preview, recording, or camera-frame transmission. The rear interface is used to qualify gestures and switch the front interaction mode, rather than for photographic controls. This intended-use distinction must be disclosed to App Review; public API availability does not establish that Apple will accept this use. The camera also scans pairing QR codes. Optional microphone forwarding is off by default and requires a separately configured virtual audio input device on the Mac; basic remote control does not require that driver.
 
-### Remaining submission gates
+### After submission
 
-- Confirm the Chordesk App Store Connect record and upload the build; wait for Apple processing and resolve server-side validation findings.
-- Beta description, feedback email and reviewer notes have been saved. Complete reviewer contact name / phone, then review the [privacy policy](https://stland-admin.github.io/Chordesk-site/privacy.html?lang=en), [support page](https://stland-admin.github.io/Chordesk-site/support.html?lang=en) and App Privacy questionnaire before submission.
-- Complete export compliance based on the actual implementation: Apple Network/Security TLS and authentication, no custom encryption implementation. Using system encryption still requires an export-compliance determination; do not mark “no encryption” simply because TLS comes from Apple.
-- For external testing, create the internal test group first, then prepare an external group and submit its first build for Beta App Review. Do not automatically invite testers or publish a public invitation link during preparation.
-- Verify the intended Duo device / OS combination and the hardware recovery cases above. Do not claim non-Duo testing or approval has already happened.
+- Wait for Apple's Beta App Review decision and respond to any request for setup details or changes. The optional CameraCaptureAccessory use is explicitly disclosed; do not assume approval merely because the API is public.
+- After approval, invite the user's selected testers to the appropriate external group. No public TestFlight link exists yet; do not substitute an App Store distribution IPA as a directly installable download.
+- Export classification was saved with the user's confirmation based on Apple Network/Security TLS and no custom encryption implementation. Reassess if encryption changes; this is not a statement that the app uses no encryption.
+- Continue the hardware cases above. The two regular-iPhone simulator checks do not establish physical-device compatibility or long-idle rear recovery.
+- Formal App Store distribution remains separate and unsubmitted; screenshots, App Privacy, age rating and other store metadata still need completion for that route.
 
 Sources: [Test information](https://developer.apple.com/help/app-store-connect/test-a-beta-version/provide-test-information/), [external testing](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers), [export compliance](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance/), [App Privacy](https://developer.apple.com/app-store/app-privacy-details/).
 
 ---
 
-2026-10-30；iOS 1.22 / build 27，配套 Mac 0.18.1 / build 26。
+以下为历史准备记录，已被上方 build 28 送审状态取代。2026-10-30；iOS 1.22 / build 27，配套 Mac 0.18.1 / build 26。
 
 ## 分发路线
 

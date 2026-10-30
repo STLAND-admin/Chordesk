@@ -30,7 +30,7 @@ Currently installed by **building locally in Xcode**. A TestFlight build is not 
 2. Select the `iPhoneDuoDemo` target. Under Signing & Capabilities, choose your own Team and a Bundle Identifier you can sign.
 3. Connect Duo over USB, enable Developer Mode and trust the Mac as prompted, then select the device and run. A free Personal Team can be used for testing, but requires periodic re-signing.
 
-Keep the same Bundle Identifier and Team when updating an existing installation. Apple Developer Program enrollment is complete. iOS **1.22.1 / build 28** has a locally exported, signature-verified distribution IPA; TestFlight review preparation is underway, with no public TestFlight or App Store build yet. [Release preparation](docs/IOS-RELEASE-1.22.md).
+Keep the same Bundle Identifier and Team when updating an existing installation. iOS **1.22.1 / build 28** was submitted for external TestFlight review on October 30, 2026 and is **Waiting for Review**. Duo and regular iPhone test groups are prepared; no public invitation or App Store release is available yet. [Review status](docs/IOS-RELEASE-1.22.md).
 
 ## How it works
 
@@ -46,7 +46,7 @@ Connect both devices to the same local network. Scan the Mac's QR code once, the
 
 Switching Spaces also requires **System Events automation permission** in the Mac host's Settings → Desktop switching (设置 → 桌面切换), plus the macOS Control + Left/Right shortcuts. This optional permission is separate from basic remote control.
 
-The rear activation area can be moved and resized. Text entry supports the iPhone's system and third-party keyboards. Other iPhones have an on-screen mode switch, but have not yet been tested.
+The rear activation area can be moved and resized. Text entry supports the iPhone's system and third-party keyboards. Other iPhones use the on-screen mode switch. Two targeted UI checks passed on an iPhone 18 Pro / iOS 27.0 simulator; regular-iPhone hardware compatibility remains under initial testing.
 
 ## Roadmap
 
