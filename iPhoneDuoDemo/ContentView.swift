@@ -32,6 +32,9 @@ struct ContentView: View {
     @State private var edgeBarWidth: CGFloat = 0
     @State private var edgeAnchorX: CGFloat?
     @State private var workspaceHeight: CGFloat = 0
+    @State private var rearBadgeSize = CGSize.zero
+    @State private var rearBadgeFrame = CGRect.zero
+    @State private var previousIdleTimer: Bool?
     @State private var nativeKeyboard = NativeKeyboardPresentation()
     @State private var keyboardPolicy = AutomaticKeyboardPolicy()
     @State private var automaticInnerMode: InnerInputMode?
@@ -52,8 +55,11 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .topTrailing) {
-                presentedWorkspace.ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
+                presentedWorkspace
+                    .padding(.top, rearBadgeFrame.maxY)
+                    .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
             }
+            .background(.black)
             .overlay(alignment: .bottom) {
                 if nativeKeyboardVisible {
                     NativeKeyboardInput(active: !menuPresented, contextID: nativeTextContext, secure: client.textFocus?.secure ?? false,
@@ -61,11 +67,6 @@ struct ContentView: View {
                         onCursorKey: { client.nativeCursorKey($0) }, controller: keyboardController)
                         .frame(height: 0).allowsHitTesting(false).accessibilityHidden(true)
                 }
-            }
-            // The contact badge keeps its original content-relative position.
-            // It does not inherit the edge Dock offsets or keyboard avoidance.
-            .overlay(alignment: .topTrailing) {
-                if !modalVisible { rearStatusBadge.padding(.vertical).padding(.trailing) }
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
@@ -100,25 +101,42 @@ struct ContentView: View {
                     if keyboardInvocation == KeyboardInvocation.manual.rawValue { automaticInnerMode = .touchpad }
                     updateRearCapture()
                 }
+                updateRearCapture()
             }
             .onChange(of: client.selectedDisplayID) { _, _ in releaseInteractions() }
             .onChange(of: camera.mode) { _, _ in releaseInteractions() }
             .onChange(of: camera.enabled) { _, value in if !value { releaseInteractions() } }
             .onChange(of: camera.running) { _, value in if !value { releaseInteractions() } }
-            .onChange(of: client.controlAllowed) { _, value in if !value { releaseInteractions() } else { updateRearCapture() } }
+            .onChange(of: camera.surfaceEpoch) { _, _ in releaseInteractions() }
+            .onChange(of: client.controlAllowed) { _, value in if !value { releaseInteractions() }; updateRearCapture() }
+            .onChange(of: client.inputSuspended) { _, _ in updateRearCapture() }
             .onChange(of: modalVisible) { _, value in
                 client.inputSuspended = value
                 if value { releaseInteractions(); if showingConnect { camera.stop() } }
-                else { updateRearCapture() }
+                updateRearCapture()
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in client.inputSuspended = true; releaseInteractions() }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in client.inputSuspended = modalVisible; updateRearCapture() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in client.inputSuspended = true; releaseInteractions(); updateRearCapture() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                client.inputSuspended = modalVisible; updateRearCapture(); camera.resumeInput()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in releaseInteractions(); camera.stop(); client.disconnect() }
-            .onDisappear { releaseInteractions(); camera.stop(); client.disconnect() }
+            .onDisappear { releaseInteractions(); camera.stop(); client.disconnect(); restoreIdleTimer() }
         }
         // Attach outside NavigationStack's inset content proposal. Ignoring the
         // safe area on the old child alone did not recover the window's width.
         .overlay { controlRail }
+        .overlay(alignment: .topLeading) {
+            // A dedicated top strip prevents any contact light covering the
+            // desktop. Its position never inherits Dock or keyboard offsets.
+            GeometryReader { _ in
+                rearStatusBadge.fixedSize()
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { rearBadgeSize = $0 }
+                    .position(x: rearBadgeFrame.midX, y: rearBadgeFrame.midY)
+                    .opacity(modalVisible ? 0 : 1).allowsHitTesting(!modalVisible)
+            }
+            .background { RearStatusPositionReader(size: rearBadgeSize) { rearBadgeFrame = $0 }.allowsHitTesting(false) }
+            .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
+        }
         .overlay(alignment: .bottomLeading) {
             if client.microphoneEnabled {
                 Button { client.setMicrophone(false) } label: {
@@ -175,6 +193,7 @@ struct ContentView: View {
                     }
                     Section("相机辅助接口") {
                         Text(camera.status)
+                        Text(camera.recoveryMessage)
                         Text("控制模式：\(camera.mode.title)")
                         Text("背面 \(grip.state.outerCount) 指 · 正面 \(grip.state.innerCount) 指 · \(grip.state.requestedFrontMode.title)")
                         Text("背面接收：\(grip.controlsPresented ? "菜单期间暂停" : "已启用") · 远控输入：\(client.acceptsInput ? "允许" : "暂停")")
@@ -256,6 +275,7 @@ struct ContentView: View {
         grip.setControlsPresented(value)
         inputEpoch += 1; client.release()
         keyboardPolicy.suppress(through: client.sentEvents)
+        updateRearCapture()
     }
     private var controlRail: some View {
         GeometryReader { geometry in
@@ -296,7 +316,7 @@ struct ContentView: View {
     }
 
     private var rearStatusBadge: some View {
-        let ready = camera.running && camera.presented
+        let ready = camera.running && camera.enabled && camera.presented
         let contacts = ready ? grip.state.outerCount : 0
         return Button(action: openCameraControls) {
             HStack(spacing: 5) {
@@ -419,12 +439,22 @@ struct ContentView: View {
     }
 
     private func updateRearCapture() {
+        let foreground = UIApplication.shared.applicationState == .active
+        let sessionActive = client.connected && client.controlAllowed && !localDemo && foreground
+        if sessionActive {
+            if previousIdleTimer == nil { previousIdleTimer = UIApplication.shared.isIdleTimerDisabled }
+            UIApplication.shared.isIdleTimerDisabled = true
+        } else { restoreIdleTimer() }
+        camera.recoveryAllowed = client.acceptsInput && !modalVisible && !menuPresented && !localDemo && foreground
 #if DEBUG && targetEnvironment(simulator)
         if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" { return }
 #endif
-        guard #available(iOS 27.1, *), rearAutoStart, client.acceptsInput,
-              !modalVisible, !localDemo, UIApplication.shared.applicationState == .active else { return }
+        guard #available(iOS 27.1, *), rearAutoStart, camera.recoveryAllowed else { return }
         camera.start()
+    }
+    private func restoreIdleTimer() {
+        if let previousIdleTimer { UIApplication.shared.isIdleTimerDisabled = previousIdleTimer }
+        previousIdleTimer = nil
     }
     private func sendWindowOverview(_ action: WindowOverviewAction) {
         guard client.acceptsInput else { return }
@@ -637,6 +667,7 @@ struct ContentView: View {
         releaseInteractions()
         rearAutoStart = true; camera.mode = mode
         camera.enabled = true
+        updateRearCapture()
         camera.start()
     }
 

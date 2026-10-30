@@ -56,7 +56,7 @@
 
 ## 当前范围
 
-- iOS **1.22 / build 27** 新增完整操作手册、三盏背面接触灯，新安装默认 iPhone 输入法及自动唤起，保留已有偏好。Mac 保持 **0.18.1 / build 26**。[本版验证](docs/VALIDATION-1.22.md)；[此前真机反馈](docs/VALIDATION-0.18.1.md)。
+- iOS **1.22.1 / build 28** 隔离忘记／连接按钮、把背面灯置于桌面上方，并加入有次数限制的相机恢复；闲置后背面失效仍待真机复测。完整手册与默认 iPhone 输入法保留。Mac 保持 **0.18.1 / build 26**。[验证记录](docs/VALIDATION-1.22.1.md)；[真实操作视频录制稿](docs/GUIDE-RECORDING.md)。
 - 当前仅局域网，TLS 配对；公网、账号与中继尚未实现。[公网规划](PUBLIC-NETWORK-PLAN.md)
 - 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
 - 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)

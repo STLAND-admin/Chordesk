@@ -1,3 +1,24 @@
+import Foundation
+
+/// Recovery is driven by session/presentation state, never by how long a user
+/// holds still. A folded/unavailable accessory is not a broken touch surface.
+struct RearCaptureRecovery {
+    enum Action: Equatable { case none, restartSession, rebindAccessory }
+    private(set) var attempts = 0
+    private var unhealthySamples = 0
+    mutating func sample(allowed: Bool, interrupted: Bool, running: Bool,
+                         enabled: Bool, available: Bool, presented: Bool) -> Action {
+        guard allowed, !interrupted else { unhealthySamples = 0; return .none }
+        guard !running || (available && (!enabled || !presented)) else {
+            unhealthySamples = 0; return .none
+        }
+        unhealthySamples += 1
+        guard unhealthySamples >= 2, attempts < 3 else { return .none }
+        unhealthySamples = 0; attempts += 1
+        return running ? .rebindAccessory : .restartSession
+    }
+}
+
 #if os(iOS)
 @preconcurrency import AVFoundation
 import SwiftUI
@@ -103,29 +124,61 @@ final class CameraAccessory: ObservableObject {
     @Published private(set) var touchCount = 0
     @Published private(set) var lastTouch = "尚未收到外屏触摸"
     @Published var rearViewportSize = CGSize.zero
+    @Published private(set) var surfaceEpoch = 0
+    @Published private(set) var recoveryMessage = "尚未自动恢复"
+    private(set) var requested = false
+    var recoveryAllowed = false
+    private var recovery = RearCaptureRecovery()
+    private var healthTimer: Timer?
+    private var checkingHealth = false
+    private var interrupted = false
+    private var recoveryBlocked = false
+    private var rebindTask: Task<Void, Never>?
     private var generation = UUID()
     private var observers: [NSObjectProtocol] = []
 
     init() {
         let center = NotificationCenter.default
-        for name in [AVCaptureSession.wasInterruptedNotification, AVCaptureSession.runtimeErrorNotification] {
-            observers.append(center.addObserver(forName: name, object: session, queue: .main) { [weak self] _ in
+        for name in [AVCaptureSession.wasInterruptedNotification, AVCaptureSession.interruptionEndedNotification,
+                     AVCaptureSession.runtimeErrorNotification] {
+            observers.append(center.addObserver(forName: name, object: session, queue: .main) { [weak self] notification in
+                let reset = (notification.userInfo?[AVCaptureSessionErrorKey] as? AVError)?.code == .mediaServicesWereReset
                 Task { @MainActor in
-                    guard let self, self.running || self.starting else { return }
-                    self.stop(); self.status = "相机被中断，外屏实验已停止；可以重新开启"
+                    guard let self, self.requested else { return }
+                    self.surfaceEpoch += 1
+                    if name == AVCaptureSession.wasInterruptedNotification {
+                        self.interrupted = true; self.running = false
+                        self.status = "相机暂时中断 · 等待系统恢复"
+                    } else if name == AVCaptureSession.interruptionEndedNotification {
+                        self.interrupted = false
+                        self.recoveryMessage = "系统中断已结束，正在检查背面接收"
+                        self.checkHealth()
+                    } else {
+                        self.running = false; self.recoveryBlocked = !reset
+                        self.status = reset ? "相机服务已重置 · 等待恢复" : "相机发生错误，请重新开启背面控制"
+                        self.checkHealth()
+                    }
                 }
             })
         }
     }
 
     func start() {
-        guard !running, !starting else { return }
+        if !requested {
+            requested = true; recovery = RearCaptureRecovery(); recoveryBlocked = false
+            let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.checkHealth() }
+            }
+            healthTimer = timer; RunLoop.main.add(timer, forMode: .common)
+        }
+        guard !running, !starting, !interrupted, !recoveryBlocked else { return }
         let token = UUID(); generation = token
         starting = true; status = "正在申请相机权限…"
         Task { [self] in
             let allowed = await AVCaptureDevice.requestAccess(for: .video)
             guard generation == token else { return }
-            guard allowed else { starting = false; status = "相机权限未允许，请在设置中开启"; return }
+            guard allowed else { stop(); status = "相机权限未允许，请在设置中开启"; return }
+            guard UIApplication.shared.applicationState == .active else { starting = false; return }
             let session = session
             let discardedFrames = discardedFrames
             queue.async { [weak self, token] in
@@ -152,11 +205,12 @@ final class CameraAccessory: ObservableObject {
                     // Video only: no microphone or audio-session activation to suppress haptics.
                     session.automaticallyConfiguresApplicationAudioSession = false
                     }()
-                    session.startRunning()
+                    if !session.isRunning && !session.isInterrupted { session.startRunning() }
                     let running = session.isRunning
                     Task { @MainActor in
                         guard let self, self.generation == token else { return }
                         self.starting = false; self.running = running; self.enabled = running
+                        self.surfaceEpoch += 1
                         self.status = running ? "相机运行中 · 画面不显示、不保存、不传输" : "相机未能启动"
                     }
                 } catch {
@@ -171,10 +225,58 @@ final class CameraAccessory: ObservableObject {
 
     func stop() {
         generation = UUID()
+        requested = false; recoveryAllowed = false; interrupted = false; recoveryBlocked = false
+        healthTimer?.invalidate(); healthTimer = nil
+        rebindTask?.cancel(); rebindTask = nil; checkingHealth = false
         enabled = false; running = false; starting = false; available = false; presented = false
         status = "相机已停止"
         let session = session
         queue.async { if session.isRunning { session.stopRunning() } }
+    }
+
+    /// Re-arm a cancelled UIView after foreground/permission transitions. Old
+    /// contacts remain cancelled until lifted; this does not synthesize touches.
+    func resumeInput() {
+        guard requested else { return }
+        surfaceEpoch += 1
+        checkHealth()
+    }
+
+    private func checkHealth() {
+        guard requested, recoveryAllowed, !recoveryBlocked, !starting, !checkingHealth,
+              rebindTask == nil, UIApplication.shared.applicationState == .active,
+              AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        checkingHealth = true
+        let token = generation, session = session
+        queue.async { [weak self] in
+            let actualRunning = session.isRunning, actualInterrupted = session.isInterrupted
+            Task { @MainActor in
+                guard let self, self.generation == token else { return }
+                self.checkingHealth = false
+                guard self.requested, self.recoveryAllowed, UIApplication.shared.applicationState == .active else { return }
+                self.running = actualRunning && !actualInterrupted
+                let action = self.recovery.sample(allowed: !self.recoveryBlocked,
+                    interrupted: self.interrupted || actualInterrupted, running: actualRunning,
+                    enabled: self.enabled, available: self.available, presented: self.presented)
+                switch action {
+                case .none: break
+                case .restartSession:
+                    self.recoveryMessage = "自动恢复相机会话（\(self.recovery.attempts)/3）"
+                    self.start()
+                case .rebindAccessory:
+                    self.recoveryMessage = "自动重新连接背面界面（\(self.recovery.attempts)/3），请重新落指"
+                    self.enabled = false; self.surfaceEpoch += 1
+                    self.rebindTask = Task { [weak self] in
+                        try? await Task.sleep(for: .milliseconds(250))
+                        guard !Task.isCancelled, let self, self.generation == token else { return }
+                        self.rebindTask = nil
+                        guard self.requested, self.recoveryAllowed, self.running,
+                              UIApplication.shared.applicationState == .active else { return }
+                        self.enabled = true
+                    }
+                }
+            }
+        }
     }
 
     func record(_ event: TouchpadEvent) {
@@ -194,7 +296,7 @@ final class CameraAccessory: ObservableObject {
     }
     enum CameraError: Error { case unavailable }
 
-    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit { healthTimer?.invalidate(); rebindTask?.cancel(); observers.forEach { NotificationCenter.default.removeObserver($0) } }
 }
 
 struct OuterRemoteTouchpad: View {
@@ -226,6 +328,7 @@ struct OuterRemoteTouchpad: View {
             }.padding().allowsHitTesting(false)
             TouchpadSurface(behavior: .contactsOnly, inputEnabled: inputReady,
                             edgeInsetFraction: outerEdgeInset, activeRegion: region, contactGestureFingers: 2,
+                            inputEpoch: camera.surfaceEpoch,
                             inputIsCurrent: { !grip.controlsPresented && camera.running && camera.enabled && client.acceptsInput }, onContactCount: { count in
                 camera.recordContacts(count)
                 if count == 0 { grip.outerContacts(0) }

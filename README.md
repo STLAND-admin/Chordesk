@@ -58,7 +58,7 @@ These are planned tasks. See the [public roadmap](ROADMAP.md) for details and ac
 
 ## Current scope
 
-- iOS **1.22 / build 27** adds a complete in-app guide, three rear-contact lights, and automatic iPhone keyboard presentation on new installs. Saved preferences are preserved. Mac stays **0.18.1 / build 26**. [Current validation](docs/VALIDATION-1.22.md); [previous hardware confirmation](docs/VALIDATION-0.18.1.md).
+- iOS **1.22.1 / build 28** separates Forget from Connect, pins rear-contact lights above the desktop, and adds bounded capture recovery. The idle rear-control fix still needs device confirmation. The complete guide and default iPhone keyboard remain. Mac stays **0.18.1 / build 26**. [Current validation](docs/VALIDATION-1.22.1.md); [guide recording plan](docs/GUIDE-RECORDING.md).
 - **Local network only**, with TLS pairing. Internet access, accounts, and relay services are not implemented. [Network plan](PUBLIC-NETWORK-PLAN.md).
 - Display scaling targets **1600 × 900 logical resolution**, using existing safe display modes. Some custom HiDPI modes still need the optional BetterDisplay fallback. [Dependencies](docs/DEPENDENCIES.md).
 - Microphone forwarding is off by default. Using Duo as a microphone for Mac apps currently requires a virtual audio device; an integrated driver is not implemented. [Audio details](docs/REMOTE-MICROPHONE.md).

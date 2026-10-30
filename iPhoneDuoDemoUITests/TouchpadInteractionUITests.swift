@@ -59,6 +59,28 @@ final class TouchpadInteractionUITests: XCTestCase {
     }
 
     @MainActor
+    func testForgetMacDoesNotConnectAndOnlyDeletesConfirmedHost() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_PAIRED_MACS"] = "1"
+        app.launchEnvironment["DUO_UI_LIVE_FRAMES"] = "1"
+        app.launch()
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("连接 Mac", in: app)
+        let forget = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "lan-forget-")).firstMatch
+        XCTAssertTrue(forget.waitForExistence(timeout: 5))
+        shortPress(forget)
+        XCTAssertTrue(app.buttons["忘记"].waitForExistence(timeout: 5))
+        shortPress(app.buttons["取消"])
+        XCTAssertTrue(app.navigationBars["连接 Mac"].exists, "Forget must not invoke connect/dismiss.")
+        XCTAssertTrue(app.buttons["我的 Mac"].exists && app.buttons["同学的 Mac"].exists)
+        shortPress(forget); shortPress(app.buttons["忘记"])
+        XCTAssertTrue(app.buttons["我的 Mac"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["同学的 Mac"].exists)
+        XCTAssertTrue(app.navigationBars["连接 Mac"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "lan-reconnect-")).count, 1)
+    }
+
+    @MainActor
     func testRearRegionEditorMovesResizesAndSticksToEdge() {
         let app = launchFixture()
         shortPress(app.buttons["remote-options"]); shortPressMenuItem("相机背面切换", in: app)
@@ -297,6 +319,8 @@ final class TouchpadInteractionUITests: XCTestCase {
         let badge = app.buttons["rear-status-badge"]
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         let originalBadge = badge.frame
+        XCTAssertLessThanOrEqual(badge.frame.maxY, app.images["lan-remote-monitor"].frame.minY + 1,
+                                 "The rear lights must not cover desktop pixels.")
         XCTAssertGreaterThan(menu.frame.midX, app.windows.firstMatch.frame.width * 0.9)
         XCTAssertEqual(menu.frame.midX, keyboard.frame.midX, accuracy: 2)
         XCTAssertLessThan(badge.frame.midX, menu.frame.midX)

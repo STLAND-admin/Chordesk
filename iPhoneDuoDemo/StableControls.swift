@@ -10,6 +10,22 @@ enum ControlRailPosition {
     }
 }
 
+enum RearStatusPlacement {
+    /// Choose the highest free trailing position using public reserved regions.
+    static func frame(size: CGSize, in bounds: CGRect, avoiding regions: [CGRect]) -> CGRect {
+        let size = CGSize(width: min(max(0, size.width), bounds.width), height: max(0, size.height))
+        let rows = ([bounds.minY] + regions.map(\.maxY)).sorted()
+        for y in rows where y >= bounds.minY && y + size.height <= bounds.maxY {
+            var candidate = CGRect(x: bounds.maxX - size.width, y: y, width: size.width, height: size.height)
+            for obstacle in regions.sorted(by: { $0.maxX > $1.maxX }) where candidate.intersects(obstacle) {
+                candidate.origin.x = obstacle.minX - size.width
+            }
+            if candidate.minX >= bounds.minX && !regions.contains(where: { $0.intersects(candidate) }) { return candidate }
+        }
+        return CGRect(origin: bounds.origin, size: size)
+    }
+}
+
 /// Hold a menu's snapshot and selected action until its dismissal completes.
 struct MenuInteractionState {
     private(set) var presented = false
@@ -29,6 +45,42 @@ struct MenuInteractionState {
 #if os(iOS)
 import SwiftUI
 import UIKit
+
+struct RearStatusPositionReader: UIViewRepresentable {
+    var size: CGSize
+    var onChange: (CGRect) -> Void
+    func makeUIView(context: Context) -> RearStatusPositionView { RearStatusPositionView() }
+    func updateUIView(_ view: RearStatusPositionView, context: Context) {
+        view.badgeSize = size; view.onChange = onChange; view.setNeedsLayout()
+    }
+}
+
+final class RearStatusPositionView: UIView {
+    var badgeSize = CGSize.zero
+    var onChange: ((CGRect) -> Void)?
+    private var previous = CGRect.null
+    override func didMoveToWindow() { super.didMoveToWindow(); setNeedsLayout() }
+    override func safeAreaInsetsDidChange() { super.safeAreaInsetsDidChange(); setNeedsLayout() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let window, badgeSize.width > 0 else { return }
+        let usable: CGRect
+        let obstacles: [CGRect]
+        if #available(iOS 27.1, *) {
+            usable = bounds
+            obstacles = window.reservedRegions(kind: .occlusion).filter(\.isActive).map {
+                convert($0.frame, from: window)
+            }
+        } else {
+            usable = convert(window.bounds.inset(by: window.safeAreaInsets), from: window)
+            obstacles = []
+        }
+        let result = RearStatusPlacement.frame(size: badgeSize, in: usable, avoiding: obstacles)
+        guard result != previous else { return }
+        previous = result
+        DispatchQueue.main.async { [weak self] in self?.onChange?(result) }
+    }
+}
 
 /// Read the public bar layout region so an edge Dock avoids system ornaments.
 /// Its extent comes from the actual controls, never a device/model threshold.

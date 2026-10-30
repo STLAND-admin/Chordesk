@@ -127,9 +127,10 @@ final class TouchSurfaceView: UIView {
     }
     var inputEnabled = true {
         didSet {
-            guard oldValue != inputEnabled else { return }
+            // UIKit may detach/rehost the accessory without changing SwiftUI's
+            // value. Reapply our own view's hit-testing state on every update.
             isUserInteractionEnabled = inputEnabled
-            if !inputEnabled { cancelTouches() }
+            if oldValue != inputEnabled && !inputEnabled { cancelTouches() }
         }
     }
     var inputIsCurrent: () -> Bool = { true }

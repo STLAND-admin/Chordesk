@@ -159,6 +159,13 @@ final class LANClient: ObservableObject {
     }
     @discardableResult
     private func saveLibrary(_ library: PairedMacLibrary) -> Bool {
+#if DEBUG && targetEnvironment(simulator)
+        // UI fixtures must exercise deletion without accessing real credentials.
+        if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" {
+            rememberedMacs = library.hosts; rememberedPairingSaveFailed = false
+            return true
+        }
+#endif
         guard let data = try? JSONEncoder().encode(library),
               LANCredentialStore.write(data, account: "remembered-macs-v2") else {
             rememberedPairingSaveFailed = true; return false
@@ -538,9 +545,11 @@ struct LANConnectView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Button { client.connect(saved.pairing); dismiss() } label: {
                                     Label(saved.hostName.isEmpty ? "Mac" : saved.hostName, systemImage: "desktopcomputer")
-                                }.accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
+                                }.buttonStyle(.borderless)
+                                    .accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
                                 Text("\(saved.pairing.host):\(saved.pairing.port)").font(.caption).foregroundStyle(.secondary)
                                 Button("忘记这台 Mac", role: .destructive) { forgetting = saved }
+                                    .buttonStyle(.borderless)
                                     .accessibilityIdentifier("lan-forget-" + saved.id.uuidString)
                             }
                         }
@@ -577,9 +586,10 @@ struct LANConnectView: View {
                 }
             }
             .navigationTitle("连接 Mac")
-            .confirmationDialog("忘记这台 Mac？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), titleVisibility: .visible) {
-                Button("忘记", role: .destructive) { if let saved = forgetting { client.forgetRememberedMac(saved.id) }; forgetting = nil }
-            } message: { Text("只删除手机上的这台电脑记录，其他配对保留。下次需要重新扫码。") }
+            .alert("忘记这台 Mac？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), presenting: forgetting) { saved in
+                Button("忘记", role: .destructive) { client.forgetRememberedMac(saved.id); forgetting = nil }
+                Button("取消", role: .cancel) { forgetting = nil }
+            } message: { saved in Text("只删除手机上的“\(saved.hostName.isEmpty ? "Mac" : saved.hostName)”记录，其他配对保留。下次需要重新扫码。") }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
             .sheet(isPresented: $showScanner) {
                 QRScannerView { result in
