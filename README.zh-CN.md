@@ -28,7 +28,7 @@
 2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
 3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
 
-已有安装更新时保持原 Bundle Identifier 和 Team。Apple Developer Program 已通过，iOS **1.22 / build 27** 正在准备发行；目前尚无 TestFlight 或 App Store 下载。TestFlight 不是提交 App Store 的前置步骤；[分发准备](docs/DISTRIBUTION.md)。
+已有安装更新时保持原 Bundle Identifier 和 Team。Apple Developer Program 已通过，iOS **1.22.1 / build 28** 正在准备发行；目前尚无 TestFlight 或 App Store 下载。TestFlight 不是提交 App Store 的前置步骤；[分发准备](docs/DISTRIBUTION.md)。
 
 ## 怎么用
 

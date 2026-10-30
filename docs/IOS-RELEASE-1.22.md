@@ -1,5 +1,52 @@
 # Chordesk iOS 1.22 · 发行准备
 
+## 2026-10-30 更新：1.22.1 / build 28 TestFlight 候选
+
+- 已用现有正式发行证书和同一 Bundle ID / Team 归档、导出 **1.22.1 / build 28**。本节取代下文旧 build 27 的产物选择；不改变已部署的开发签名版本。
+- Archive：`release-artifacts/ios-1.22.1-build28/Chordesk.xcarchive`。
+- IPA：`release-artifacts/ios-1.22.1-build28/AppStoreExport/iPhoneDuoDemo.ipa`，2,369,324 字节；SHA-256：`220779ce9fa38ce19cafad4b1222f367879e26bf9b914ecb4457c8be953f8ffb`。
+- 干净解包副本的 `codesign --verify --deep --strict` 通过。正式 profile：`Chordesk App Store 2026`；`get-task-allow=false`、`beta-reports-active=true`、无设备名单，版本、iOS 27.1 SDK、隐私清单均已核对。工作目录解包副本受 Finder 扩展属性污染时不能误判为原 IPA 无效；原 ZIP 无 `__MACOSX` 项，独立临时目录重新解包验证通过。
+- 用户已指定 TestFlight 反馈邮箱，已在 App Store Connect 与中文 Beta 描述、英文审核备注、官网／隐私政策链接一起保存；不将该邮箱写入公开 Git 历史。审核联系姓名／电话尚待在 Apple 后台补齐。
+- [真实演示视频](https://stland-admin.github.io/Chordesk-site/?lang=en#demo)已发布，展示手机和 Mac 的实际操作。视频无声，保留完整启动／配对过程；不能将其视为背面长期闲置恢复的完整回归结果。
+- 当前为**本地候选包与审核材料准备**，尚未上传 build 28、提交 TestFlight Beta App Review 或邀请测试者。已创建并核对 [Chordesk App Store Connect 记录](https://appstoreconnect.apple.com/apps/6828753865/distribution/info)（Apple ID `6828753865`，主要语言简体中文，SKU `chordesk-ios`），使用原 Bundle ID。
+
+### 本轮测试重点（可用于 What to Test）
+
+1. 首次扫码与记住多台 Mac；“忘记”取消不连接，确认只删除所选记录。
+2. 直接触控：轻点、滚动、长按拖选与抬手释放；长按后不移动为右键。
+3. iPhone 输入法：自动唤出、中文确认与退格、长按空格移动光标、Ctrl / Option / Cmd。
+4. 背面一指＋正面双指：上下滑窗口总览、左右滑切换桌面；Mac 桌面切换需 System Events 授权和对应系统快捷键。
+5. 背面双指长按：临时触控板；松开恢复直接触控，轻点应仍为左键。
+6. 闲置、操作 Mac、输入／菜单、前后台及旋转后，重新落指能否恢复背面接触灯；此项仍需重点验证。
+
+### TestFlight 文案草稿
+
+**Beta App Description (English)**
+
+Chordesk brings your Mac desktop to your iPhone over a local network. Touch, scroll, select, and type with the iPhone keyboard. On iPhone Duo, simple holds on the rear surface change the meaning of front gestures, like playing a chord: one rear finger qualifies window and desktop gestures; holding two rear fingers temporarily turns the front into a trackpad. A companion Apple Silicon Mac running macOS 15.2 or later is required. This beta focuses on Duo; other iPhones have not yet been validated. Internet access is not included.
+
+**What to Test (English)**
+
+Test QR pairing and saved-Mac reconnect, forgetting a Mac without connecting, direct-touch selection and release, Chinese text entry and keyboard cursor movement, and rear 0/1/2-finger gestures. Please especially test whether rear contacts recover after idle time, keyboard or menu use, rotation, and returning to the foreground. Report the iOS/Mac versions and the exact gesture combination. Do not attach private desktop content or pairing credentials to public feedback.
+
+**Reviewer setup and disclosure**
+
+Use the [Mac 0.18.1 Apple Silicon host](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test). This host is a test build and is not notarized. The [installation instructions](https://github.com/STLAND-admin/Chordesk/blob/main/docs/MAC-PEER-TEST.txt) explain its setup. Put the Mac and iPhone on the same local network. On Mac, click “开始服务” and complete screen recording and control permission setup, then scan its current QR code from the iPhone. No cloud account or reviewer login is required. Use a disposable TextEdit document to test text entry and selection. The right-side menu contains the complete Duo operation manual and diagnostics. A right-side interaction-mode button offers a manual alternative to rear gestures.
+
+The optional experimental Duo rear interface uses the public CameraCaptureAccessory API while a foreground camera capture session remains active. Camera frames are immediately discarded: no preview, recording, or camera-frame transmission. The rear interface is used to qualify gestures and switch the front interaction mode, rather than for photographic controls. This intended-use distinction must be disclosed to App Review; public API availability does not establish that Apple will accept this use. The camera also scans pairing QR codes. Optional microphone forwarding is off by default and requires a separately configured virtual audio input device on the Mac; basic remote control does not require that driver.
+
+### Remaining submission gates
+
+- Confirm the Chordesk App Store Connect record and upload the build; wait for Apple processing and resolve server-side validation findings.
+- Beta description, feedback email and reviewer notes have been saved. Complete reviewer contact name / phone, then review the [privacy policy](https://stland-admin.github.io/Chordesk-site/privacy.html?lang=en), [support page](https://stland-admin.github.io/Chordesk-site/support.html?lang=en) and App Privacy questionnaire before submission.
+- Complete export compliance based on the actual implementation: Apple Network/Security TLS and authentication, no custom encryption implementation. Using system encryption still requires an export-compliance determination; do not mark “no encryption” simply because TLS comes from Apple.
+- For external testing, create the internal test group first, then prepare an external group and submit its first build for Beta App Review. Do not automatically invite testers or publish a public invitation link during preparation.
+- Verify the intended Duo device / OS combination and the hardware recovery cases above. Do not claim non-Duo testing or approval has already happened.
+
+Sources: [Test information](https://developer.apple.com/help/app-store-connect/test-a-beta-version/provide-test-information/), [external testing](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers), [export compliance](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance/), [App Privacy](https://developer.apple.com/app-store/app-privacy-details/).
+
+---
+
 2026-10-30；iOS 1.22 / build 27，配套 Mac 0.18.1 / build 26。
 
 ## 分发路线

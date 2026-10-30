@@ -30,7 +30,7 @@ Currently installed by **building locally in Xcode**. A TestFlight build is not 
 2. Select the `iPhoneDuoDemo` target. Under Signing & Capabilities, choose your own Team and a Bundle Identifier you can sign.
 3. Connect Duo over USB, enable Developer Mode and trust the Mac as prompted, then select the device and run. A free Personal Team can be used for testing, but requires periodic re-signing.
 
-Keep the same Bundle Identifier and Team when updating an existing installation. Apple Developer Program enrollment is complete. iOS **1.22 / build 27** is in release preparation; there is no public TestFlight or App Store build yet. TestFlight is optional before App Store submission. [Distribution plan](docs/DISTRIBUTION.md).
+Keep the same Bundle Identifier and Team when updating an existing installation. Apple Developer Program enrollment is complete. iOS **1.22.1 / build 28** has a locally exported, signature-verified distribution IPA; TestFlight review preparation is underway, with no public TestFlight or App Store build yet. [Release preparation](docs/IOS-RELEASE-1.22.md).
 
 ## How it works
 
