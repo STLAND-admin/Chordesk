@@ -12,8 +12,29 @@ fi
 swift build --configuration "$duo_configuration" --scratch-path "$duo_scratch_path" "${duo_compile_args[@]}"
 duo_binary_path=$(swift build --configuration "$duo_configuration" --scratch-path "$duo_scratch_path" --show-bin-path)
 app_bundle="${DUO_APP_BUNDLE:-$duo_scratch_path/Chordesk.app}"
+legacy_launch_link=""
 if [[ "${1:-}" == "--install" ]]; then
-    app_bundle="$HOME/Applications/DuoWorkbench.app"
+    app_bundle="$HOME/Applications/Chordesk.app"
+    legacy_bundle="$HOME/Applications/DuoWorkbench.app"
+    # Existing development installs retain their signed path and TCC identity.
+    # Expose the branded entry instead of leaving DuoWorkbench visible in Finder.
+    if [[ -d "$legacy_bundle" && ! -L "$legacy_bundle" ]]; then
+        if [[ -L "$app_bundle" ]]; then
+            link_target=$(readlink "$app_bundle")
+            if [[ "$link_target" != "DuoWorkbench.app" && "$link_target" != "$legacy_bundle" ]]; then
+                printf '%s\n' 'Refusing to replace an unrelated Chordesk launch link.' >&2
+                exit 1
+            fi
+        elif [[ -e "$app_bundle" ]]; then
+            printf '%s\n' 'Both Chordesk and a legacy install exist; choose one before installing.' >&2
+            exit 1
+        fi
+        legacy_launch_link="$app_bundle"
+        app_bundle="$legacy_bundle"
+    elif [[ -L "$app_bundle" ]]; then
+        printf '%s\n' 'Refusing to replace an unresolved Chordesk launch link.' >&2
+        exit 1
+    fi
 elif [[ $# -gt 0 ]]; then
     printf '%s\n' 'Usage: build-workbench.sh [--install]' >&2
     exit 1
@@ -63,4 +84,12 @@ if ! mv "$prepared_bundle" "$app_bundle"; then
     exit 1
 fi
 codesign --verify --strict "$app_bundle"
+if [[ -n "$legacy_launch_link" ]]; then
+    if [[ ! -L "$legacy_launch_link" ]]; then
+        ln -s "DuoWorkbench.app" "$legacy_launch_link"
+    fi
+    # Finder hides only the legacy entry; its contents and signature stay intact.
+    chflags hidden "$app_bundle"
+    printf '%s\n' "Launch: $legacy_launch_link"
+fi
 printf '%s\n' "Built: $app_bundle"

@@ -14,7 +14,7 @@ DUO_SIGNING_IDENTITY="Apple Development" ./scripts/build-workbench.sh
 ./scripts/build-workbench.sh --install
 ```
 
-沿用原 bundle ID、签名与稳定路径 `~/Applications/DuoWorkbench.app`，避免钥匙串／系统权限失效。
+从 `~/Applications/Chordesk.app` 打开主机。新安装使用这个路径；已有开发安装继续保留 `~/Applications/DuoWorkbench.app` 的实际签名包，安装脚本会创建名为 `Chordesk.app` 的兼容启动链接并隐藏 Finder 中的旧入口。这样可统一可见名称，同时保留原安装路径、bundle ID、签名及配对／权限配置。不要把旧开发目录中的历史 `.app` 当成当前版本。
 
 ```sh
 # 先退出占用 49173 端口的主机；测试不会投递真实输入或调整实体屏。
@@ -33,4 +33,4 @@ swift test --scratch-path /private/tmp/ChordeskTests
 - `RemoteMicrophone.swift`：麦克风传输与虚拟设备路由。
 - `Tests/`、`iPhoneDuoDemoUITests/`：逻辑与模拟器检查。
 
-原网页位于独立公开仓库 [Chordesk-site](https://github.com/STLAND-admin/Chordesk-site)。原生仓库私有，不提交签名材料、配对凭据、构建产物或其他产品。
+原网页位于独立公开仓库 [Chordesk-site](https://github.com/STLAND-admin/Chordesk-site)。原生仓库也已公开，不提交签名材料、配对凭据、构建产物或其他产品。
