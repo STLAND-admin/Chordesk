@@ -161,10 +161,11 @@ final class TouchpadInteractionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["camera-mode-direct"].exists)
         app.buttons["camera-control-done"].tap()
         app.buttons["remote-options"].tap()
-        shortPressMenuItem("操作指南", in: app)
-        XCTAssertTrue(app.navigationBars["操作指南"].waitForExistence(timeout: 5))
-        let rearGuide = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "背面不再移动")).firstMatch
-        for _ in 0..<5 where !rearGuide.exists { app.swipeUp() }
+        shortPressMenuItem("Duo 操作手册", in: app)
+        XCTAssertTrue(app.navigationBars["Duo 操作手册"].waitForExistence(timeout: 5))
+        let rearGuide = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "背面不直接移动")).firstMatch
+        reveal(rearGuide, in: app.collectionViews.firstMatch)
+        if !rearGuide.exists { print(app.debugDescription) }
         XCTAssertTrue(rearGuide.exists)
     }
 
@@ -235,8 +236,8 @@ final class TouchpadInteractionUITests: XCTestCase {
         XCTAssertEqual(menu.frame.maxX, keyboard.frame.maxX, accuracy: 2)
         XCTAssertLessThanOrEqual(app.buttons["native-modifier-2"].frame.maxX, keyboard.frame.minX)
         shortPress(menu)
-        shortPressMenuItem("操作指南", in: app)
-        XCTAssertTrue(app.navigationBars["操作指南"].waitForExistence(timeout: 5))
+        shortPressMenuItem("Duo 操作手册", in: app)
+        XCTAssertTrue(app.navigationBars["Duo 操作手册"].waitForExistence(timeout: 5))
     }
 
     @MainActor
@@ -312,7 +313,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Chordesk edge Dock and stationary rear badge"; shot.lifetime = .keepAlways; add(shot)
         shortPress(menu)
-        shortPressMenuItem("操作指南", in: app)
-        XCTAssertTrue(app.navigationBars["操作指南"].waitForExistence(timeout: 5))
+        shortPressMenuItem("Duo 操作手册", in: app)
+        XCTAssertTrue(app.navigationBars["Duo 操作手册"].waitForExistence(timeout: 5))
     }
 }

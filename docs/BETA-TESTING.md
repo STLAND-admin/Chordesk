@@ -7,7 +7,7 @@
 | 交付物 | 试用入口 | 当前状态 |
 | --- | --- | --- |
 | 概念与操作演示 | https://stland-admin.github.io/Chordesk-site/ | GitHub Pages，具体部署见 VALIDATION-1.18.md |
-| Duo App | 定向邀请 TestFlight | 开发者会员注册中；尚未上传、审核或邀请 |
+| Duo App | 定向邀请 TestFlight | 开发者会员已通过；1.22 正在准备发行，尚未上传、审核或邀请 |
 | Mac 主机 | 本地未公证同学试用 DMG；正式版未来放 Releases | Apple Silicon 0.15.0 / 22 测试包已生成，需接收者手动允许；未公开发布、公证或在另一台 Mac 验证 |
 
 本机现有 Apple Development 签名 App 继续用于稳定调试。用户已单独授权由干净 Release 构建生成本地 ad hoc 签名的 Mac 同学试用包，明确标为未公证；不是把本机开发包改名后当正式发行版，也不适用于 iOS。网站公开不等于原生源码公开。发布前确定包的架构、最低系统版本与配套 Duo 版本；目前构建验证以 Apple Silicon 为准，不承诺 Intel。

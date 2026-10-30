@@ -2,7 +2,7 @@
 
 ## 试用交付
 
-用户正在注册 Apple Developer Program。小范围试用执行清单、十分钟任务与反馈模板见 [BETA-TESTING.md](BETA-TESTING.md)；BetterDisplay 与虚拟音频依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。正式发布脚本已准备，但当前只检测到 Apple Development 身份，不能宣称已生成公证包或上传 TestFlight。
+2026-10-30 用户确认 Apple Developer Program 已通过。iOS 1.22 的本地 Release Archive 已生成，发行导出及审核状态见 [1.22 发行准备](IOS-RELEASE-1.22.md)。小范围试用执行清单、十分钟任务与反馈模板见 [BETA-TESTING.md](BETA-TESTING.md)；BetterDisplay 与虚拟音频依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。尚未上传 TestFlight 或提交 App Store；Mac 正式 Developer ID 公证包也未生成。
 
 2026-10-29 用户另行明确授权生成无付费会员的同学试用包：`scripts/package-macos-test.sh` 独立生成 Apple Silicon Release、本地 ad hoc 签名、未公证 DMG。接收者手动为该 App 放行并授予屏幕录制／辅助功能，不需要 Xcode；受管理的 Mac 可能禁止。具体说明见 [Mac 同学试用说明](MAC-PEER-TEST.txt)。此流程不修改本机稳定开发包，也不等于 Developer ID、公证或 TestFlight 分发。
 
@@ -18,12 +18,12 @@ TestFlight 初期采用定向邀请，招募时确认 Duo 设备；不开放无�
 
 公开发布门槛：先确认官方是否允许声明必需的背面交互能力；若没有硬限制，继续 Duo 封闭测试，或在公开发行前补足可下载机型的适配／验证。不能以“我们只测 Duo”替代[Apple 对可下载设备的兼容要求](https://developer.apple.com/help/app-review/before-submitting-for-review/test-compatible-devices)。
 
-## iOS → TestFlight
+## iOS → App Store Connect
 
 1. Apple Developer Program 激活并能进入 App Store Connect；个人开发签名安装成功不等于已可分发 TestFlight。
 2. 注册 App 记录、确定最终 bundle ID。当前开发 ID 继续用于本机更新，换 ID 会成为另一个 App，需迁移／重新配对。
 3. 准备图标、Duo 截图、隐私政策与数据收集说明、相机与本地网络用途说明、测试账号或可复现的 Mac 连接步骤。
-4. 用分发签名 Archive、验证、上传；先内部验证，再提交外部测试审核。说明相机辅助场景的具体用途，不将其称为通用外屏接口，也不预判审核结论。
+4. Archive、导出／验证并上传 App Store Connect；可直接准备 App Store 提交，也可先内部 TestFlight 测试，再提交外部测试审核。TestFlight 不是 App Store 的前置要求。说明相机辅助场景的具体用途，不将其称为通用外屏接口，也不预判审核结论。
 5. 测试说明包含局域网依赖、Mac 权限、二维码凭据管理、退后台断连，以及真实支持的手势和画质边界。
 
 ## macOS → 安装包

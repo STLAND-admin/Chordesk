@@ -4,7 +4,7 @@
 
 [English](README.md) · 简体中文
 
-**前后协作，像按和弦一样控制。**
+**指间和弦，掌控桌面。**
 
 为 iPhone Duo 设计的远程桌面：正面拇指触控和输入，背面手指像按和弦一样切换操作模式。包含 **iOS 控制端** 和 **Mac 主机端**。
 
@@ -28,7 +28,7 @@
 2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
 3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
 
-已有安装更新时保持原 Bundle Identifier 和 Team。开发者会员与审核准备完成后，通过 **TestFlight** 分发；[分发准备](docs/DISTRIBUTION.md)。
+已有安装更新时保持原 Bundle Identifier 和 Team。Apple Developer Program 已通过，iOS **1.22 / build 27** 正在准备发行；目前尚无 TestFlight 或 App Store 下载。TestFlight 不是提交 App Store 的前置步骤；[分发准备](docs/DISTRIBUTION.md)。
 
 ## 怎么用
 
@@ -56,12 +56,16 @@
 
 ## 当前范围
 
-- iOS **1.21 / build 25**，Mac **0.18.1 / build 26**；用户已真机确认手机菜单与背面组合手势均可切换 Spaces，iOS 1.21 无需重装。其他设备及新 Mac 首次授权流程的验证范围见记录。[验证记录](docs/VALIDATION-0.18.1.md)
+- iOS **1.22 / build 27** 新增完整操作手册、三盏背面接触灯，新安装默认 iPhone 输入法及自动唤起，保留已有偏好。Mac 保持 **0.18.1 / build 26**。[本版验证](docs/VALIDATION-1.22.md)；[此前真机反馈](docs/VALIDATION-0.18.1.md)。
 - 当前仅局域网，TLS 配对；公网、账号与中继尚未实现。[公网规划](PUBLIC-NETWORK-PLAN.md)
 - 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
 - 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)
 - 背面实验使用相机辅助 API；相机帧不显示、不保存、不传输，不代表已获得通用外屏接口或上架许可。
 
 [开发与构建](docs/DEVELOPMENT.md) · [开发历史](docs/DEVELOPMENT-HISTORY.md) · [品牌素材](Branding/README.md)
+
+## 许可证
+
+[CC BY-NC-SA 4.0](LICENSE)：署名、非商业性使用、相同方式共享。适用于项目自有代码、文档及素材；第三方依赖保留原许可证。[适用范围](NOTICE.md)。
 
 STLAND 出品

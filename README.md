@@ -4,13 +4,13 @@
 
 English · [简体中文](README.zh-CN.md)
 
-**Two sides. One chord. Your desktop.**
+**Play a chord. Control your desktop.**
 
 A remote desktop app designed for iPhone Duo. Use your thumbs for touch and typing on the front, while fingers on the back switch interaction modes like holding a chord. Includes an **iOS client** and a **Mac host**.
 
 [Concept & 3D demo](https://stland-admin.github.io/Chordesk-site/) · [Operation guide](OPERATION-GUIDE.md) · [Roadmap](ROADMAP.md)
 
-The demo and detailed guides are currently in Chinese.
+The website supports Chinese and English. Detailed operation guides are currently in Chinese.
 
 ## Install
 
@@ -30,7 +30,7 @@ Currently installed by **building locally in Xcode**. A TestFlight build is not 
 2. Select the `iPhoneDuoDemo` target. Under Signing & Capabilities, choose your own Team and a Bundle Identifier you can sign.
 3. Connect Duo over USB, enable Developer Mode and trust the Mac as prompted, then select the device and run. A free Personal Team can be used for testing, but requires periodic re-signing.
 
-Keep the same Bundle Identifier and Team when updating an existing installation. **TestFlight** distribution is planned once developer membership and review requirements are met. [Distribution plan](docs/DISTRIBUTION.md).
+Keep the same Bundle Identifier and Team when updating an existing installation. Apple Developer Program enrollment is complete. iOS **1.22 / build 27** is in release preparation; there is no public TestFlight or App Store build yet. TestFlight is optional before App Store submission. [Distribution plan](docs/DISTRIBUTION.md).
 
 ## How it works
 
@@ -58,12 +58,16 @@ These are planned tasks. See the [public roadmap](ROADMAP.md) for details and ac
 
 ## Current scope
 
-- iOS **1.21 / build 25**, Mac **0.18.1 / build 26**. Phone menus and rear-finger gestures for switching Spaces have been confirmed on the user's devices. iOS 1.21 does not need reinstalling for this Mac fix. [Validation record](docs/VALIDATION-0.18.1.md).
+- iOS **1.22 / build 27** adds a complete in-app guide, three rear-contact lights, and automatic iPhone keyboard presentation on new installs. Saved preferences are preserved. Mac stays **0.18.1 / build 26**. [Current validation](docs/VALIDATION-1.22.md); [previous hardware confirmation](docs/VALIDATION-0.18.1.md).
 - **Local network only**, with TLS pairing. Internet access, accounts, and relay services are not implemented. [Network plan](PUBLIC-NETWORK-PLAN.md).
 - Display scaling targets **1600 × 900 logical resolution**, using existing safe display modes. Some custom HiDPI modes still need the optional BetterDisplay fallback. [Dependencies](docs/DEPENDENCIES.md).
 - Microphone forwarding is off by default. Using Duo as a microphone for Mac apps currently requires a virtual audio device; an integrated driver is not implemented. [Audio details](docs/REMOTE-MICROPHONE.md).
 - Rear-screen interaction uses the experimental camera accessory path. Camera frames are not displayed, saved, or transmitted. This does not establish a general-purpose rear-screen API or App Store approval.
 
 [Development & builds](docs/DEVELOPMENT.md) · [Development history](docs/DEVELOPMENT-HISTORY.md) · [Brand assets](Branding/README.md)
+
+## License
+
+[CC BY-NC-SA 4.0](LICENSE): attribution, noncommercial use, and ShareAlike. Applies to project-owned code, docs and assets; third-party licenses remain unchanged. [Scope](NOTICE.md).
 
 Made by STLAND
