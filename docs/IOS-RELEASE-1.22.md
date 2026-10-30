@@ -8,19 +8,23 @@ Apple Developer Program 已通过。可以直接准备 App Store 提交，**Test
 
 本次只准备本地发行产物，不上传构建、不提交审核、不邀请测试者。App Store 导出的 IPA 不能像 Mac DMG 一样直接发给朋友安装。
 
-## 当前产物与阻塞
+## 当前产物
 
 - Release Archive 构建成功，版本、bundle ID 与内含隐私清单已核对，严格签名校验通过。
 - 已在用户明确授权后创建 Apple Distribution 证书；不导出或提交证书私钥。
 - 本地路径：`release-artifacts/ios-1.22-build27/Chordesk.xcarchive`。产物、签名日志和配置文件被 Git 忽略。
-- IPA 导出尚未完成：命令行报告 `No Accounts`／缺少 App Store profile，Organizer 仍把归档团队识别为历史 Personal Team。需要在 Developer 账户核对团队和 App Store 配置文件后继续，不修改 bundle ID、不假称已上传。
+- **App Store IPA 已导出**：`release-artifacts/ios-1.22-build27/AppStoreExport/iPhoneDuoDemo.ipa`，2,326,381 字节。SHA-256：`5220645cb22e70dad53310aa673bb4aabe44c77283c8902dcd849320d8eaf836`；同目录提供 `SHA256SUMS.txt`。
+- 经 Edge 已登录账户确认原 Team 会员有效，为原 App ID 生成 `Chordesk App Store 2026` profile，使用现有 Apple Distribution 证书手动导出成功。此前 `No Accounts` 和 Personal Team 提示属于本次自动签名／旧配置识别路径的问题，不代表会员未生效；未修改 Bundle ID 或撤销旧证书。
+- IPA 解包后严格签名检查通过；版本 1.22 / 27、正式 App Store profile、`get-task-allow=false`、无设备名单和隐私清单均已核对。尚未经过 App Store Connect 服务端验证、上传或审核。
+- Duo 已覆盖安装 **开发签名**版本并查询确认为 1.22 / 27。自动启动被系统 `Locked` 拒绝，等待用户解锁后交互复测；发行 IPA 与本次 USB 开发安装分开。
 
-可复用脚本为 `scripts/archive-ios-release.sh` 和 `scripts/export-ios-release.sh`。导出固定使用 `destination=export`；账户侧自动配置仅在明确设置 `CHORDESK_ALLOW_PROVISIONING_UPDATES=1` 时允许。
+可复用脚本为 `scripts/archive-ios-release.sh` 和 `scripts/export-ios-release.sh`。导出固定使用 `destination=export`；设置 `CHORDESK_DISTRIBUTION_PROFILE` 可选择已安装的 profile 进行手动签名，`CHORDESK_DISTRIBUTION_CERTIFICATE` 可指定证书 SHA-1（不含私钥）。账户侧自动配置仅在明确设置 `CHORDESK_ALLOW_PROVISIONING_UPDATES=1` 时允许。
 
 ## 上传／提交前待办
 
 - [ ] App Store Connect 创建或核对 Chordesk App 记录，使用现有 `dev.iphoneduo.remotedemo`；确认 Team、版本及构建号。
-- [ ] 完成发行导出与验证，再单独上传；不要选择仅限 TestFlight 内部测试的构建方式，否则不能用于 App Store 提交。
+- [x] 完成本地 App Store 发行 IPA 导出与签名／profile 校验。
+- [ ] App Store Connect 服务端验证与单独上传；不要选择仅限 TestFlight 内部测试的构建方式，否则不能用于 App Store 提交。
 - [ ] 准备真实 App 截图、支持 URL、隐私政策 URL、年龄分级、产品描述和审核联系方式。概念网页的 3D 不能冒充 App 实际截图；尚未提供的演示视频不填假链接。
 - [ ] 核对 App Privacy 和加密出口合规问卷。当前使用系统 TLS 的局域网配对，未替账户填写法律声明；`PrivacyInfo.xcprivacy` 不替代问卷或隐私政策。
 - [ ] 提供 Mac 主机下载、同网连接／扫码步骤、必要设备要求，以及可复现的测试流程。没有云账号登录；不要公开真实配对密钥或私人桌面。

@@ -16,8 +16,8 @@
 
 ## 当前原型边界
 
-- **2026-10-30 / iOS 1.22 build 27**：新增完整 Duo 操作手册；新安装默认 iPhone 输入法与自动唤起，保留既有偏好；背面徽标改三盏灰色灯（1／2／3+），原位置不变，暂停表示未就绪，不新增三指手势。41 项逻辑和 2 项针对性模拟器 UI 回归通过，Release Archive 已生成，未部署真机。发行账户／配置文件问题及实际产物状态见 `docs/IOS-RELEASE-1.22.md`，不得把 Archive 当成已可外部分发的 IPA。
-- 本轮用户已确认 Developer Program 通过，并明确授权现有 Team 创建／更新 Chordesk 发行证书、App ID、配置文件，仅本地导出，不上传或提交。Apple Distribution 证书已创建。网站采用完整中英文切换，标题“指间和弦，掌控桌面。”／“Play a chord. Control your desktop.”，保留 3D，2D 演示改为真实视频预留。人体工学段落是作者观察，不宣称实验证明。
+- **2026-10-30 / iOS 1.22 build 27**：新增完整 Duo 操作手册；新安装默认 iPhone 输入法与自动唤起，保留既有偏好；背面徽标改三盏灰色灯（1／2／3+），原位置不变，暂停表示未就绪，不新增三指手势。41 项逻辑和 2 项针对性模拟器 UI 回归通过，Release Archive 和正式发行 IPA 已生成；开发签名包已 USB 覆盖安装、设备版本查询确认 1.22 / 27，自动启动被锁屏阻止，交互待复测。实际产物状态见 `docs/IOS-RELEASE-1.22.md`，不得把 Archive 当成已可外部分发的 IPA。
+- 本轮用户已确认 Developer Program 通过，并明确授权现有 Team 创建／更新 Chordesk 发行证书、App ID、配置文件，仅本地导出，不上传或提交。Apple Distribution 证书已创建。随后经用户指定的 Edge 已登录账户核对会员和原 Team，生成 Chordesk App Store profile，手动签名导出成功；严格签名、正式 profile 和版本已验证，未上传／审核。网站采用完整中英文切换，标题“指间和弦，掌控桌面。”／“Play a chord. Control your desktop.”，保留 3D，2D 演示改为真实视频预留。人体工学段落是作者观察，不宣称实验证明。
 - **许可证决定**：用户明确要求项目暂用 CC BY-NC-SA 4.0，不使用 MIT 作为项目许可证；自有代码、文档、品牌和官网内容均受该许可约束，见 LICENSE／NOTICE.md。第三方依赖保留原许可（网站 Three.js 仍为 MIT）。不要把非商业许可称为允许自由商用，也不要把历史无许可证状态当作当前规则。
 
 - **2026-10-30 文档展示**：默认 `README.md` 使用英文，`README.zh-CN.md` 保留中文并互链；版本、能力边界和三项 Roadmap 应同步维护。GitHub README／品牌页使用现有 `Chordesk-transparent.svg`，透出页面实际背景；不要退回黑色方块背景。此调整不改变两端 App 图标、签名或安装包。
