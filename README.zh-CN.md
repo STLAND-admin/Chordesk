@@ -26,7 +26,7 @@
 
 也可以自行编译：
 
-1. 安装 Xcode 27.1 或更新，打开 `iPhoneDuoDemo.xcodeproj`。
+1. 安装 Xcode 27.1 或更新及 Go 1.27.1+，先执行 `./scripts/build-tailnet.sh`，再打开 `iPhoneDuoDemo.xcodeproj`（[构建说明](docs/DEVELOPMENT.md)）。
 2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
 3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
 
@@ -50,7 +50,7 @@
 
 ## 后续开发
 
-- [ ] **P0 跨网络远控（最高优先级）**：手机蜂窝／异地 Wi-Fi 访问已授权 Mac；先验证 Tailscale，再评估内置设备服务＋直连／中继，支持动态地址和换网重连。
+- [ ] **P0 跨网络验收（最高优先级）**：开发版已内嵌两端 Tailscale，无需额外 App；发布前完成账号登录、蜂窝／异地 Wi-Fi、中继性能和换网重连测试。
 - [ ] **P1 后台能耗**：测量无人连接时的采屏、JPEG 编码和保活，按需采集并保持低开销后台可达。
 - [ ] **键盘可视性**：探索 Liquid Glass 输入预览，减少远端输入框被键盘遮挡。
 - [ ] **RDP／客户端渲染**：验证 Mac 当前会话可行性，对比清晰度、带宽和延迟。
@@ -61,7 +61,8 @@
 ## 当前范围
 
 - iOS **1.22.1 / build 28** 隔离忘记／连接按钮、把背面灯置于桌面上方，并加入有次数限制的相机恢复；闲置后背面失效仍待真机复测。完整手册与默认 iPhone 输入法保留。Mac 保持 **0.18.1 / build 26**。[验证记录](docs/VALIDATION-1.22.1.md)；[真实操作视频录制稿](docs/GUIDE-RECORDING.md)。
-- 当前仅局域网，TLS 配对；公网、账号与中继尚未实现。[公网规划](PUBLIC-NETWORK-PLAN.md)
+- **公开安装包仍为局域网版。**开发中 iOS **1.23 / build 29**、Mac **0.19.0 / build 27** 已加入内嵌 Tailscale：局域网免登录，公网使用各自的个人账号，不另装 Tailscale 或系统 VPN。跨网络真机验收尚待完成，本版尚未更新至 TestFlight。[设置与边界](docs/TAILSCALE.md)
+- 开发版 Mac 从一个按钮依次请求首次权限，通过后重启一次并开启内置屏服务；系统授权仍由机主确认。
 - 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
 - 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)
 - 背面实验使用相机辅助 API；相机帧不显示、不保存、不传输，不代表已获得通用外屏接口或上架许可。

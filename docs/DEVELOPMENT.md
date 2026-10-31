@@ -2,6 +2,28 @@
 
 完整 Xcode 27.1；iOS 控制端使用 iOS 27.1 SDK，真机主测 Duo。Mac 主机最低运行版本 macOS 15.2，目前硬件验收环境为 macOS 27。
 
+## 两端共用的内嵌网络引擎
+
+当前开发版需要 Go 1.27.1+（本机验证使用官方 Go 1.27.3）及完整 Xcode。先从 [Go 官方](https://go.dev/dl/)安装工具链，然后：
+
+```sh
+./scripts/build-tailnet.sh
+# 或 CHORDESK_GO=/absolute/path/to/go ./scripts/build-tailnet.sh
+```
+
+脚本按 `Native/Tailnet/go.mod`／`go.sum` 下载并校验官方模块，生成忽略入 Git 的 `build/tailnet/ChordeskTailnet.xcframework`。包括 Mac arm64、iOS arm64 和模拟器 arm64/x86_64。不启动节点或登录，不包含个人凭据。`swift build/test` 与 Xcode 均需先有该产物；修改原生引擎或依赖版本后重跑脚本。Mac 打包脚本缺少产物时会调用它。
+
+依赖下载需要联网，默认用 Go 官方代理；本机首次下载官方代理超时，测试使用 `GOPROXY=https://goproxy.cn`，仍保留模块校验，不关闭 sumdb。这不是 App 运行时代理。
+
+```sh
+# 原生字节桥接／取消／地址范围检查；不会登录或操作真实设备
+(cd Native/Tailnet && go test -race ./...)
+# 更新依赖后重新收集并审查两端随包许可
+python3 scripts/collect-tailnet-notices.py
+```
+
+注意：这不是嵌入外部 Tailscale 可执行文件，不应把机器上已有的登录状态、auth key 或配置目录复制进 App。跨网测试步骤、适用条件及发布要求见 [TAILSCALE.md](TAILSCALE.md)。
+
 ## iOS
 
 打开 `iPhoneDuoDemo.xcodeproj`，选择自己的 Team 和可用 Bundle Identifier，在 Duo 模拟器或已开启开发者模式的真机运行。个人账号不等于 TestFlight 分发资格，详见 [分发准备](DISTRIBUTION.md)。已有设备保持原签名和标识以延续 App 数据。

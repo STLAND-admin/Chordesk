@@ -1,0 +1,8 @@
+module ChordeskTailnet {
+    header "ChordeskTailnet.h"
+    export *
+    link framework "Security"
+    link framework "CoreFoundation"
+    link framework "SystemConfiguration"
+    link "resolv"
+}

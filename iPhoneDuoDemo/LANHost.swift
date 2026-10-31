@@ -81,6 +81,20 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }()
     @Published private(set) var status = "准备内置屏远控服务"
     @Published private(set) var pairing: LANPairing?
+    @Published private(set) var tailscalePairings: [LANPairing] = []
+    @Published private(set) var tailscaleAddresses: [String] = []
+    @Published private(set) var tailscaleMessage = "在 Mac 和 iPhone 的 Tailscale 中登录同一私人网络，然后开启公网连接。"
+    @Published var allowsTailscale = UserDefaults.standard.bool(forKey: "ChordeskAllowsTailscaleV1") {
+        didSet {
+            UserDefaults.standard.set(allowsTailscale, forKey: "ChordeskAllowsTailscaleV1")
+            refreshTailscale()
+        }
+    }
+    private var tailnetListener: NWListener?
+    private let tailnet = EmbeddedTailnet.shared
+    private var candidateNetworks: [UUID: RemoteNetwork] = [:]
+    private var peerNetwork: RemoteNetwork = .lan
+    private var lastTailscaleRefresh = Date.distantPast
     @Published private(set) var connected = false
     @Published private(set) var sharing = false { didSet { updateAwakeLease() } }
     @Published private(set) var controlAllowed = false
@@ -345,24 +359,72 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
 
     func refreshAddresses() {
-        var pointer: UnsafeMutablePointer<ifaddrs>?
-        var found: [(String, String)] = []
-        if getifaddrs(&pointer) == 0 {
-            defer { freeifaddrs(pointer) }
-            var current = pointer
-            while let entry = current {
-                defer { current = entry.pointee.ifa_next }
-                guard let address = entry.pointee.ifa_addr, address.pointee.sa_family == UInt8(AF_INET) else { continue }
-                var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                if getnameinfo(address, socklen_t(address.pointee.sa_len), &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 {
-                    let ip = String(cString: buffer)
-                    if LANPairing.isLocalHost(ip), !ip.hasPrefix("127.") { found.append((String(cString: entry.pointee.ifa_name), ip)) }
-                }
-            }
-        }
+        let found = RemoteInterfaceAddress.current().filter { $0.isUp && LANPairing.isLocalHost($0.address) && !$0.address.hasPrefix("127.") }.map { ($0.name, $0.address) }
         addresses = found.sorted { ($0.0.hasPrefix("en") ? 0 : 1, $0.0) < ($1.0.hasPrefix("en") ? 0 : 1, $1.0) }
             .map(\.1).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
         if !addresses.contains(selectedAddress) { selectedAddress = addresses.first ?? "" }
+        refreshTailscale()
+    }
+
+    /// A private loopback TLS endpoint is reached only through the embedded
+    /// userspace node. Never bind the remote service to a public interface.
+    func refreshTailscale() {
+        lastTailscaleRefresh = Date()
+        tailscaleAddresses = tailnet.addresses
+        guard allowsTailscale, sharing, tailnet.ready else {
+            if let server = tailnetListener {
+                server.cancel(); tailnetListener = nil; tailnet.stopForwarding()
+            }
+            tailscalePairings.removeAll()
+            if peerNetwork == .tailscale { releaseQueuedInput(); setControl(false); link?.close() }
+            for (id, network) in candidateNetworks where network == .tailscale { candidates[id]?.close() }
+            tailscaleMessage = !allowsTailscale ? "公网入口关闭；局域网仍可免登录使用。"
+                : !tailnet.ready ? "请先在 Chordesk 登录并连接 Tailscale。"
+                : "公网已连接；开启远控服务后生成配对二维码。"
+            return
+        }
+        if tailnetListener != nil {
+            if !tailscalePairings.isEmpty {
+                tailscalePairings = tailnet.addresses.map {
+                    LANPairing(host: $0, port: LANPairing.defaultPort, secret: pairingSecret, network: .tailscale)
+                }
+            }
+            return
+        }
+        let token = generation
+        do {
+            let server = try LANTransport.listener(secret: pairingSecret, localAddress: "127.0.0.1", port: .any)
+            tailnetListener = server
+            server.newConnectionHandler = { [weak self, weak server] connection in
+                Task { @MainActor in
+                    guard let self, let server, self.generation == token, self.allowsTailscale,
+                          self.tailnet.ready, self.tailnetListener === server else { connection.cancel(); return }
+                    self.accept(connection, token: token, network: .tailscale)
+                }
+            }
+            server.stateUpdateHandler = { [weak self, weak server] state in
+                Task { @MainActor in
+                    guard let self, let server, self.generation == token, self.tailnetListener === server else { return }
+                    if case .ready = state, let port = server.port {
+                        let started = await self.tailnet.forward(to: port.rawValue)
+                        guard self.generation == token, self.tailnetListener === server, self.allowsTailscale, self.tailnet.ready else { return }
+                        if started {
+                            self.tailscalePairings = self.tailnet.addresses.map {
+                                LANPairing(host: $0, port: LANPairing.defaultPort, secret: self.pairingSecret, network: .tailscale)
+                            }
+                            self.tailscaleMessage = "公网入口已就绪；手机在 Chordesk 登录同一 Tailscale 网络后扫码绑定。"
+                        } else {
+                            server.cancel(); self.tailnetListener = nil
+                            self.tailscaleMessage = "公网入口未能开启：" + self.tailnet.message
+                        }
+                    } else if case .failed(let error) = state {
+                        server.cancel(); self.tailnetListener = nil; self.tailnet.stopForwarding()
+                        self.tailscalePairings.removeAll(); self.tailscaleMessage = error.localizedDescription
+                    }
+                }
+            }
+            server.start(queue: DispatchQueue(label: "dev.chordesk.tailnet-tls"))
+        } catch { tailscaleMessage = "无法开启公网入口：" + error.localizedDescription }
     }
 
     func refreshDisplays(requestPermission: Bool = false) async {
@@ -424,7 +486,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 status = "已切换到 \(currentDisplayName)"
             } else {
                 refreshAddresses()
-                guard !selectedAddress.isEmpty else { status = "请先连接局域网"; return }
+                guard !selectedAddress.isEmpty || (allowsTailscale && !tailscaleAddresses.isEmpty) else { status = "请先连接局域网或登录 Tailscale"; return }
                 await start(filter, display: display)
             }
         } catch {
@@ -650,7 +712,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         let token = UUID(); generation = token
         do {
             guard LANPairing.isValidSecret(pairingSecret) else { throw LANWireError.random }
-            let newListener = try LANTransport.listener(secret: pairingSecret, localAddress: selectedAddress)
+            let localBind = selectedAddress.isEmpty ? "127.0.0.1" : selectedAddress
+            let newListener = try LANTransport.listener(secret: pairingSecret, localAddress: localBind)
             newListener.newConnectionHandler = { [weak self] connection in
                 Task { @MainActor in
                     guard let self, self.generation == token else { connection.cancel(); return }
@@ -661,7 +724,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 Task { @MainActor in
                     guard let self, self.generation == token else { return }
                     if case .ready = state, let port = newListener?.port {
-                        self.pairing = LANPairing(host: self.selectedAddress, port: port.rawValue, secret: self.pairingSecret)
+                        if localBind != "127.0.0.1" { self.pairing = LANPairing(host: localBind, port: port.rawValue, secret: self.pairingSecret) }
                         self.status = "等待已配对 Duo 或首次扫码 · TLS 加密 · 一次只连接一台手机"
                     } else if case .failed(let error) = state { self.stop(); self.status = error.localizedDescription }
                 }
@@ -670,6 +733,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             try await installCapture(filter, display: display, sessionToken: token)
             guard generation == token else { return }
             sharing = true
+            refreshTailscale()
             Task { await self.refreshScaleOptions() }
             newListener.start(queue: DispatchQueue(label: "dev.iphoneduo.listener"))
             let heartbeat = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
@@ -732,11 +796,12 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         }
     }
 
-    private func accept(_ connection: NWConnection, token: UUID) {
+    private func accept(_ connection: NWConnection, token: UUID, network: RemoteNetwork = .lan) {
         guard link == nil, candidates.count < 3 else { connection.cancel(); return }
         let id = UUID()
         let candidate = LANLink(connection)
         candidates[id] = candidate
+        candidateNetworks[id] = network
         candidate.onFrameSent = { [weak self, weak candidate] bytes in
             Task { @MainActor in
                 guard let self, let candidate, self.generation == token, self.link === candidate else { return }
@@ -746,8 +811,11 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         candidate.onReady = { [weak self, weak candidate] in
             Task { @MainActor in
                 guard let self, let candidate, self.generation == token, self.link == nil else { candidate?.close(); return }
+                guard network == .lan || (self.allowsTailscale && self.tailnet.ready && self.tailnetListener != nil) else { candidate.close(); return }
                 self.link = candidate
                 self.candidates.removeValue(forKey: id)
+                self.candidateNetworks.removeValue(forKey: id)
+                self.peerNetwork = network
                 self.connected = true; self.lastPing = Date(); self.configuredPeer = nil
                 self.traffic = VideoTrafficMeter(); self.videoMbps = 0; self.videoFPS = 0
                 self.status = self.autoConfigurePairing ? "手机已安全配对 · 正在准备自动控制与显示设置" : "手机已安全配对 · 仅查看"
@@ -828,10 +896,12 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             Task { @MainActor in
                 guard let self, self.generation == token else { return }
                 self.candidates.removeValue(forKey: id)
+                self.candidateNetworks.removeValue(forKey: id)
                 if let candidate, self.link === candidate {
                     self.inputQueueEpoch += 1; self.pendingInputs.removeAll(); self.textFocus = nil; self.focusRequest = 0; self.latestFocusClick = 0
                     self.stopMicrophone("手机已断开，麦克风已停止"); self.peerSupportsMicrophone = false
                     self.input.release(); self.link = nil
+                    self.peerNetwork = .lan
                     self.controlRevision += 1
                     self.controlAllowed = false; self.connected = false; self.peerSupportsDisplays = false
                     self.allowsDisplaySwitching = false; self.configuredPeer = nil
@@ -868,6 +938,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
 
     private func tick() {
+        if allowsTailscale && Date().timeIntervalSince(lastTailscaleRefresh) >= 5 { refreshTailscale() }
         if microphoneActive {
             if Date().timeIntervalSince(lastMicrophonePacket) > 2 { stopMicrophone("麦克风数据中断，请在 Duo 重新开启") }
             else if !microphonePlayer.routeIsValid { stopMicrophone("音频输出设备已改变，麦克风已停止") }
@@ -1018,6 +1089,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         timer?.invalidate(); timer = nil
         link?.close(); link = nil
         candidates.values.forEach { $0.close() }; candidates.removeAll()
+        candidateNetworks.removeAll(); peerNetwork = .lan
+        tailnetListener?.cancel(); tailnetListener = nil; tailnet.stopForwarding(); tailscalePairings.removeAll()
         listener?.cancel(); listener = nil
         let old = stream; stream = nil; frames = nil
         if let old { Task { try? await old.stopCapture() } }

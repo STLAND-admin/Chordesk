@@ -51,12 +51,31 @@ struct PermissionRestartPolicy {
     mutating func claim() { attempted = true }
 }
 
+/// Request each missing grant once, in order. A denial waits for the user;
+/// polling must never keep reopening system permission dialogs.
+struct PermissionRequestSequence {
+    enum Step: Hashable { case screen, accessibility, input }
+    private(set) var requested: Set<Step> = []
+    mutating func next(_ value: HostPermissionSnapshot) -> Step? {
+        let step: Step?
+        if !value.screen { step = .screen }
+        else if !value.accessibility { step = .accessibility }
+        else if !value.input { step = .input }
+        else { step = nil }
+        guard let step, requested.insert(step).inserted else { return nil }
+        return step
+    }
+}
+
 @MainActor
 final class HostPermissionSetup: ObservableObject {
     @Published private(set) var permissions: HostPermissionSnapshot
     @Published private(set) var message = ""
     @Published private(set) var countdown: Int?
     @Published private(set) var restarting = false
+    @Published private(set) var requestingAll = false
+    private var requests = PermissionRequestSequence()
+    static let resumeServiceKey = "ChordeskStartAfterPermissionSetupV1"
     @Published var automatic = UserDefaults.standard.object(forKey: "ChordeskAutoPermissionRestartV1") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automatic, forKey: "ChordeskAutoPermissionRestartV1") }
     }
@@ -99,6 +118,23 @@ final class HostPermissionSetup: ObservableObject {
             host.refreshInputPermissions()
             Task { await host.refreshDisplays(); await host.refreshScaleOptions() }
         }
+        if requestingAll {
+            if value.ready {
+                requestingAll = false
+            } else if let step = requests.next(value) {
+                switch step {
+                case .screen:
+                    message = "第 1/2 步：请允许屏幕录制。完成后自动继续请求控制权限。"
+                    _ = CGRequestScreenCaptureAccess()
+                case .accessibility:
+                    message = "第 2/2 步：请在系统提示／辅助功能设置中允许 Chordesk 控制 Mac。完成后自动检查并重启 App。"
+                    _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+                case .input:
+                    message = "正在完成控制权限：请确认 macOS 的设备控制提示。"
+                    _ = CGRequestPostEventAccess()
+                }
+            }
+        }
         guard !restarting else { return }
         if policy.eligible(value, automatic: automatic, sharing: host.sharing || host.connected || host.scaleBusy || host.switchingDisplay || host.restoreFailed) {
             guard restartTask == nil else { return }
@@ -118,6 +154,26 @@ final class HostPermissionSetup: ObservableObject {
         } else if value.ready && policy.needsRestart && (host.sharing || host.connected) {
             message = "权限已通过。结束共享后自动重启，避免中断当前远控。"
         }
+    }
+    /// The one primary action starts the service or continues the permission
+    /// sequence. It never grants permissions or opens the content picker itself.
+    func startService(_ host: LANHost) {
+        guard !restarting, !host.sharing, !host.pairingCredentialLoading else { return }
+        if requestingAll { Task { await check(host) }; return }
+        if permissions.ready && !policy.needsRestart {
+            Task { await host.startDefaultDisplay() }
+            return
+        }
+        beginRequest()
+        requests = PermissionRequestSequence(); requestingAll = true
+        defaults.set(true, forKey: Self.resumeServiceKey)
+        Task { await check(host) }
+    }
+    func cancelRequests() {
+        requestingAll = false
+        defaults.set(false, forKey: Self.resumeServiceKey)
+        postpone()
+        message = "设置已暂停。已允许的系统权限保留，可稍后继续。"
     }
     func requestScreen(_ host: LANHost) {
         beginRequest()
@@ -158,6 +214,7 @@ final class HostPermissionSetup: ObservableObject {
             return
         }
         let config = NSWorkspace.OpenConfiguration()
+        await EmbeddedTailnet.shared.disconnectAndWait(preservePreference: true)
         config.createsNewApplicationInstance = true
         config.allowsRunningApplicationSubstitution = false
         config.arguments = ["--chordesk-permission-relaunch"]
@@ -177,10 +234,16 @@ struct HostPermissionChecklist: View {
     var body: some View {
         GroupBox("首次使用 · 权限检查") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("首次开启需要两项系统权限。依次授权后，Chordesk 会检查并重启一次，再开启内置屏服务。无需重启 Mac。")
+                Text("点一次“授权并开启服务”，按 macOS 提示依次允许屏幕录制和控制。完成后自动检查并重启一次 App，再共享内置屏。无需重启 Mac。")
                     .font(.callout)
                 permission("屏幕与系统音频录制（用于传输画面）", passed: setup.permissions.screen)
                 permission("控制 Mac（辅助功能／设备控制）", passed: setup.permissions.accessibility && setup.permissions.input)
+                HStack {
+                    Button(setup.requestingAll ? "检查授权进度" : "授权并开启服务") { setup.startService(host) }
+                        .buttonStyle(.borderedProminent).disabled(setup.restarting || host.pairingCredentialLoading)
+                        .accessibilityIdentifier("host-permissions-start-all")
+                    if setup.requestingAll { Button("暂停设置") { setup.cancelRequests() } }
+                }
                 HStack {
                     Button("允许屏幕录制") { setup.requestScreen(host) }.disabled(setup.permissions.screen || setup.restarting)
                     Button("允许控制") { setup.requestControl(host) }.disabled((setup.permissions.accessibility && setup.permissions.input) || setup.restarting)
@@ -191,7 +254,7 @@ struct HostPermissionChecklist: View {
                     HStack { Text("\(countdown) 秒后重启 App"); Button("稍后") { setup.postpone() } }
                 }
                 if !setup.message.isEmpty { Text(setup.message).font(.callout) }
-                Text("这里只检查权限，不能代替你在系统里确认。若系统已允许但检查尚未更新，可重启后再检查；不会重启 Mac 或循环重启。启用“启动后自动开启服务”时，权限通过并重启后共享内置屏。")
+                Text("系统授权仍需你本人确认。若系统已允许但检查尚未更新，可重启后再检查；不会重启 Mac 或循环重启。从“授权并开启服务”进入时，重启后会继续开启内置屏服务。")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("已完成授权，重启 Chordesk 并检查") { Task { await setup.restart(host) } }
                     .disabled(setup.restarting || host.sharing || host.connected || host.scaleBusy || host.switchingDisplay || host.restoreFailed)

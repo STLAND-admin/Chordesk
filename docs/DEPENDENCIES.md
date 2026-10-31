@@ -29,3 +29,9 @@ BlackHole 作者另外明确要求非 GPLv3 项目取得授权。Chordesk 当前
 用户明确暂不安装 BlackHole。已下载核验的安装包不纳入源码或发布包，不安装、不接受新许可、不重启音频系统。本轮麦克风链路默认关闭；未完成虚拟输入设备及目标会议应用验证。初期手势测试不需要这个依赖。
 
 参考：[BlackHole 许可原文](https://github.com/ExistentialAudio/BlackHole/blob/master/LICENSE)、[作者开发集成要求](https://github.com/ExistentialAudio/BlackHole#developer-guides)。以上用于工程方案判断，正式分发授权以许可文本和权利人的确认范围为准。
+
+## 内嵌 Tailscale（1.23 开发版）
+
+新增必编译的官方 `tailscale.com/tsnet v1.104.1` 用户态引擎，运行时只在用户启用公网后启动。局域网仍无需账号；用户不安装外部 Tailscale App、VPN 扩展或系统服务。Go/C 桥接自行编写，节点状态存 Keychain。依赖版本与校验和在 `Native/Tailnet/`，许可随 App 保留，构建方法见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+
+运行仍依赖 Tailscale 托管控制平面及必要中继，不能称作完全离线或自建服务。个人账号计划不自动等于免费商业 OEM 授权。正式分发前重新核对隐私和加密出口声明；详见 [TAILSCALE.md](TAILSCALE.md)。

@@ -9,6 +9,9 @@ struct LANHostView: View {
     @State private var showingAbout = false
     @State private var showingPermissions = false
     @State private var showingPairingResetConfirmation = false
+    @ObservedObject private var tailnet = EmbeddedTailnet.shared
+    @State private var pairingNetwork: RemoteNetwork = .lan
+    private var displayedPairing: LANPairing? { pairingNetwork == .lan ? host.pairing : host.tailscalePairings.first }
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         ScrollView {
@@ -23,12 +26,24 @@ struct LANHostView: View {
                     Spacer(minLength: 0)
                 }
                 VStack(spacing: 16) {
+                    Picker("连接方式", selection: $pairingNetwork) {
+                        ForEach(RemoteNetwork.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                    }.pickerStyle(.segmented).accessibilityIdentifier("host-network-mode")
+                    if pairingNetwork == .tailscale {
+                        Toggle("允许通过我的 Tailscale 连接", isOn: $host.allowsTailscale)
+                            .accessibilityIdentifier("host-enable-tailscale")
+                        Text(host.tailscaleMessage).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        EmbeddedTailnetControls()
+                    }
                     Label(host.sharing ? (host.connected ? "已连接 · " + host.clientName : "等待连接") : "服务已停止",
                           systemImage: host.sharing ? "link" : "pause.circle")
                         .font(.title3.weight(.medium)).accessibilityIdentifier("host-service-state")
                     if host.sharing {
                         Text(host.currentDisplayName).foregroundStyle(.secondary)
-                        if let pairing = host.pairing { CachedPairingCode(code: pairing.code) }
+                        if let pairing = displayedPairing {
+                            CachedPairingCode(code: pairing.code)
+                            Text(pairing.connectionNetwork.title + " · " + pairing.host).font(.caption.monospaced()).textSelection(.enabled)
+                        }
                         Text("首次扫码绑定；已配对的 Mac 可在手机列表中直接连接。")
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         if host.connected {
@@ -41,15 +56,19 @@ struct LANHostView: View {
                         Text("默认共享内置显示器；没有内置屏时使用主显示器。")
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         Button {
-                            if permissionSetup.visible { showingPermissions = true; showingSettings = true }
-                            else { Task { await host.startDefaultDisplay() } }
-                        } label: { Label("开始服务", systemImage: "play.circle.fill") }
+                            permissionSetup.startService(host)
+                        } label: { Label(permissionSetup.visible ? "授权并开启服务" : "开始服务", systemImage: "play.circle.fill") }
                             .buttonStyle(.borderedProminent).disabled(permissionSetup.restarting || host.pairingCredentialLoading || host.scaleBusy)
                             .accessibilityIdentifier("lan-start-sharing")
                     }
                 }.padding(24).frame(maxWidth: .infinity).modifier(HostGlassCard())
                 if permissionSetup.visible {
-                    Button { showingSettings = true } label: { Label("完成首次权限设置", systemImage: "lock.shield") }
+                    VStack(spacing: 8) {
+                        Text(permissionSetup.message.isEmpty ? "首次需要屏幕录制和控制权限。点击上方按钮会依次请求，完成后重启 App 并开启服务。" : permissionSetup.message)
+                            .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        if permissionSetup.requestingAll { Button("暂停授权流程") { permissionSetup.cancelRequests() } }
+                        Button { showingPermissions = true; showingSettings = true } label: { Label("查看权限进度／手动处理", systemImage: "lock.shield") }
+                    }
                         .accessibilityIdentifier("host-permission-settings")
                 }
                 if !host.sharing || host.restoreFailed || permissionSetup.restarting {
@@ -69,7 +88,10 @@ struct LANHostView: View {
         }
         .sheet(isPresented: $showingSettings) { settings }
         .sheet(isPresented: $showingAbout) { ChordAboutView() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await permissionSetup.check(host); host.refreshDesktopPermission() } }
+        .onReceive(tailnet.$snapshot) { _ in Task { host.refreshTailscale() } }
+        .onReceive(tailnet.$enabled) { _ in Task { host.refreshTailscale() } }
+        .onChange(of: pairingNetwork) { _, value in if value == .tailscale { host.refreshTailscale() } }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await permissionSetup.check(host); host.refreshDesktopPermission(); host.refreshTailscale() } }
     }
 
     private var settings: some View {
@@ -130,14 +152,19 @@ struct LANHostView: View {
                 }
 
                 DisclosureGroup("网络与配对") {
+                    Toggle("允许 Tailscale 公网连接", isOn: $host.allowsTailscale)
+                    Text(host.tailscaleMessage).font(.caption).foregroundStyle(.secondary)
+                    Button("检测 Tailscale 地址") { host.refreshTailscale() }
                     Picker("局域网地址", selection: $host.selectedAddress) { ForEach(host.addresses, id: \.self) { Text($0).tag($0) } }.disabled(host.sharing)
                     Button("刷新地址") { host.refreshAddresses() }.disabled(host.sharing)
-                    if let pairing = host.pairing {
+                    if let pairing = displayedPairing {
                         LabeledContent("地址", value: "\(pairing.host):\(pairing.port)")
                         Button("复制配对信息") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(pairing.code, forType: .string)
                         }
                     }
+                    Text("复制与二维码使用主窗口选中的连接方式。公网通过 App 内嵌 Tailscale 节点连接，仍验证 Chordesk 配对密钥；不会开放任意公网 IP。")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text(host.pairingCredentialStored ? "配对密钥已保存在钥匙串。二维码图片缓存并每 5 分钟刷新；密钥保持稳定，不使已有配对失效。" : "配对密钥未持久保存，重启后需重新扫码。")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("重置配对密钥", role: .destructive) { showingPairingResetConfirmation = true }

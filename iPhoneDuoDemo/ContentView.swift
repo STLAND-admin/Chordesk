@@ -117,9 +117,10 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in client.inputSuspended = true; releaseInteractions(); updateRearCapture() }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] != "1" { EmbeddedTailnet.shared.resumeIfNeeded() }
                 client.inputSuspended = modalVisible; updateRearCapture(); camera.resumeInput()
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in releaseInteractions(); camera.stop(); client.disconnect() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in releaseInteractions(); camera.stop(); client.disconnect(); EmbeddedTailnet.shared.suspend() }
             .onDisappear { releaseInteractions(); camera.stop(); client.disconnect(); restoreIdleTimer() }
         }
         // Attach outside NavigationStack's inset content proposal. Ignoring the
@@ -490,7 +491,7 @@ struct ContentView: View {
         NavigationStack {
             List {
                 Section("开始使用") {
-                    Text("Mac 开启 Chordesk 服务并完成屏幕录制与控制权限。两端连接同一局域网；首次从“连接 Mac”扫码，之后在已配对列表点按电脑。可记住多台 Mac，每次连接一台；IP 改变时暂需重新扫码。")
+                    Text("Mac 首次点“授权并开启服务”，依次允许屏幕录制和控制，完整后自动重启 App 一次并继续共享。局域网无需账号；从“连接 Mac”扫码，之后点已配对电脑。可保存多台，每次连接一台；局域网 IP 改变需重新扫码。")
                     Text("右侧从上到下是菜单、触控方式、显示器，键盘按钮在同列下方。按钮均可轻点；手指按钮可在设置中隐藏。菜单打开时远程触摸暂停，收起后请抬起背面手指再落下。")
                 }
                 Section("直接触控 · 默认模式") {
@@ -528,7 +529,7 @@ struct ContentView: View {
                     Text("Duo → Mac 麦克风默认关闭。需要 Mac 配置双向虚拟音频设备并允许接收，再从手机菜单开启；不保存录音。当前没有内置虚拟音频驱动。")
                     Text("退出前从菜单断开。断连、后台或控制撤销会释放按键／拖选并停止相机和麦克风。Mac 关闭窗口仍在菜单栏运行；停止服务或退出主机会断开。息屏不等于睡眠，真正睡眠／合盖不保证能连接。")
                     Text("背面没有反应：检查暂停标志、有效区域和 App 是否全屏，抬起手指再试。菜单可用而手势不行：确认直接触控、背面一指和窗口手势设置。两者都不行：检查 Mac 控制／System Events 权限，查看“诊断信息”。")
-                    Text("目前仅支持同一局域网；公网与非 Duo 兼容性仍在计划中。新手机没有背面可用场景时，可以通过右侧按钮和菜单操作，不代表已完成该机型测试。")
+                    Text("跨网络可在两端 Chordesk 选择“Tailscale 公网”，登录同一个个人账号；Mac 开启“允许通过我的 Tailscale 连接”后扫描公网二维码。无需另装 Tailscale；默认关闭。两种模式各绑定一次，均保留 Chordesk 加密配对。公网连通与速度受网络限制，Mac 需要运行且联网。普通 iPhone 可用右侧按钮和菜单操作；兼容性仍在测试。")
                 }
             }.navigationTitle("Duo 操作手册")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingGuide = false } } }

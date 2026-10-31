@@ -191,11 +191,14 @@ final class WorkbenchLifecycle: NSObject, NSApplicationDelegate {
     func attach(_ host: LANHost, setup: HostPermissionSetup) {
         self.host = host
         guard monitorTask == nil else { return }
+        if host.allowsTailscale { EmbeddedTailnet.shared.resumeIfNeeded() }
         monitorTask = Task { await setup.monitor(host) }
         startupTask = Task {
             while !Task.isCancelled {
                 if !host.pairingCredentialLoading && !setup.visible && !host.scaleBusy && !host.restoreFailed {
-                    if host.autoStartHost { await host.startDefaultDisplay() }
+                    let requested = UserDefaults.standard.bool(forKey: HostPermissionSetup.resumeServiceKey)
+                    UserDefaults.standard.set(false, forKey: HostPermissionSetup.resumeServiceKey)
+                    if host.autoStartHost || requested { await host.startDefaultDisplay() }
                     return
                 }
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
@@ -211,6 +214,7 @@ final class WorkbenchLifecycle: NSObject, NSApplicationDelegate {
         guard let host else { return .terminateNow }
         Task { @MainActor in
             await host.stopAndRestore()
+            await EmbeddedTailnet.shared.disconnectAndWait(preservePreference: true)
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
@@ -227,7 +231,7 @@ private struct HostMenuBar: View {
         if host.sharing { Button("停止服务") { host.stop() } }
         else { Button("开始内置屏服务") {
             if setup.visible { openWindow(id: "lan-host"); NSApp.activate() }
-            else { Task { await host.startDefaultDisplay() } }
+            setup.startService(host)
         }.disabled(setup.restarting) }
         Divider()
         Button("退出 Chordesk") { NSApp.terminate(nil) }

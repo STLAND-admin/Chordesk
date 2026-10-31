@@ -4,7 +4,9 @@ import SwiftUI
 struct iPhoneDuoDemoApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView().tint(.gray)
+            ContentView().tint(.gray).task {
+                if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] != "1" { EmbeddedTailnet.shared.resumeIfNeeded() }
+            }
         }
     }
 }

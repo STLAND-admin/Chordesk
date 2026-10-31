@@ -28,7 +28,7 @@ Download the [Mac 0.18.1 test release](https://github.com/STLAND-admin/Chordesk/
 
 Building from source is also available:
 
-1. Install Xcode 27.1 or later and open `iPhoneDuoDemo.xcodeproj`.
+1. Install Xcode 27.1 or later and Go 1.27.1+. Run `./scripts/build-tailnet.sh`, then open `iPhoneDuoDemo.xcodeproj` ([build details](docs/DEVELOPMENT.md)).
 2. Select the `iPhoneDuoDemo` target. Under Signing & Capabilities, choose your own Team and a Bundle Identifier you can sign.
 3. Connect Duo over USB, enable Developer Mode and trust the Mac as prompted, then select the device and run. A free Personal Team can be used for testing, but requires periodic re-signing.
 
@@ -52,7 +52,7 @@ The rear activation area can be moved and resized. Text entry supports the iPhon
 
 ## Roadmap
 
-- [ ] **P0 — Cross-network remote access (top priority):** reach an authorized Mac from cellular or another Wi-Fi network. Validate Tailscale first, then evaluate built-in device services, direct connections and relay fallback, including address changes and reconnection.
+- [ ] **P0 — Cross-network validation:** the development build embeds Tailscale on both devices, with no companion app. Test account login, cellular/Wi-Fi paths, relay performance and reconnection before release.
 - [ ] **P1 — Background energy:** measure capture, JPEG encoding and keep-alive work without a viewer; capture on demand while keeping a low-cost listener available.
 - [ ] **Keyboard visibility:** explore a Liquid Glass preview so remote input fields remain visible while typing.
 - [ ] **RDP and client-side rendering:** validate Mac current-session feasibility and compare clarity, bandwidth and latency.
@@ -63,7 +63,8 @@ These are planned tasks. See the [public roadmap](ROADMAP.md) for details and ac
 ## Current scope
 
 - iOS **1.22.1 / build 28** separates Forget from Connect, pins rear-contact lights above the desktop, and adds bounded capture recovery. The idle rear-control fix still needs device confirmation. The complete guide and default iPhone keyboard remain. Mac stays **0.18.1 / build 26**. [Current validation](docs/VALIDATION-1.22.1.md); [guide recording plan](docs/GUIDE-RECORDING.md).
-- **Local network only**, with TLS pairing. Internet access, accounts, and relay services are not implemented. [Network plan](PUBLIC-NETWORK-PLAN.md).
+- **Published builds are LAN-only.** Development versions iOS **1.23 / build 29** and Mac **0.19.0 / build 27** add embedded Tailscale: LAN needs no login; cross-network mode uses each owner’s private Tailscale account. No additional Tailscale app or system VPN is installed. Hardware cross-network validation is pending; these builds are not on TestFlight yet. [Setup and limits](docs/TAILSCALE.md).
+- Development Mac builds request first-run permissions in sequence from one button, then restart once and start the built-in display service. macOS permission confirmations still require the owner.
 - Display scaling targets **1600 × 900 logical resolution**, using existing safe display modes. Some custom HiDPI modes still need the optional BetterDisplay fallback. [Dependencies](docs/DEPENDENCIES.md).
 - Microphone forwarding is off by default. Using Duo as a microphone for Mac apps currently requires a virtual audio device; an integrated driver is not implemented. [Audio details](docs/REMOTE-MICROPHONE.md).
 - Rear-screen interaction uses the experimental camera accessory path. Camera frames are not displayed, saved, or transmitted. This does not establish a general-purpose rear-screen API or App Store approval.

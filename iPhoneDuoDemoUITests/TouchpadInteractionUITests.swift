@@ -59,6 +59,26 @@ final class TouchpadInteractionUITests: XCTestCase {
     }
 
     @MainActor
+    func testLANRemainsLoginFreeAndEmbeddedModeDoesNotConnectWithoutLogin() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_PAIRED_MACS"] = "1"
+        app.launch()
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("连接 Mac", in: app)
+        let picker = app.segmentedControls["connection-network-mode"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["我的 Mac"].isEnabled)
+        XCTAssertFalse(app.buttons["tailscale-connect"].exists)
+        shortPress(picker.buttons["Tailscale 公网"])
+        XCTAssertTrue(app.buttons["tailscale-connect"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["我的 Mac"].isEnabled)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "无需额外安装 App")).firstMatch.exists)
+        shortPress(picker.buttons["局域网"])
+        XCTAssertTrue(app.buttons["我的 Mac"].isEnabled)
+        XCTAssertFalse(app.buttons["tailscale-connect"].exists)
+    }
+
+    @MainActor
     func testForgetMacDoesNotConnectAndOnlyDeletesConfirmedHost() {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"

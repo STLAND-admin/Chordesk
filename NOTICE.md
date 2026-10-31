@@ -10,3 +10,5 @@ Third-party material retains its own copyright and license. This notice does not
 
 Project source: https://github.com/STLAND-admin/Chordesk
 Website source: https://github.com/STLAND-admin/Chordesk-site
+
+The development build embeds Tailscale tsnet and its dependencies under their original licenses (including BSD, MIT and Apache licenses), plus the Go runtime. Full third-party texts are bundled in [ThirdPartyNotices.txt](iPhoneDuoDemo/Resources/Legal/ThirdPartyNotices.txt) and accessible in both apps under About → Third-party licenses. The project’s CC BY-NC-SA license does not replace these licenses. Tailscale’s hosted service is separately governed by its terms; source-code license rights do not grant unrestricted hosted-service or OEM rights.

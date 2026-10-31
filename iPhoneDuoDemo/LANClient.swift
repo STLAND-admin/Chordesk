@@ -16,7 +16,8 @@ final class LANClient: ObservableObject {
     }
     var acceptsInput: Bool { connected && controlAllowed && !inputSuspended }
     @Published private(set) var image: CGImage?
-    @Published private(set) var status = "连接同一局域网的 Mac"
+    @Published private(set) var status = "通过局域网或 Tailscale 连接 Mac"
+    @Published private(set) var connectionNetwork: RemoteNetwork = .lan
     @Published private(set) var sourceName = "Mac"
     @Published private(set) var receivedFrames = 0
     @Published private(set) var sentEvents: UInt64 = 0
@@ -109,6 +110,7 @@ final class LANClient: ObservableObject {
     private var heartbeat: Timer?
     private var lastPacket = Date()
     private var currentPairing: LANPairing?
+    private var tailnetDialID: Int32?
 
     private struct RememberedPairing: Codable {
         var pairing: LANPairing
@@ -182,13 +184,35 @@ final class LANClient: ObservableObject {
 
     func connect(_ pairing: LANPairing) {
         disconnect()
-        guard pairing.isValid else { status = "请输入局域网 IPv4 地址、端口及 32 位配对密钥"; return }
+        guard pairing.isValid else { status = "请检查所选连接模式、IPv4 地址、端口及 32 位配对密钥"; return }
+        connectionNetwork = pairing.connectionNetwork
         let token = UUID(); generation = token
-        let connection = NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!,
-                                      using: LANTransport.parameters(secret: pairing.secret))
+        connecting = true
+        status = "正在通过\(pairing.connectionNetwork.title)验证配对并连接 Mac…"
+        if pairing.connectionNetwork == .tailscale {
+            Task {
+                do {
+                    let route = try await EmbeddedTailnet.shared.dial(pairing)
+                    guard generation == token else { EmbeddedTailnet.shared.closeDial(route.identifier); return }
+                    tailnetDialID = route.identifier
+                    let connection = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: route.port)!,
+                                                  using: LANTransport.parameters(secret: pairing.secret))
+                    startWire(pairing, token: token, connection: connection)
+                } catch {
+                    guard generation == token else { return }
+                    disconnect(); status = error.localizedDescription
+                }
+            }
+        } else {
+            let connection = NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!,
+                                          using: LANTransport.parameters(secret: pairing.secret))
+            startWire(pairing, token: token, connection: connection)
+        }
+    }
+    private func startWire(_ pairing: LANPairing, token: UUID, connection: NWConnection) {
         let wire = LANLink(connection)
         link = wire; connecting = true
-        status = "正在验证配对密钥并连接 Mac…"
+        status = "正在通过\(pairing.connectionNetwork.title)验证配对并连接 Mac…"
         let name = UIDevice.current.name
         wire.onReady = { [weak self, weak wire] in
             Task { @MainActor in
@@ -269,7 +293,10 @@ final class LANClient: ObservableObject {
         wire.onClose = { [weak self] reason in
             Task { @MainActor in
                 guard let self, self.generation == token else { return }
-                self.disconnect(); self.status = reason
+                self.disconnect()
+                self.status = pairing.connectionNetwork == .tailscale
+                    ? reason + "。请确认两端 Chordesk 内的 Tailscale 已连接同一私人网络、允许互访，且 Mac 已开启公网入口。"
+                    : reason
             }
         }
         wire.start()
@@ -378,6 +405,7 @@ final class LANClient: ObservableObject {
         release()
         generation = UUID()
         currentPairing = nil
+        if let id = tailnetDialID { EmbeddedTailnet.shared.closeDial(id); tailnetDialID = nil }
         heartbeat?.invalidate(); heartbeat = nil
         link?.close(); link = nil
         connected = false; connecting = false; controlAllowed = false
@@ -536,32 +564,48 @@ struct LANConnectView: View {
     @State private var showScanner = false
     @State private var error = ""
     @State private var forgetting: RememberedMac?
+    @State private var network: RemoteNetwork = .lan
+    @State private var initialized = false
+    @ObservedObject private var tailnet = EmbeddedTailnet.shared
     var body: some View {
         NavigationStack {
             Form {
+                Section("连接方式") {
+                    Picker("连接方式", selection: $network) {
+                        ForEach(RemoteNetwork.allCases) { Text($0.title).tag($0) }
+                    }.pickerStyle(.segmented).accessibilityIdentifier("connection-network-mode")
+                    if network == .lan {
+                        Text("同一 Wi-Fi／局域网直接连接，不需要 Tailscale 或账号。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        EmbeddedTailnetControls()
+                    }
+                }
                 if !client.rememberedMacs.isEmpty {
                     Section("已配对的 Mac · \(client.rememberedMacs.count) 台") {
                         ForEach(client.rememberedMacs) { saved in
                             VStack(alignment: .leading, spacing: 8) {
-                                Button { client.connect(saved.pairing); dismiss() } label: {
+                                Button { if let pairing = saved.pairing(for: network) { client.connect(pairing); dismiss() } } label: {
                                     Label(saved.hostName.isEmpty ? "Mac" : saved.hostName, systemImage: "desktopcomputer")
                                 }.buttonStyle(.borderless)
+                                    .disabled(saved.pairing(for: network) == nil || (network == .tailscale && !tailnet.ready))
                                     .accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
-                                Text("\(saved.pairing.host):\(saved.pairing.port)").font(.caption).foregroundStyle(.secondary)
+                                Text(saved.pairing(for: network).map { "\($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
+                                    .font(.caption).foregroundStyle(.secondary)
                                 Button("忘记这台 Mac", role: .destructive) { forgetting = saved }
                                     .buttonStyle(.borderless)
                                     .accessibilityIdentifier("lan-forget-" + saved.id.uuidString)
                             }
                         }
-                        Text("每台 Mac 的凭据独立保存在此 iPhone 钥匙串；名称相同也不会合并。地址变化时重新扫码可更新原记录，不影响其他电脑。一次连接一台。")
+                        Text("每台 Mac 分别记忆局域网和 Tailscale 地址，凭据仅保存在此 iPhone 钥匙串；同名不会合并。首次使用某种模式需扫描对应二维码，之后直接点选。一次连接一台。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                Section("在 Chordesk · Mac 主机中选择显示器并共享") {
+                Section("在 Mac 开启服务，选择对应模式的二维码") {
                     Button { showScanner = true } label: { Label("扫描 Mac 配对二维码", systemImage: "qrcode.viewfinder") }
                 }
                 Section("手动输入") {
-                    TextField("Mac 局域网 IP，例如 192.168.1.10", text: $host).keyboardType(.decimalPad)
+                    TextField(network == .lan ? "Mac 局域网 IP，例如 192.168.1.10" : "Mac Tailscale IP，例如 100.100.1.10", text: $host).keyboardType(.decimalPad)
                         .accessibilityIdentifier("lan-host-address")
                     TextField("端口", text: $port).keyboardType(.numberPad)
                         .accessibilityIdentifier("lan-host-port")
@@ -569,14 +613,15 @@ struct LANConnectView: View {
                         .accessibilityIdentifier("lan-pairing-secret")
                     Button("配对并连接") {
                         let value = LANPairing(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: UInt16(port) ?? 0,
-                                               secret: secret.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
-                        guard value.isValid else { error = "检查 IP、端口和 32 位密钥"; return }
+                                               secret: secret.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), network: network)
+                        guard value.isValid else { error = network == .lan ? "检查局域网 IP、端口和 32 位密钥" : "请使用 Mac 的 Tailscale IPv4 地址（100.64–100.127），并检查端口和密钥"; return }
                         client.connect(value); dismiss()
                     }
+                    .disabled(network == .tailscale && !tailnet.ready)
                     .accessibilityIdentifier("lan-connect")
                 }
                 Section {
-                    Text("手机与 Mac 连接同一局域网。首次使用请允许本地网络访问并扫码绑定。绑定后可用上方按钮重连，无需再次扫码；停止共享不会清除已配对凭据。")
+                    Text("首次扫码绑定后可以直接重连。Tailscale 登录不代替 Chordesk 配对：两种模式都验证同一台 Mac 的加密凭据。公网地址仅支持 Tailscale IPv4，不接受任意公网 IP 或域名。")
                         .font(.footnote).foregroundStyle(.secondary)
                     if client.rememberedPairingSaveFailed {
                         Text("连接成功，但 iPhone 钥匙串没有保存配对信息；请再次扫码后重试。")
@@ -586,6 +631,11 @@ struct LANConnectView: View {
                 }
             }
             .navigationTitle("连接 Mac")
+            .tint(.gray)
+            .onAppear {
+                if !initialized { initialized = true; network = client.connectionNetwork; port = String(LANPairing.defaultPort) }
+            }
+            .onChange(of: network) { _, _ in host = ""; secret = ""; error = "" }
             .alert("忘记这台 Mac？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), presenting: forgetting) { saved in
                 Button("忘记", role: .destructive) { client.forgetRememberedMac(saved.id); forgetting = nil }
                 Button("取消", role: .cancel) { forgetting = nil }
@@ -594,8 +644,12 @@ struct LANConnectView: View {
             .sheet(isPresented: $showScanner) {
                 QRScannerView { result in
                     showScanner = false
-                    if let value = LANPairing.parse(result) { client.connect(value); dismiss() }
-                    else { error = "这不是有效的 Duo 局域网配对二维码" }
+                    if let value = LANPairing.parse(result) {
+                        if value.connectionNetwork == .tailscale && !tailnet.ready {
+                            network = .tailscale; error = "请先登录 Tailscale，再扫描公网配对二维码。"
+                        } else { client.connect(value); dismiss() }
+                    }
+                    else { error = "不是有效的 Chordesk 配对二维码；请确认两端均使用支持该连接模式的版本" }
                 }
             }
         }

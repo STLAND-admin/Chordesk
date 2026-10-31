@@ -2,14 +2,56 @@ import Foundation
 import Network
 import Security
 import CoreGraphics
+import Darwin
 
-/// A pairing capability, shown only on the Mac. No account or cloud service.
+enum RemoteNetwork: String, Codable, CaseIterable, Identifiable {
+    case lan, tailscale
+    var id: String { rawValue }
+    var title: String { self == .lan ? "局域网" : "Tailscale 公网" }
+    var symbol: String { self == .lan ? "wifi" : "network" }
+    func accepts(_ address: String) -> Bool {
+        self == .lan ? LANPairing.isLocalHost(address) : LANPairing.isTailscaleHost(address)
+    }
+}
+
+/// An interface address is a routing hint, never proof of login or identity.
+/// Keep the existing pairing PSK mandatory even on a private tailnet.
+struct RemoteInterfaceAddress: Equatable {
+    var name: String
+    var address: String
+    var isUp: Bool
+    static func current() -> [Self] {
+        var pointer: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&pointer) == 0 else { return [] }
+        defer { freeifaddrs(pointer) }
+        var current = pointer, result: [Self] = []
+        while let entry = current {
+            defer { current = entry.pointee.ifa_next }
+            guard let address = entry.pointee.ifa_addr, address.pointee.sa_family == UInt8(AF_INET) else { continue }
+            var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            guard getnameinfo(address, socklen_t(address.pointee.sa_len), &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
+            result.append(.init(name: String(cString: entry.pointee.ifa_name), address: String(cString: buffer),
+                                isUp: entry.pointee.ifa_flags & UInt32(IFF_UP) != 0))
+        }
+        return result
+    }
+}
+
+/// Chordesk pairing remains independent of the optional Tailscale account.
 struct LANPairing: Codable, Equatable {
     static let defaultPort: UInt16 = 49_173
     var version = 1
     var host: String
     var port: UInt16
     var secret: String
+    var network: RemoteNetwork? = nil
+    var connectionNetwork: RemoteNetwork { network ?? .lan }
+
+    init(host: String, port: UInt16, secret: String, network: RemoteNetwork = .lan) {
+        self.host = host; self.port = port; self.secret = secret
+        self.network = network == .lan ? nil : network
+        version = network == .lan ? 1 : 2
+    }
 
     var code: String {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
@@ -23,7 +65,8 @@ struct LANPairing: Codable, Equatable {
     }
 
     var isValid: Bool {
-        version == 1 && port > 0 && Self.isLocalHost(host) && secret.count == 32 && secret.allSatisfy { $0.isASCII && $0.isHexDigit }
+        let supported = (version == 1 && connectionNetwork == .lan) || (version == 2 && network == .tailscale)
+        return supported && port > 0 && connectionNetwork.accepts(host) && Self.isValidSecret(secret)
     }
 
     static func isLocalHost(_ value: String) -> Bool {
@@ -31,6 +74,12 @@ struct LANPairing: Codable, Equatable {
         guard parts.count == 4, parts.map(String.init).joined(separator: ".") == value else { return false }
         return parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168)
             || (parts[0] == 172 && (16...31).contains(parts[1])) || (parts[0] == 169 && parts[1] == 254)
+    }
+
+    static func isTailscaleHost(_ value: String) -> Bool {
+        let parts = value.split(separator: ".").compactMap { UInt8($0) }
+        guard parts.count == 4, parts.map(String.init).joined(separator: ".") == value else { return false }
+        return parts[0] == 100 && (64...127).contains(parts[1])
     }
 
     static func newSecret() throws -> String {
@@ -50,6 +99,11 @@ struct RememberedMac: Codable, Equatable, Identifiable {
     var pairing: LANPairing
     var hostName: String
     var hostID: String? = nil
+    var alternativePairings: [LANPairing]? = nil
+    func pairing(for network: RemoteNetwork) -> LANPairing? {
+        if pairing.connectionNetwork == network { return pairing }
+        return alternativePairings?.first { $0.isValid && $0.connectionNetwork == network && $0.secret == pairing.secret }
+    }
 }
 struct PairedMacLibrary: Codable, Equatable {
     var hosts: [RememberedMac] = []
@@ -60,6 +114,12 @@ struct PairedMacLibrary: Codable, Equatable {
             (identity != nil && existing.hostID == identity) || existing.pairing.secret == pairing.secret
         }
         var item = match.map { hosts[$0] } ?? RememberedMac(pairing: pairing, hostName: "Mac")
+        // Preserve one authenticated endpoint per mode, but never retain an old
+        // key after a credential rotation. Legacy single-endpoint records decode unchanged.
+        let previous = [item.pairing] + (item.alternativePairings ?? [])
+        item.alternativePairings = RemoteNetwork.allCases.filter { $0 != pairing.connectionNetwork }.compactMap { network in
+            previous.first { $0.isValid && $0.secret == pairing.secret && $0.connectionNetwork == network }
+        }
         item.pairing = pairing; item.hostName = String(name.prefix(80))
         item.hostID = identity ?? item.hostID
         if let match { hosts.remove(at: match) }
@@ -301,8 +361,8 @@ struct LANInput: Codable {
 /// TLS 1.2 PSK authenticates both ends using the random 128-bit pairing key.
 /// It never disables certificate verification or sends the key over the connection.
 enum LANTransport {
-    static func listener(secret: String, localAddress: String, port: NWEndpoint.Port = NWEndpoint.Port(rawValue: LANPairing.defaultPort)!) throws -> NWListener {
-        guard LANPairing.isLocalHost(localAddress), LANPairing.isValidSecret(secret) else { throw LANWireError.malformed }
+    static func listener(secret: String, localAddress: String, port: NWEndpoint.Port = NWEndpoint.Port(rawValue: LANPairing.defaultPort)!, network: RemoteNetwork = .lan) throws -> NWListener {
+        guard network.accepts(localAddress), LANPairing.isValidSecret(secret) else { throw LANWireError.malformed }
         let options = parameters(secret: secret)
         // NWListener sets its port itself. Supplying a concrete port in both
         // requiredLocalEndpoint and init(using:on:) produces EINVAL.
@@ -365,7 +425,7 @@ final class LANLink {
         connection.start(queue: queue)
         queue.asyncAfter(deadline: .now() + 12) { [weak self] in
             guard let self, self.connection.state != .ready else { return }
-            self.finish("连接超时，请检查 IP、配对密钥、局域网权限及防火墙")
+            self.finish("连接超时，请检查地址、配对密钥及 Mac 服务；公网模式还需两端 Tailscale 在线且允许互访")
         }
     }
 
