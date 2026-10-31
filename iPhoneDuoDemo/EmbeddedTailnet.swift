@@ -2,7 +2,8 @@ import Foundation
 import SwiftUI
 import ChordeskTailnet
 #if os(iOS)
-import SafariServices
+import AuthenticationServices
+import UIKit
 #else
 import AppKit
 #endif
@@ -15,7 +16,14 @@ struct TailnetSnapshot: Decodable, Equatable {
     var port: UInt16?
     var identifier: Int32?
     var health: [String]?
-    var ready: Bool { state == "Running" && (addresses?.contains(where: LANPairing.isTailscaleHost) == true) }
+    var ready: Bool { error == nil && state == "Running" && (addresses?.contains(where: LANPairing.isTailscaleHost) == true) }
+    // Browser completion is not evidence of enrollment. Only the engine's
+    // authenticated Running state and an assigned tailnet address count.
+    var canAuthorize: Bool { error == nil && state == "NeedsLogin" }
+    var shouldCloseAuthentication: Bool { error == nil && (ready || state == "NeedsMachineAuth") }
+    func permitsAuthenticationGrace(browserVisible: Bool) -> Bool {
+        browserVisible && canAuthorize
+    }
     var loginURL: URL? {
         guard let raw = authURL, let url = URL(string: raw), url.scheme == "https",
               url.host == "login.tailscale.com", url.user == nil, url.password == nil,
@@ -26,7 +34,7 @@ struct TailnetSnapshot: Decodable, Equatable {
         guard state == "NeedsLogin" else { return nil }
         guard let raw = authURL, !raw.isEmpty else { return "正在向 Tailscale 请求登录页面；暂未收到地址。" }
         if loginURL == nil { return "登录页面未通过地址检查（" + (URL(string: raw)?.host ?? "未知地址") + "），请更新 App 或反馈此提示。" }
-        return "已收到官方登录页面；未自动打开时可点下方按钮。"
+        return "请在官方页面确认将此 Chordesk 设备加入网络。若网页显示下载 App，关闭网页后点“继续绑定这台设备”；无需下载安装。"
     }
 }
 
@@ -40,6 +48,11 @@ final class EmbeddedTailnet: ObservableObject {
     @Published private(set) var message = "公网关闭；局域网无需登录。"
     @Published private(set) var enabled = false
     @Published var showLogin = false
+    @Published private(set) var authenticationNotice: String?
+#if os(iOS)
+    private var authenticationBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var authenticationGraceTimer: Task<Void, Never>?
+#endif
     private let queue = DispatchQueue(label: "dev.chordesk.embedded-tailnet", qos: .userInitiated)
     private var polling: Task<Void, Never>?
     private var generation = UUID()
@@ -64,11 +77,14 @@ final class EmbeddedTailnet: ObservableObject {
     private func update(_ value: TailnetSnapshot) {
         if let error = value.error { snapshot = value; message = error; return }
         if snapshot != value { snapshot = value }
-        if value.loginURL != nil, requestLoginPresentation {
+        if value.canAuthorize, value.loginURL != nil, requestLoginPresentation {
             requestLoginPresentation = false; showLogin = true
         }
+        if value.shouldCloseAuthentication {
+            requestLoginPresentation = false; showLogin = false; authenticationNotice = nil
+        }
         switch value.state {
-        case "Running": message = "已连接我的 Tailscale 私人网络"; showLogin = false
+        case "Running": message = value.ready ? "已连接我的 Tailscale 私人网络" : "设备已授权，正在等待私人网络地址…"
         case "NeedsLogin": message = "请登录 Tailscale，授权此 Chordesk 设备加入你的私人网络。"
         case "NeedsMachineAuth": message = "请在 Tailscale 管理页面批准这台设备，再返回继续。"
         case "Stopped": message = "公网已断开；局域网仍可用。"
@@ -110,14 +126,39 @@ final class EmbeddedTailnet: ObservableObject {
     func presentLogin() {
         guard !busy else { return }
         if !enabled { connect(); return }
-        if snapshot.loginURL != nil { showLogin = true; return }
-        guard !ready else { return }
-        busy = true; let token = generation
+        guard !ready, snapshot.state != "NeedsMachineAuth" else { refreshStatus(); return }
+        // Ask the live node to resume enrollment, rather than reopening a URL
+        // saved before an engine restart. The provider manages URL expiry.
+        busy = true; requestLoginPresentation = true; authenticationNotice = nil
+        let token = generation
         Task {
             let value = await call { CRLogin() }
             guard generation == token else { return }
             busy = false; update(value)
-            if snapshot.loginURL != nil { showLogin = true }
+            if value.error != nil { requestLoginPresentation = false }
+        }
+    }
+    func authenticationEnded(couldNotStart: Bool = false) {
+        showLogin = false; requestLoginPresentation = false
+        authenticationNotice = couldNotStart
+            ? "系统认证窗口未能打开，请回到 Chordesk 后重试。"
+            : "正在核对本机绑定状态。仅登录网页账号还不代表设备已加入网络。"
+        refreshStatus()
+    }
+    func refreshStatus() {
+        guard enabled, !busy else { return }
+        let token = generation
+        Task {
+            let value = await call { CRStatus() }
+            guard token == generation, enabled else { return }
+            update(value)
+            if value.canAuthorize, !showLogin {
+#if os(iOS)
+                authenticationNotice = "此设备尚未完成绑定。点“继续绑定这台设备”，确认设备名 chordesk-iphone；请使用与 Mac 相同的账号／私人网络。"
+#else
+                authenticationNotice = "此设备尚未完成绑定。点“继续绑定这台设备”，确认设备名 chordesk-mac；请使用与手机相同的账号／私人网络。"
+#endif
+            }
         }
     }
     private func beginPolling(_ token: UUID) {
@@ -141,9 +182,13 @@ final class EmbeddedTailnet: ObservableObject {
         await finishDisconnect(token)
     }
     private func prepareDisconnect(preservePreference: Bool) -> UUID {
+#if os(iOS)
+        endAuthenticationGrace()
+#endif
         generation = UUID(); let token = generation
         polling?.cancel(); polling = nil
-        enabled = false; busy = true; showLogin = false; snapshot = .init(state: "Stopped")
+        enabled = false; busy = true; showLogin = false; requestLoginPresentation = false
+        authenticationNotice = nil; snapshot = .init(state: "Stopped")
         message = "正在断开公网…"
         if !preservePreference { UserDefaults.standard.set(false, forKey: "ChordeskEmbeddedTailnetEnabledV1") }
         return token
@@ -154,8 +199,12 @@ final class EmbeddedTailnet: ObservableObject {
     }
     func logout() {
         guard !busy, enabled else { return }
+#if os(iOS)
+        endAuthenticationGrace()
+#endif
         generation = UUID(); let token = generation; polling?.cancel(); polling = nil
-        busy = true; showLogin = false; snapshot = .init(state: "Stopped")
+        busy = true; showLogin = false; requestLoginPresentation = false
+        authenticationNotice = nil; snapshot = .init(state: "Stopped")
         Task {
             let value = await call { CRLogout() }
             guard token == generation else { return }
@@ -168,14 +217,44 @@ final class EmbeddedTailnet: ObservableObject {
         }
     }
     func suspend() {
-        guard enabled else { return }; disconnect(preservePreference: true)
+        guard enabled else { return }
+#if os(iOS)
+        // A short trip to an identity provider or an OTP app must not immediately
+        // destroy the node whose browser authorization is still in progress.
+        // Remote input/capture are stopped separately by ContentView as before.
+        if snapshot.permitsAuthenticationGrace(browserVisible: showLogin),
+           authenticationBackgroundTask == .invalid {
+            authenticationBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finish Chordesk enrollment") { [weak self] in
+                Task { @MainActor in self?.disconnect(preservePreference: true) }
+            }
+            if authenticationBackgroundTask != .invalid {
+                authenticationGraceTimer = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(20)) } catch { return }
+                    self?.disconnect(preservePreference: true)
+                }
+                return
+            }
+        }
+#endif
+        disconnect(preservePreference: true)
     }
     func resumeIfNeeded() {
+#if os(iOS)
+        endAuthenticationGrace()
+#endif
+        if enabled { refreshStatus(); return }
         guard shouldResume, !enabled else { return }
         if busy {
             Task { try? await Task.sleep(for: .milliseconds(300)); if !Task.isCancelled { self.resumeIfNeeded() } }
         } else { connect(interactive: false) }
     }
+#if os(iOS)
+    private func endAuthenticationGrace() {
+        authenticationGraceTimer?.cancel(); authenticationGraceTimer = nil
+        let task = authenticationBackgroundTask; authenticationBackgroundTask = .invalid
+        if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+    }
+#endif
     func forward(to port: UInt16) async -> Bool {
         guard ready else { return false }
         let token = generation
@@ -203,6 +282,9 @@ final class EmbeddedTailnet: ObservableObject {
 struct EmbeddedTailnetControls: View {
     @ObservedObject var tailnet = EmbeddedTailnet.shared
     @State private var confirmLogout = false
+#if os(iOS)
+    @StateObject private var authentication = TailnetAuthenticationController()
+#endif
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(tailnet.message, systemImage: tailnet.ready ? "checkmark.shield" : "network")
@@ -211,6 +293,7 @@ struct EmbeddedTailnetControls: View {
                 Text(tailnet.addresses.joined(separator: " · ")).font(.caption.monospaced()).textSelection(.enabled)
             }
             if let diagnostic = tailnet.snapshot.loginDiagnostic { Text(diagnostic).font(.caption).foregroundStyle(.secondary) }
+            if let notice = tailnet.authenticationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
             if !tailnet.ready, let health = tailnet.snapshot.health, !health.isEmpty {
                 Text(health.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary)
             }
@@ -219,7 +302,12 @@ struct EmbeddedTailnetControls: View {
                     Button("登录／连接 Tailscale") { tailnet.connect() }.disabled(tailnet.busy)
                         .accessibilityIdentifier("tailscale-connect")
                 } else {
-                    if !tailnet.ready { Button("打开 Tailscale 登录") { tailnet.presentLogin() }.disabled(tailnet.busy) }
+                    if !tailnet.ready {
+                        if tailnet.snapshot.state != "NeedsMachineAuth" {
+                            Button("继续绑定这台设备") { tailnet.presentLogin() }.disabled(tailnet.busy)
+                        }
+                        Button("检查绑定状态") { tailnet.refreshStatus() }.disabled(tailnet.busy)
+                    }
                     Button("断开公网") { tailnet.disconnect() }.disabled(tailnet.busy)
                     Button("退出账号", role: .destructive) { confirmLogout = true }.disabled(tailnet.busy)
                 }
@@ -236,8 +324,14 @@ struct EmbeddedTailnetControls: View {
             Button("退出账号", role: .destructive) { tailnet.logout() }
         } message: { Text("公网连接会断开，局域网配对不会删除。再次使用公网需重新登录。") }
 #if os(iOS)
-        .sheet(isPresented: $tailnet.showLogin) {
-            if let url = tailnet.snapshot.loginURL { TailnetLoginBrowser(url: url).ignoresSafeArea(edges: .bottom) }
+        .onChange(of: tailnet.showLogin, initial: true) { _, value in
+            if value, tailnet.snapshot.canAuthorize, let url = tailnet.snapshot.loginURL {
+                authentication.start(url: url) { failed in tailnet.authenticationEnded(couldNotStart: failed) }
+            } else { authentication.cancel() }
+        }
+        .onDisappear {
+            authentication.cancel()
+            if tailnet.showLogin { tailnet.authenticationEnded() }
         }
 #else
         .onChange(of: tailnet.showLogin, initial: true) { _, value in
@@ -247,9 +341,51 @@ struct EmbeddedTailnetControls: View {
     }
 }
 #if os(iOS)
-private struct TailnetLoginBrowser: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+/// Use Apple's authentication UI. Like Tailscale's official embedded iOS
+/// example, the ipnauth callback is only a dismissal signal; CRStatus remains
+/// authoritative. Never log URLs, callbacks, cookies, or provider errors.
+@MainActor
+private final class TailnetAuthenticationController: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+    private var session: ASWebAuthenticationSession?
+    private var anchor: UIWindow?
+    private var token = UUID()
+    private var completion: ((Bool) -> Void)?
+
+    func start(url: URL, completion: @escaping (Bool) -> Void) {
+        cancel()
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .filter({ $0.activationState != .background && $0.activationState != .unattached })
+            .flatMap(\.windows).first(where: \.isKeyWindow) else { completion(true); return }
+        anchor = window; self.completion = completion
+        let id = token
+        let auth = ASWebAuthenticationSession(url: url, callbackURLScheme: "ipnauth",
+            completionHandler: Self.callback(for: self, token: id))
+        // Retain the user's official login cookies across a retry after a
+        // generic onboarding page, rather than requiring account login again.
+        auth.prefersEphemeralWebBrowserSession = false
+        auth.presentationContextProvider = self
+        session = auth
+        if !auth.start() { finish(token: id, failed: true) }
+    }
+    nonisolated private static func callback(for controller: TailnetAuthenticationController, token: UUID) -> @Sendable (URL?, Error?) -> Void {
+        { [weak controller] _, _ in
+            Task { @MainActor in controller?.finish(token: token, failed: false) }
+        }
+    }
+    private func finish(token id: UUID, failed: Bool) {
+        guard id == token else { return }
+        let done = completion
+        token = UUID(); completion = nil; session = nil; anchor = nil
+        done?(failed)
+    }
+    func cancel() {
+        // Invalidate first: a late callback must not dismiss a newer login.
+        token = UUID(); completion = nil
+        session?.cancel(); session = nil; anchor = nil
+    }
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        // start() checks and retains a real window before asking the system.
+        anchor ?? ASPresentationAnchor()
+    }
 }
 #endif

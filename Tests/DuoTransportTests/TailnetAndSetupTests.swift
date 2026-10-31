@@ -66,4 +66,33 @@ final class TailnetAndSetupTests: XCTestCase {
         XCTAssertFalse(TailnetSnapshot(state: "Running", addresses: ["8.8.8.8"]).ready)
         XCTAssertTrue(TailnetSnapshot(state: "Running", addresses: ["100.64.1.1"]).ready)
     }
+    func testBrowserLoginAloneCannotCompleteDeviceEnrollment() {
+        let login = TailnetSnapshot(state: "NeedsLogin", authURL: "https://login.tailscale.com/a/example", addresses: ["100.64.1.1"])
+        XCTAssertTrue(login.canAuthorize)
+        XCTAssertFalse(login.ready)
+        XCTAssertFalse(login.shouldCloseAuthentication)
+        let pending = TailnetSnapshot(state: "NeedsMachineAuth", authURL: login.authURL, addresses: login.addresses)
+        XCTAssertFalse(pending.canAuthorize, "Do not reopen stale account login while waiting for device approval")
+        XCTAssertFalse(pending.ready)
+        XCTAssertTrue(pending.shouldCloseAuthentication)
+        let runningWithoutAddress = TailnetSnapshot(state: "Running", authURL: login.authURL)
+        XCTAssertFalse(runningWithoutAddress.canAuthorize)
+        XCTAssertFalse(runningWithoutAddress.shouldCloseAuthentication)
+        XCTAssertFalse(runningWithoutAddress.ready)
+        let running = TailnetSnapshot(state: "Running", addresses: login.addresses)
+        XCTAssertTrue(running.ready)
+        XCTAssertTrue(running.shouldCloseAuthentication)
+        let error = TailnetSnapshot(state: "Running", addresses: login.addresses, error: "status unavailable")
+        XCTAssertFalse(error.ready)
+        XCTAssertFalse(error.shouldCloseAuthentication)
+    }
+    func testOnlyPendingInteractiveAuthenticationCanReceiveBackgroundGrace() {
+        let login = TailnetSnapshot(state: "NeedsLogin")
+        XCTAssertTrue(login.permitsAuthenticationGrace(browserVisible: true))
+        XCTAssertFalse(login.permitsAuthenticationGrace(browserVisible: false))
+        for state in ["Stopped", "Running", "NeedsMachineAuth", "Starting", ""] {
+            XCTAssertFalse(TailnetSnapshot(state: state).permitsAuthenticationGrace(browserVisible: true), state)
+        }
+        XCTAssertFalse(TailnetSnapshot(state: "NeedsLogin", error: "failure").permitsAuthenticationGrace(browserVisible: true))
+    }
 }
