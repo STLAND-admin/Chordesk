@@ -183,7 +183,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingLog) {
             NavigationStack {
                 List {
-                    Section("局域网") {
+                    Section(client.connectionNetwork.title) {
                         Text(client.status)
                         Text("收到画面 \(client.receivedFrames) 帧 · \(client.videoMbps, specifier: "%.1f") Mbps · \(client.videoFPS, specifier: "%.0f") fps")
                         Text("发送操作 \(client.sentEvents) · Mac 确认 \(client.acknowledged)")

@@ -188,6 +188,7 @@ final class WorkbenchLifecycle: NSObject, NSApplicationDelegate {
     var reopenWindow: (() -> Void)?
     private var monitorTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
+    private let shutdown = HostShutdownCoordinator()
     func attach(_ host: LANHost, setup: HostPermissionSetup) {
         self.host = host
         guard monitorTask == nil else { return }
@@ -212,12 +213,11 @@ final class WorkbenchLifecycle: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         monitorTask?.cancel(); startupTask?.cancel()
         guard let host else { return .terminateNow }
-        Task { @MainActor in
+        let ready = shutdown.request(cleanup: {
             await host.stopAndRestore()
             await EmbeddedTailnet.shared.disconnectAndWait(preservePreference: true)
-            sender.reply(toApplicationShouldTerminate: true)
-        }
-        return .terminateLater
+        }, terminate: { sender.terminate(nil) })
+        return ready ? .terminateNow : .terminateCancel
     }
 }
 
@@ -254,6 +254,10 @@ private struct HostScene: View {
 @main
 enum ChordeskEntry {
     static func main() {
+        if CommandLine.arguments.dropFirst().first == HostRelaunchHelper.argument {
+            HostRelaunchHelper.run(arguments: CommandLine.arguments)
+            return
+        }
         if CommandLine.arguments.contains("--chordesk-permission-probe") {
             HostPermissionProbe.printSnapshot()
             return

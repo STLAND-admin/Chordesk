@@ -2,6 +2,40 @@ import XCTest
 @testable import DuoWorkbench
 
 final class SetupAndRearAreaTests: XCTestCase {
+    func testManualRestartAlsoRequiresBothPermissionGroups() {
+        for screen in [false, true] {
+            for accessibility in [false, true] {
+                for input in [false, true] {
+                    let value = HostPermissionSnapshot(screen: screen, accessibility: accessibility, input: input)
+                    XCTAssertEqual(PermissionRestartPolicy.canRestart(value, busy: false), screen && accessibility && input)
+                    XCTAssertFalse(PermissionRestartPolicy.canRestart(value, busy: true))
+                }
+            }
+        }
+    }
+    @MainActor
+    func testQuitWaitsForCleanupWithoutEnteringTerminateLaterAndCoalescesRequests() async {
+        let shutdown = HostShutdownCoordinator()
+        let started = expectation(description: "Cleanup started")
+        let terminated = expectation(description: "Termination scheduled after cleanup")
+        var release: CheckedContinuation<Void, Never>?
+        var cleanupCount = 0
+        var terminationCount = 0
+        XCTAssertFalse(shutdown.request(cleanup: {
+            cleanupCount += 1
+            await withCheckedContinuation { release = $0; started.fulfill() }
+        }, terminate: { terminationCount += 1; terminated.fulfill() }))
+        XCTAssertFalse(shutdown.request(cleanup: { XCTFail("No duplicate cleanup") }, terminate: { XCTFail("No duplicate exit") }))
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertFalse(shutdown.prepared)
+        XCTAssertEqual(terminationCount, 0, "Never relaunch before releasing capture, input and the network node")
+        release?.resume()
+        await fulfillment(of: [terminated], timeout: 2)
+        XCTAssertTrue(shutdown.prepared)
+        XCTAssertEqual(cleanupCount, 1)
+        XCTAssertEqual(terminationCount, 1)
+        XCTAssertTrue(shutdown.request(cleanup: { XCTFail("No cleanup after prepared") }, terminate: { XCTFail("No new exit request") }))
+    }
     func testPermissionRestartRequiresAllGrantsAndIdleSessionAndOnlyOnce() {
         var policy = PermissionRestartPolicy(needsRestart: true, attempted: false)
         let ready = HostPermissionSnapshot(screen: true, accessibility: true, input: true)

@@ -2,6 +2,7 @@
 import AppKit
 import ApplicationServices
 import SwiftUI
+import Darwin
 
 struct HostPermissionSnapshot: Equatable, Codable {
     var screen: Bool
@@ -49,6 +50,61 @@ struct PermissionRestartPolicy {
         automatic && needsRestart && !attempted && value.ready && !sharing
     }
     mutating func claim() { attempted = true }
+    static func canRestart(_ value: HostPermissionSnapshot, busy: Bool) -> Bool {
+        value.ready && !busy
+    }
+}
+
+/// Launch only this bundle after its old process has actually exited. Starting
+/// another host before termination can race the listener and embedded node.
+enum HostRelaunchHelper {
+    static let argument = "--chordesk-wait-and-relaunch"
+    static func schedule() throws {
+        guard let executable = Bundle.main.executableURL else { throw CocoaError(.fileNoSuchFile) }
+        let helper = Process()
+        helper.executableURL = executable
+        helper.arguments = [argument, String(ProcessInfo.processInfo.processIdentifier)]
+        helper.standardOutput = FileHandle.nullDevice
+        helper.standardError = FileHandle.nullDevice
+        try helper.run()
+    }
+    static func run(arguments: [String]) {
+        guard arguments.count == 3, arguments[1] == argument,
+              let parent = Int32(arguments[2]), parent > 1, parent != getpid(),
+              Bundle.main.bundleURL.pathExtension == "app" else { return }
+        // A failed quit must not create a second host. This process never
+        // initializes SwiftUI, Keychain, permission requests, or networking.
+        for _ in 0..<60 {
+            if kill(parent, 0) != 0 && errno == ESRCH {
+                let opener = Process()
+                opener.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                opener.arguments = ["-n", "-a", Bundle.main.bundleURL.path, "--args", "--chordesk-permission-relaunch"]
+                do { try opener.run(); opener.waitUntilExit() } catch { return }
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+    }
+}
+
+/// Returning terminateLater from a main-actor task can keep AppKit's nested
+/// termination loop waiting on another task on the same actor. Cancel the first
+/// request, finish cleanup on the normal run loop, then request termination once.
+@MainActor
+final class HostShutdownCoordinator {
+    private(set) var prepared = false
+    private(set) var task: Task<Void, Never>?
+    func request(cleanup: @escaping @MainActor () async -> Void, terminate: @escaping @MainActor () -> Void) -> Bool {
+        if prepared { return true }
+        guard task == nil else { return false }
+        task = Task {
+            await cleanup()
+            self.prepared = true
+            self.task = nil
+            DispatchQueue.main.async { terminate() }
+        }
+        return false
+    }
 }
 
 /// Request each missing grant once, in order. A denial waits for the user;
@@ -84,6 +140,11 @@ final class HostPermissionSetup: ObservableObject {
     private var checking = false
     private let defaults = UserDefaults.standard
     var visible: Bool { !permissions.ready || policy.needsRestart || restarting }
+    var primaryTitle: String {
+        if restarting { return "正在重启 Chordesk…" }
+        if permissions.ready && policy.needsRestart { return "重启并开启服务" }
+        return visible ? (requestingAll ? "检查授权进度" : "授权并开启服务") : "开始服务"
+    }
     init() {
         let current = HostPermissionSnapshot.current()
         permissions = current
@@ -124,7 +185,7 @@ final class HostPermissionSetup: ObservableObject {
             } else if let step = requests.next(value) {
                 switch step {
                 case .screen:
-                    message = "第 1/2 步：请允许屏幕录制。完成后自动继续请求控制权限。"
+                    message = "第 1/2 步：请允许屏幕录制。如果系统询问退出并重新打开，请选“稍后”，继续完成控制权限。"
                     _ = CGRequestScreenCaptureAccess()
                 case .accessibility:
                     message = "第 2/2 步：请在系统提示／辅助功能设置中允许 Chordesk 控制 Mac。完成后自动检查并重启 App。"
@@ -159,6 +220,10 @@ final class HostPermissionSetup: ObservableObject {
     /// sequence. It never grants permissions or opens the content picker itself.
     func startService(_ host: LANHost) {
         guard !restarting, !host.sharing, !host.pairingCredentialLoading else { return }
+        if permissions.ready && policy.needsRestart {
+            defaults.set(true, forKey: Self.resumeServiceKey)
+            Task { await restart(host) }; return
+        }
         if requestingAll { Task { await check(host) }; return }
         if permissions.ready && !policy.needsRestart {
             Task { await host.startDefaultDisplay() }
@@ -197,13 +262,19 @@ final class HostPermissionSetup: ObservableObject {
     }
     func restart(_ host: LANHost) async {
         guard !restarting else { return }
+        let current = await refreshedSnapshot()
+        guard !restarting else { return }
+        permissions = current
+        guard PermissionRestartPolicy.canRestart(current, busy: host.sharing || host.connected || host.scaleBusy || host.switchingDisplay || host.restoreFailed) else {
+            message = current.ready ? "请先结束当前共享和显示调整，再重启。" : "两项权限尚未全部开启；先完成屏幕录制和控制授权，现在不会重启。"
+            return
+        }
         guard !Bundle.main.bundlePath.hasPrefix("/Volumes/"), !Bundle.main.bundlePath.contains("/AppTranslocation/") else {
             automatic = false
             message = "请先把 Chordesk 拖入“应用程序”并从那里打开，再完成授权。"
             return
         }
-        restarting = true; policy.claim()
-        defaults.set(true, forKey: "ChordeskPermissionRestartAttemptedV1")
+        restarting = true
         defaults.set(true, forKey: "ChordeskPermissionsPendingV1")
         defaults.synchronize()
         message = "正在释放控制并恢复显示设置…"
@@ -213,14 +284,19 @@ final class HostPermissionSetup: ObservableObject {
             message = "原显示设置恢复失败，暂不重启。请先在显示模式区域重试恢复。"
             return
         }
-        let config = NSWorkspace.OpenConfiguration()
         await EmbeddedTailnet.shared.disconnectAndWait(preservePreference: true)
-        config.createsNewApplicationInstance = true
-        config.allowsRunningApplicationSubstitution = false
-        config.arguments = ["--chordesk-permission-relaunch"]
         do {
-            _ = try await NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config)
-            NSApplication.shared.terminate(nil)
+            guard (await refreshedSnapshot()).ready else {
+                restarting = false
+                message = "权限发生变化，重启已取消。请完成两项授权后继续。"
+                return
+            }
+            policy.claim()
+            defaults.set(true, forKey: "ChordeskPermissionRestartAttemptedV1")
+            defaults.synchronize()
+            try HostRelaunchHelper.schedule()
+            message = "两项权限已通过，正在重启 Chordesk…"
+            DispatchQueue.main.async { NSApplication.shared.terminate(nil) }
         } catch {
             restarting = false; automatic = false
             message = "未能重新打开 Chordesk：\(error.localizedDescription)。当前窗口保留，可手动退出重开。"
@@ -234,12 +310,12 @@ struct HostPermissionChecklist: View {
     var body: some View {
         GroupBox("首次使用 · 权限检查") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("点一次“授权并开启服务”，按 macOS 提示依次允许屏幕录制和控制。完成后自动检查并重启一次 App，再共享内置屏。无需重启 Mac。")
+                Text("先完成屏幕录制和控制两项授权，全部通过后才重启一次 App，再开启共享。若 macOS 在第一项后询问“退出并重新打开”，请选择“稍后”，回到这里继续控制授权。无需重启 Mac。")
                     .font(.callout)
                 permission("屏幕与系统音频录制（用于传输画面）", passed: setup.permissions.screen)
                 permission("控制 Mac（辅助功能／设备控制）", passed: setup.permissions.accessibility && setup.permissions.input)
                 HStack {
-                    Button(setup.requestingAll ? "检查授权进度" : "授权并开启服务") { setup.startService(host) }
+                    Button(setup.primaryTitle) { setup.startService(host) }
                         .buttonStyle(.borderedProminent).disabled(setup.restarting || host.pairingCredentialLoading)
                         .accessibilityIdentifier("host-permissions-start-all")
                     if setup.requestingAll { Button("暂停设置") { setup.cancelRequests() } }
@@ -256,8 +332,8 @@ struct HostPermissionChecklist: View {
                 if !setup.message.isEmpty { Text(setup.message).font(.callout) }
                 Text("系统授权仍需你本人确认。若系统已允许但检查尚未更新，可重启后再检查；不会重启 Mac 或循环重启。从“授权并开启服务”进入时，重启后会继续开启内置屏服务。")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("已完成授权，重启 Chordesk 并检查") { Task { await setup.restart(host) } }
-                    .disabled(setup.restarting || host.sharing || host.connected || host.scaleBusy || host.switchingDisplay || host.restoreFailed)
+                Button("两项授权已完成，重启 Chordesk") { Task { await setup.restart(host) } }
+                    .disabled(!setup.permissions.ready || setup.restarting || host.sharing || host.connected || host.scaleBusy || host.switchingDisplay || host.restoreFailed)
             }.padding(5)
         }
     }

@@ -219,7 +219,7 @@ final class LANClient: ObservableObject {
                 guard let self, self.generation == token else { return }
                 self.currentPairing = pairing
                 self.connected = true; self.connecting = false; self.lastPacket = Date()
-                self.status = "已建立 TLS 加密连接，等待屏幕画面"
+                self.status = "已通过\(pairing.connectionNetwork.title)建立加密连接，等待屏幕画面"
                 wire?.send(.hello, value: LANHello(name: name))
                 let heartbeat = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                     Task { @MainActor in
@@ -273,7 +273,7 @@ final class LANClient: ObservableObject {
                     self.sourceName = state.name
                     if let pairing = self.currentPairing { self.remember(pairing, hostName: state.name, hostID: state.hostID) }
                     self.controlAllowed = state.canControl
-                    self.status = state.message
+                    self.status = "\(self.connectionNetwork.title) · \(state.message)"
                 case .microphoneState:
                     guard self.supportsMicrophone, data.count < 4096,
                           let state = try? JSONDecoder().decode(LANMicrophoneState.self, from: data) else { return }
@@ -590,7 +590,7 @@ struct LANConnectView: View {
                                 }.buttonStyle(.borderless)
                                     .disabled(saved.pairing(for: network) == nil || (network == .tailscale && !tailnet.ready))
                                     .accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
-                                Text(saved.pairing(for: network).map { "\($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
+                                Text(saved.pairing(for: network).map { "\($0.connectionNetwork.title)配对 · \($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
                                     .font(.caption).foregroundStyle(.secondary)
                                 Button("忘记这台 Mac", role: .destructive) { forgetting = saved }
                                     .buttonStyle(.borderless)
@@ -602,7 +602,7 @@ struct LANConnectView: View {
                     }
                 }
                 Section("在 Mac 开启服务，选择对应模式的二维码") {
-                    Button { showScanner = true } label: { Label("扫描 Mac 配对二维码", systemImage: "qrcode.viewfinder") }
+                    Button { showScanner = true } label: { Label("扫描 Mac \(network.title)配对二维码", systemImage: "qrcode.viewfinder") }
                 }
                 Section("手动输入") {
                     TextField(network == .lan ? "Mac 局域网 IP，例如 192.168.1.10" : "Mac Tailscale IP，例如 100.100.1.10", text: $host).keyboardType(.decimalPad)

@@ -57,16 +57,21 @@ struct LANHostView: View {
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         Button {
                             permissionSetup.startService(host)
-                        } label: { Label(permissionSetup.visible ? "授权并开启服务" : "开始服务", systemImage: "play.circle.fill") }
+                        } label: { Label(permissionSetup.primaryTitle, systemImage: "play.circle.fill") }
                             .buttonStyle(.borderedProminent).disabled(permissionSetup.restarting || host.pairingCredentialLoading || host.scaleBusy)
                             .accessibilityIdentifier("lan-start-sharing")
                     }
                 }.padding(24).frame(maxWidth: .infinity).modifier(HostGlassCard())
                 if permissionSetup.visible {
                     VStack(spacing: 8) {
-                        Text(permissionSetup.message.isEmpty ? "首次需要屏幕录制和控制权限。点击上方按钮会依次请求，完成后重启 App 并开启服务。" : permissionSetup.message)
+                        Label("1 · 屏幕录制：" + (permissionSetup.permissions.screen ? "已允许" : "待允许"), systemImage: permissionSetup.permissions.screen ? "checkmark.circle.fill" : "circle")
+                        Label("2 · 控制 Mac：" + (permissionSetup.permissions.accessibility && permissionSetup.permissions.input ? "已允许" : "待允许"), systemImage: permissionSetup.permissions.accessibility && permissionSetup.permissions.input ? "checkmark.circle.fill" : "circle")
+                        Text(permissionSetup.message.isEmpty ? "两项全部开启后才重启一次并共享。系统在第一项后询问重启时，请选“稍后”，继续第二项。" : permissionSetup.message)
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         if permissionSetup.requestingAll { Button("暂停授权流程") { permissionSetup.cancelRequests() } }
+                        if let countdown = permissionSetup.countdown {
+                            HStack { Text("两项已开启，\(countdown) 秒后重启"); Button("稍后") { permissionSetup.postpone() } }
+                        }
                         Button { showingPermissions = true; showingSettings = true } label: { Label("查看权限进度／手动处理", systemImage: "lock.shield") }
                     }
                         .accessibilityIdentifier("host-permission-settings")
