@@ -61,7 +61,7 @@
 ## 当前范围
 
 - iOS **1.22.1 / build 28** 隔离忘记／连接按钮、把背面灯置于桌面上方，并加入有次数限制的相机恢复；闲置后背面失效仍待真机复测。完整手册与默认 iPhone 输入法保留。Mac 保持 **0.18.1 / build 26**。[验证记录](docs/VALIDATION-1.22.1.md)；[真实操作视频录制稿](docs/GUIDE-RECORDING.md)。
-- **公开安装包仍为局域网版。**开发中 iOS **1.23.1 / build 30**、Mac **0.19.0 / build 27** 已加入内嵌 Tailscale：局域网免登录，公网使用各自的个人账号，不另装 Tailscale 或系统 VPN。跨网络真机验收尚待完成，本版尚未更新至 TestFlight。[设置与边界](docs/TAILSCALE.md)
+- **公开安装包仍为局域网版。**开发中 iOS **1.23.2 / build 31**、Mac **0.19.0 / build 27** 已加入内嵌 Tailscale：局域网免登录，公网使用各自的个人账号，不另装 Tailscale 或系统 VPN。跨网络真机验收尚待完成，本版尚未更新至 TestFlight。[设置与边界](docs/TAILSCALE.md)
 - 开发版 Mac 从一个按钮依次请求首次权限，通过后重启一次并开启内置屏服务；系统授权仍由机主确认。
 - 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
 - 麦克风默认关闭。当前 Duo → Mac 会议输入需要虚拟音频设备；自研集成驱动尚未实现。[音频说明](docs/REMOTE-MICROPHONE.md)

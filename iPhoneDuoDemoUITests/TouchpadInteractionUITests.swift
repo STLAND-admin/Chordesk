@@ -79,6 +79,42 @@ final class TouchpadInteractionUITests: XCTestCase {
     }
 
     @MainActor
+    func testTailnetFormButtonsDoNotActivateNeighborActionsOrWebsiteLinks() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_TAILNET_TAPS"] = "1"
+        app.launch()
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("连接 Mac", in: app)
+        let picker = app.segmentedControls["connection-network-mode"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        shortPress(picker.buttons["Tailscale 公网"])
+        let trace = app.staticTexts["tailscale-fixture-actions"]
+        var expected: [String] = []
+        for (identifier, action) in [
+            ("tailscale-connect", "connect"),
+            ("tailscale-authorize", "authorize"),
+            ("tailscale-check-status", "status"),
+            ("tailscale-disconnect", "disconnect"),
+            ("tailscale-logout", "logout-prompt")
+        ] {
+            // Actual coordinate presses: accessibility activation can bypass
+            // SwiftUI Form's automatic whole-row button handling.
+            let button = app.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.05)
+            expected.append(action)
+            XCTAssertEqual(trace.label, expected.joined(separator: ","), identifier)
+        }
+        let plan = app.links["tailscale-plan-link"]
+        XCTAssertTrue(plan.exists)
+        plan.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.05)
+        expected.append("link-pricing")
+        XCTAssertEqual(trace.label, expected.joined(separator: ","))
+        // Fixture intercepts actions/links before any account, network or
+        // credential change; it is compiled out on physical devices/Release.
+    }
+
+    @MainActor
     func testForgetMacDoesNotConnectAndOnlyDeletesConfirmedHost() {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"

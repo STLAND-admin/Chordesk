@@ -282,6 +282,22 @@ final class EmbeddedTailnet: ObservableObject {
 struct EmbeddedTailnetControls: View {
     @ObservedObject var tailnet = EmbeddedTailnet.shared
     @State private var confirmLogout = false
+    @State private var fixtureActions: [String] = []
+    @State private var fixtureEnabled = false
+    private var interactionFixture: Bool {
+#if DEBUG && targetEnvironment(simulator)
+        ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" &&
+        ProcessInfo.processInfo.environment["DUO_UI_TAILNET_TAPS"] == "1"
+#else
+        false
+#endif
+    }
+    private func invoke(_ action: String, operation: () -> Void) {
+        if interactionFixture {
+            fixtureActions.append(action)
+            if action == "connect" { fixtureEnabled = true }
+        } else { operation() }
+    }
 #if os(iOS)
     @StateObject private var authentication = TailnetAuthenticationController()
 #endif
@@ -298,18 +314,22 @@ struct EmbeddedTailnetControls: View {
                 Text(health.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary)
             }
             HStack {
-                if !tailnet.enabled {
-                    Button("登录／连接 Tailscale") { tailnet.connect() }.disabled(tailnet.busy)
+                if !tailnet.enabled && !(interactionFixture && fixtureEnabled) {
+                    Button("登录／连接 Tailscale") { invoke("connect") { tailnet.connect() } }.disabled(tailnet.busy)
                         .accessibilityIdentifier("tailscale-connect")
                 } else {
                     if !tailnet.ready {
                         if tailnet.snapshot.state != "NeedsMachineAuth" {
-                            Button("继续绑定这台设备") { tailnet.presentLogin() }.disabled(tailnet.busy)
+                            Button("继续绑定这台设备") { invoke("authorize") { tailnet.presentLogin() } }.disabled(tailnet.busy)
+                                .accessibilityIdentifier("tailscale-authorize")
                         }
-                        Button("检查绑定状态") { tailnet.refreshStatus() }.disabled(tailnet.busy)
+                        Button("检查绑定状态") { invoke("status") { tailnet.refreshStatus() } }.disabled(tailnet.busy)
+                            .accessibilityIdentifier("tailscale-check-status")
                     }
-                    Button("断开公网") { tailnet.disconnect() }.disabled(tailnet.busy)
-                    Button("退出账号", role: .destructive) { confirmLogout = true }.disabled(tailnet.busy)
+                    Button("断开公网") { invoke("disconnect") { tailnet.disconnect() } }.disabled(tailnet.busy)
+                        .accessibilityIdentifier("tailscale-disconnect")
+                    Button("退出账号", role: .destructive) { invoke("logout-prompt") { confirmLogout = true } }.disabled(tailnet.busy)
+                        .accessibilityIdentifier("tailscale-logout")
                 }
                 if tailnet.busy { ProgressView().controlSize(.small) }
             }
@@ -317,9 +337,22 @@ struct EmbeddedTailnetControls: View {
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Link("个人计划", destination: URL(string: "https://tailscale.com/pricing")!)
+                    .accessibilityIdentifier("tailscale-plan-link")
                 Link("隐私政策", destination: URL(string: "https://tailscale.com/privacy-policy")!)
+                    .accessibilityIdentifier("tailscale-privacy-link")
             }.font(.caption)
+            if interactionFixture {
+                Text(fixtureActions.joined(separator: ",")).accessibilityIdentifier("tailscale-fixture-actions")
+            }
         }
+        // Embedded in one Form row: .automatic makes every button/link a row
+        // action. A physical tap then runs login, disconnect, logout and both
+        // external links together. Give each control its own hit target.
+        .buttonStyle(.borderless)
+        .environment(\.openURL, OpenURLAction { url in
+            if interactionFixture { fixtureActions.append("link-" + url.lastPathComponent); return .handled }
+            return .systemAction
+        })
         .confirmationDialog("退出此设备的 Tailscale 账号？", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("退出账号", role: .destructive) { tailnet.logout() }
         } message: { Text("公网连接会断开，局域网配对不会删除。再次使用公网需重新登录。") }

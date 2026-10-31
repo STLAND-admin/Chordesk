@@ -1,6 +1,6 @@
 # Chordesk 内嵌公网模式
 
-开发版：iOS 1.23.1 / build 30、Mac 0.19.0 / build 27。当前公开 TestFlight 1.22.1 和 Mac 0.18.1 不含此功能；本轮只做本地构建与联调，跨网络验收见 [验证记录](VALIDATION-1.23.md)。
+开发版：iOS 1.23.2 / build 31、Mac 0.19.0 / build 27。当前公开 TestFlight 1.22.1 和 Mac 0.18.1 不含此功能；本轮只做本地构建与联调，跨网络验收见 [验证记录](VALIDATION-1.23.md)。
 
 ## 使用方式
 
@@ -14,6 +14,8 @@
 
 无需安装官方 Tailscale App。Chordesk 自带节点；登录网页账号与批准该节点加入网络是两件事。1.23.1 使用系统 `ASWebAuthenticationSession` 完成官方网页认证，并以引擎的 `Running` 状态及已分配的 `100.x` 地址确认连接，网页跳转／关闭不算成功。
 
+**1.23.2 修正按钮误触：**旧版同一个 Form 单元格内的自动按钮样式，会让普通触点同时触发授权、断开、退出和官网链接。实际复现了点“继续绑定”后跳到默认浏览器的官网。这是 Chordesk 的界面问题；新版为按钮／链接分别隔离触点。应从 App 的登录按钮进入设备授权页，不要从官网的账号登录入口开始绑定。
+
 1. 在“连接 Mac → Tailscale 公网”打开登录，使用与 Mac 相同的账号／私人网络，确认本机名称 `chordesk-iphone`。
 2. 若进入下载／安装页面，关闭认证窗口，点“检查绑定状态”。已经显示“已连接我的 Tailscale 私人网络”和 `100.x` 地址时，可继续扫描 Mac 的公网二维码。
 3. 尚未绑定时点“继续绑定这台设备”。App 向当前节点请求继续授权，重新打开设备绑定链接，保留官方网页登录会话；无需退出账号或删除节点。
@@ -21,7 +23,7 @@
 
 认证时短暂切换到验证码应用，可获得系统允许且最长 20 秒的后台收尾时间；到期停止节点，返回后再继续绑定。远控、相机和输入始终在退后台时停止。此机制不是常驻后台 VPN，也不保证长时间离开后原登录窗口仍有效。
 
-实现依据：[官方 tsnet 网页设备授权](https://tailscale.com/docs/features/tsnet/how-to/create-basic-tsnet-app)、[官方内嵌 iOS 认证示例](https://github.com/tailscale/aperture-plus/blob/main/TSNet/AuthManager.swift)。用户报告 Mac 登录可用、iPhone 登录后显示下载页；修正版真实账号登录仍需回归，不能据此认定已确定唯一原因。
+实现依据：[官方 tsnet 网页设备授权](https://tailscale.com/docs/features/tsnet/how-to/create-basic-tsnet-app)、[官方内嵌 iOS 认证示例](https://github.com/tailscale/aperture-plus/blob/main/TSNet/AuthManager.swift)。用户报告 Mac 登录可用；iPhone 按钮连带误触修正后，用户已在 1.23.2 真机确认“已绑定，显示 100.x 地址”。蜂窝跨网远控与长期重连仍需单独验收。
 
 不同人使用各自的 Tailscale 账号与私人网络，不把所有 Chordesk 用户加进开发者账号。一个人可以保存多台自己的 Mac，一次控制一台。第一版只接受节点的 `100.64.0.0/10` IPv4 地址，不接受域名、普通公网 IP 或 IPv6。已有的系统 Tailscale 客户端节点与 Chordesk 内嵌节点不是同一个节点。
 
