@@ -2,7 +2,7 @@
 
 ## 试用交付
 
-2026-10-30 用户授权推进外部 TestFlight 审核。iOS **1.22.1 / build 28** 已上传并完成 Apple 处理；准确提交状态见 [发行与审核记录](IOS-RELEASE-1.22.md)。小范围试用执行清单、十分钟任务与反馈模板见 [BETA-TESTING.md](BETA-TESTING.md)；BetterDisplay 与虚拟音频依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。尚未提交正式 App Store 发行；Mac Developer ID 公证包也未生成。
+2026-10-31 核验 iOS **1.22.1 / build 28** 已通过外部 Beta 审核，[公开 TestFlight 邀请](https://testflight.apple.com/join/WZDXKgvg)已可用；发行状态见 [发行与审核记录](IOS-RELEASE-1.22.md)。小范围试用执行清单、十分钟任务与反馈模板见 [BETA-TESTING.md](BETA-TESTING.md)；BetterDisplay 与虚拟音频依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。尚未提交正式 App Store 发行；Mac Developer ID 公证包也未生成。
 
 2026-10-29 用户另行明确授权生成无付费会员的同学试用包：`scripts/package-macos-test.sh` 独立生成 Apple Silicon Release、本地 ad hoc 签名、未公证 DMG。接收者手动为该 App 放行并授予屏幕录制／辅助功能，不需要 Xcode；受管理的 Mac 可能禁止。具体说明见 [Mac 同学试用说明](MAC-PEER-TEST.txt)。此流程不修改本机稳定开发包，也不等于 Developer ID、公证或 TestFlight 分发。
 
@@ -12,7 +12,7 @@
 
 2026-10-30 在 iPhone 18 Pro／iOS 27.0 模拟器通过“短按切换／隐藏模式按钮”和“忘记 Mac 不连接、仅删除确认记录”两项 UI 测试，使用合成画面与配对数据。未完成普通 iPhone 真机连接、输入、旋转和长期测试，不能把模拟器通过扩展为这些路径已验证。
 
-TestFlight 初期采用定向邀请，按实际设备分组；目前不开放无条件公开链接，也未发送邀请。[TestFlight](https://developer.apple.com/testflight/)允许公开链接按设备类型和 OS 设置测试者条件，但尚未确认 Duo 单独筛选条件；测试组名称不是安装机型限制。
+按用户 2026-10-31 要求，官网发布现有公开邀请；加入同一构建后，按实际设备测试 Duo 背面和弦或普通 iPhone 屏幕按钮。未另行发送邮件邀请。[TestFlight](https://developer.apple.com/testflight/)允许公开链接按设备类型和 OS 设置测试者条件，但尚未确认 Duo 单独筛选条件；测试组名称不是安装机型限制。
 
 截至 2026-10-29，本次查阅[公开设备能力限制](https://developer.apple.com/support/required-device-capabilities/)未确认可用于“仅 Duo”的 capability。不能编造 `UIRequiredDeviceCapabilities` 键，也不能拿无关硬件条件排除其他 iPhone。仅设 iPhone family 不能区分 Duo 与其他 iPhone。
 

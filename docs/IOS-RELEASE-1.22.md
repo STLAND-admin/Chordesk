@@ -1,5 +1,15 @@
 # Chordesk iOS 1.22 · 发行准备
 
+## 2026-10-31：Beta 已批准，公开邀请已可用
+
+- App Store Connect 核对 **1.22.1 / build 28 已批准**。用户提供并要求发布的邀请为 [加入 Chordesk TestFlight](https://testflight.apple.com/join/WZDXKgvg)，对应 `iPhone 兼容性测试` 外部组；本次查看时公开链接已启用、上限 100、测试员 0，没有另加邮箱或修改人数上限。
+- 初次访问公开页仍提示不接受新测试者；在该组已批准构建处执行“通知测试员”启用后，重新读取公开页已出现 **View Chordesk Beta / View in TestFlight** 与 App 测试说明。核验的是公开邀请入口，不是新设备安装或硬件测试。
+- 官网中英文首页、双语 README 与试用说明同步此入口。测试者安装 TestFlight 后打开链接；需使用配套 Mac 主机、同一可互访局域网。设备条件、剩余名额及构建有效期以 Apple 页面为准。
+- 普通 iPhone 使用屏幕按钮，Duo 可使用背面和弦；公开 Beta 不等于全部机型已验证，也不是正式 App Store 上架或获得通用背屏 API。
+- 本轮未上传新构建、未提交正式 App Store 版本、未部署公网或改 App 采集行为。开发计划新增 P0 跨网络远控和 P1 后台耗能优化，见 [ROADMAP](../ROADMAP.md)。
+
+以下保留首次送审过程，历史“等待审核／无公开链接”状态由本节取代。
+
 ## 2026-10-30 18:51（北京时间）：1.22.1 / build 28 正在等待审核
 
 - 用户本轮明确授权推进 **外部 TestFlight Beta App Review**，覆盖历史“仅本地导出、不上传／提交”的范围限制；没有提交正式 App Store 发行。
@@ -50,7 +60,7 @@ Use the [Mac 0.18.1 Apple Silicon host](https://github.com/STLAND-admin/Chordesk
 
 The optional experimental Duo rear interface uses the public CameraCaptureAccessory API while a foreground camera capture session remains active. Camera frames are immediately discarded: no preview, recording, or camera-frame transmission. The rear interface is used to qualify gestures and switch the front interaction mode, rather than for photographic controls. This intended-use distinction must be disclosed to App Review; public API availability does not establish that Apple will accept this use. The camera also scans pairing QR codes. Optional microphone forwarding is off by default and requires a separately configured virtual audio input device on the Mac; basic remote control does not require that driver.
 
-### After submission
+### 送审时的后续清单（历史；当前状态见页首）
 
 - Wait for Apple's Beta App Review decision and respond to any request for setup details or changes. The optional CameraCaptureAccessory use is explicitly disclosed; do not assume approval merely because the API is public.
 - After approval, invite the user's selected testers to the appropriate external group. No public TestFlight link exists yet; do not substitute an App Store distribution IPA as a directly installable download.

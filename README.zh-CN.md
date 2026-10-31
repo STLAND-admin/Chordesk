@@ -20,15 +20,17 @@
 - 首次点“开始服务”，按引导完成屏幕录制和控制两项权限；检查完整后自动重启 App 一次，默认开启内置屏服务。关闭窗口后保留菜单栏后台运行。
 - 本仓库与试用 Release 公开，可把下载链接直接发给测试者。历史私有仓库独立保留，公开提交不包含原作者的私人邮箱。
 
-### iPhone Duo
+### iPhone／iPhone Duo
 
-当前使用 **Xcode 本地编译安装**，尚无 TestFlight 下载链接。
+通过 [TestFlight 安装 Beta](https://testflight.apple.com/join/WZDXKgvg)。先在 iPhone 安装 TestFlight，再打开邀请链接；需配合上面的 Mac 主机在同一局域网使用。普通 iPhone 用屏幕按钮切换模式，Duo 可使用背面和弦。测试名额和设备条件以 Apple 页面为准。
+
+也可以自行编译：
 
 1. 安装 Xcode 27.1 或更新，打开 `iPhoneDuoDemo.xcodeproj`。
 2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
 3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
 
-已有安装更新时保持原 Bundle Identifier 和 Team。iOS **1.22.1 / build 28** 已于 2026-10-30 提交外部 TestFlight 审核，当前为**正在等待审核**。Duo 和普通 iPhone 测试组已准备好，目前尚无公开邀请链接或 App Store 版本。[审核状态](docs/IOS-RELEASE-1.22.md)。
+源码安装更新时保持原 Bundle Identifier 和 Team。iOS **1.22.1 / build 28** 已通过外部 TestFlight Beta 审核；这不是正式 App Store 上架。[发行记录](docs/IOS-RELEASE-1.22.md)。
 
 ## 怎么用
 
@@ -48,9 +50,11 @@
 
 ## 后续开发
 
-- [ ] **优先优化键盘遮挡**：评估键盘上方的 Liquid Glass 输入预览，让 Codex 等远端输入框的内容保持可见。
-- [ ] **评估 RDP 与客户端渲染**：验证 Mac 主机可行性及清晰度、带宽、延迟收益，再决定是否替换当前画面传输。
-- [ ] **公网与非 Duo 测试**：验证外网连接、换网重连，以及普通 iPhone 的按钮／菜单操作与布局。
+- [ ] **P0 跨网络远控（最高优先级）**：手机蜂窝／异地 Wi-Fi 访问已授权 Mac；先验证 Tailscale，再评估内置设备服务＋直连／中继，支持动态地址和换网重连。
+- [ ] **P1 后台能耗**：测量无人连接时的采屏、JPEG 编码和保活，按需采集并保持低开销后台可达。
+- [ ] **键盘可视性**：探索 Liquid Glass 输入预览，减少远端输入框被键盘遮挡。
+- [ ] **RDP／客户端渲染**：验证 Mac 当前会话可行性，对比清晰度、带宽和延迟。
+- [ ] **普通 iPhone 真机测试**：验证屏幕按钮、输入法、布局和重连。
 
 以上均为待办，具体任务和验收条件见[公开开发计划](ROADMAP.md)。
 

@@ -7,18 +7,18 @@
 | 交付物 | 试用入口 | 当前状态 |
 | --- | --- | --- |
 | 概念与操作演示 | https://stland-admin.github.io/Chordesk-site/ | GitHub Pages，具体部署见 VALIDATION-1.18.md |
-| iOS App | Duo／普通 iPhone 两个定向 TestFlight 组 | 1.22.1 / 28 已于 2026-10-30 送审，正在等待审核；尚未邀请，无公开链接 |
+| iOS App | [公开 TestFlight 邀请](https://testflight.apple.com/join/WZDXKgvg) | 1.22.1 / 28 已获 Beta 审核批准；2026-10-31 核验公开页有安装入口，名额和设备条件以 Apple 为准 |
 | Mac 主机 | [Mac 0.18.1 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test) | Apple Silicon，macOS 15.2+，ad hoc 签名且未公证，安装说明随包提供 |
 
 本机现有 Apple Development 签名 App 继续用于稳定调试。Mac 同学试用包由独立 Release 构建生成，明确标为未公证；不是把本机开发包改名后当正式发行版，也不适用于 iOS。网站与原生源码仓库目前均已公开，自有内容采用 CC BY-NC-SA 4.0。当前 Mac 构建以 Apple Silicon 为准，不承诺 Intel。
 
-## 会员激活后的执行顺序
+## 发行进度与后续准备
 
 1. 确认 App Store Connect 可用并创建 Chordesk 记录；优先保留现有 bundle ID。准备隐私政策、支持联系方式、相机／麦克风用途、局域网说明及审查可复现步骤。
-2. build 28 已上传，内部验证、Duo 手势体验、iPhone 兼容性测试组均已建立并关联构建。已提交首次外部审核，取消自动通知测试员；通过后再手动邀请。不要给普通测试者 App Store Connect 管理权限。
+2. build 28 已上传并获首次外部审核批准，三个组均已关联构建。公开邀请已放在官网；安装 TestFlight 后即可打开链接加入，无需填写问卷或获得 App Store Connect 管理权限。Duo 和普通 iPhone 使用同一构建，按设备选择对应测试项。
 3. 申请 Developer ID Application 证书，把公证凭据保存到本机 Keychain 的 notarytool profile。用 `scripts/package-macos-release.sh` 生成 Hardened Runtime、签名、公证并装订的 DMG，验证首次安装权限与配对。
 4. 把验证过的 DMG、SHA256、变更与安装说明附到 Chordesk 原生仓库的 GitHub prerelease；更新网页下载链接。iOS 只放真实 TestFlight 链接，不能把开发 IPA 放上去代替。
-5. 发送一条包含网页、Mac 下载与 TestFlight 的邀请；需要用户明确指定收件人后才代发。当前不发送邀请、不购买资源。
+5. 发送一条包含网页、Mac 下载与 TestFlight 的邀请；需要用户明确指定收件人后才代发。目前发布公开入口，不向指定联系人发送邀请或购买资源。
 
 ## 测试者准备与十分钟任务
 
@@ -32,7 +32,7 @@
 
 ## 收集反馈
 
-网页提供 GitHub 反馈入口和模板，**提交内容公开**；没有 GitHub 账号的测试者可把下面的文字发回邀请人。TestFlight 开通后优先使用其反馈渠道，上传截图前检查远程桌面内容。
+网页提供 GitHub 反馈入口和模板，**提交内容公开**；没有 GitHub 账号的测试者可把下面的文字发回邀请人。优先使用 TestFlight 反馈渠道，上传截图前检查远程桌面内容。
 
 ```text
 体验方式：网页 / Duo + Mac / 普通 iPhone + Mac
@@ -46,4 +46,4 @@
 更喜欢和弦还是菜单，原因：
 ```
 
-参考：[Apple 外部测试流程](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/)、[macOS 公证](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。这些准备不表示已获审核通过。
+参考：[Apple 外部测试流程](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/)、[macOS 公证](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。外部 Beta 已获批准；正式 App Store 发行和 Mac 公证仍独立准备。

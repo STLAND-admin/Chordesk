@@ -22,15 +22,17 @@ Download the [Mac 0.18.1 test release](https://github.com/STLAND-admin/Chordesk/
 - Click **Start service (开始服务)** and follow the screen recording and control permission setup. Once permission checks pass, the app restarts once and starts sharing the built-in display by default. Closing the window keeps the service running in the menu bar.
 - The source repository and test releases are public. You can share the download link directly with testers.
 
-### iPhone Duo
+### iPhone / iPhone Duo
 
-Currently installed by **building locally in Xcode**. A TestFlight build is not available yet.
+[Install the TestFlight beta](https://testflight.apple.com/join/WZDXKgvg). Install TestFlight on your iPhone, then open the invitation. Use the Mac host above on the same local network. Regular iPhones use on-screen mode controls; Duo adds rear chords. Availability and device conditions are shown by Apple.
+
+Building from source is also available:
 
 1. Install Xcode 27.1 or later and open `iPhoneDuoDemo.xcodeproj`.
 2. Select the `iPhoneDuoDemo` target. Under Signing & Capabilities, choose your own Team and a Bundle Identifier you can sign.
 3. Connect Duo over USB, enable Developer Mode and trust the Mac as prompted, then select the device and run. A free Personal Team can be used for testing, but requires periodic re-signing.
 
-Keep the same Bundle Identifier and Team when updating an existing installation. iOS **1.22.1 / build 28** was submitted for external TestFlight review on October 30, 2026 and is **Waiting for Review**. Duo and regular iPhone test groups are prepared; no public invitation or App Store release is available yet. [Review status](docs/IOS-RELEASE-1.22.md).
+Keep the same Bundle Identifier and Team when updating a source-built installation. iOS **1.22.1 / build 28** has passed external TestFlight Beta App Review; this is not an App Store release. [Release record](docs/IOS-RELEASE-1.22.md).
 
 ## How it works
 
@@ -50,9 +52,11 @@ The rear activation area can be moved and resized. Text entry supports the iPhon
 
 ## Roadmap
 
-- [ ] **Keyboard visibility first:** explore a Liquid Glass preview above the keyboard so remote input fields, such as those in Codex, remain visible while typing.
-- [ ] **RDP and client-side rendering:** validate Mac host feasibility and compare clarity, bandwidth, and latency before deciding whether to replace the current image transport.
-- [ ] **Internet access and non-Duo testing:** validate remote networks, reconnection, and on-screen controls and layouts on other iPhones.
+- [ ] **P0 — Cross-network remote access (top priority):** reach an authorized Mac from cellular or another Wi-Fi network. Validate Tailscale first, then evaluate built-in device services, direct connections and relay fallback, including address changes and reconnection.
+- [ ] **P1 — Background energy:** measure capture, JPEG encoding and keep-alive work without a viewer; capture on demand while keeping a low-cost listener available.
+- [ ] **Keyboard visibility:** explore a Liquid Glass preview so remote input fields remain visible while typing.
+- [ ] **RDP and client-side rendering:** validate Mac current-session feasibility and compare clarity, bandwidth and latency.
+- [ ] **Regular-iPhone hardware testing:** validate on-screen controls, keyboards, layouts and reconnection.
 
 These are planned tasks. See the [public roadmap](ROADMAP.md) for details and acceptance criteria.
 

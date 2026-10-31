@@ -16,6 +16,8 @@
 
 ## 当前原型边界
 
+- **2026-10-31 / TestFlight 公开入口与 Roadmap**：用户要求将 `https://testflight.apple.com/join/WZDXKgvg` 发布到官网。已在 App Store Connect 核对 1.22.1 / 28 为“已批准”、现有公开链接启用；启用测试后，公开页已显示 View in TestFlight。中英文官网与双语 README 同步邀请，取代历史“等待审核／无公开链接”，不等于正式 App Store 上架或全机型硬件验证。现有 100 人上限未改，未添加测试员邮箱。当前仍仅局域网；公开待办以跨网络远控 P0 为最高优先级，后台能耗 P1，保留键盘、RDP、普通 iPhone 真机测试。Tailscale 先验证、产品内置设备服务＋P2P＋必要中继为后续路线，不购买或部署。源码发现断连后采屏／JPEG 编码仍可继续，只作为待测耗能候选；本轮没有修改 App、电源设置或采集行为。详见 docs/IOS-RELEASE-1.22.md、ROADMAP.md。
+
 - **2026-10-30 18:51 / TestFlight 首次外部送审**：用户明确要求推进 Chordesk 审核，分发给 Duo 与普通 iPhone 测试者，覆盖历史“仅本地导出／仅 Duo 测试”限制。1.22.1 / build 28 已上传、Apple 处理完成、用户确认系统加密分类后保存出口合规信息，已正式提交 Beta App Review；App Store Connect 构建列表明确显示“正在等待审核”。关联 `Chordesk 内部验证`、`Duo 手势体验`、`iPhone 兼容性测试` 三组，未添加测试员或公开邀请链接，关闭自动通知。不是已审核通过，也未提交正式 App Store 发行。审核联系人经用户确认沿用另一 App，仅存 Apple 后台，不写入公开 Git。审核备注如实披露 CameraCaptureAccessory 的非摄影用途、相机帧丢弃、麦克风可选及未公证 Mac 主机。普通 iPhone 18 Pro / iOS 27.0 模拟器两项 UI 检查通过（手动模式按钮、忘记 Mac），采用合成 fixture；未验证普通 iPhone 真机或所有系统，Duo 长闲置恢复仍待回归。产物、状态与证据见 docs/IOS-RELEASE-1.22.md。
 
 - **2026-10-30 / Mac 本地品牌入口修正**：用户确认仅增加 Chordesk 符号链接后，Dock 悬停仍显示 DuoWorkbench，不能视为名称已修复。按本次要求将已签名实体包迁移到 `~/Applications/Chordesk.app`，旧路径最多保留反向兼容链接；此规则覆盖历史保留旧实体路径的要求。不修改包内容、bundle ID、签名或配对数据，不重置权限，迁移后重新启动并复查。`build-workbench.sh --install` 始终安装真实 Chordesk.app；遇到未迁移旧实体包或 Chordesk 符号链接时停止，不能猜测覆盖。内部 Swift target／可执行文件名继续兼容。已验证包内容校验值不变、严格签名通过，主机界面显示共享运行及屏幕／控制权限已允许；用户明确回复 Dock 悬停“已显示 Chordesk”。此反馈不扩大为改名后的远控全手势复测，详见 docs/VALIDATION-MAC-NAME.md。
