@@ -23,7 +23,7 @@
 
 认证时短暂切换到验证码应用，可获得系统允许且最长 20 秒的后台收尾时间；到期停止节点，返回后再继续绑定。远控、相机和输入始终在退后台时停止。此机制不是常驻后台 VPN，也不保证长时间离开后原登录窗口仍有效。
 
-实现依据：[官方 tsnet 网页设备授权](https://tailscale.com/docs/features/tsnet/how-to/create-basic-tsnet-app)、[官方内嵌 iOS 认证示例](https://github.com/tailscale/aperture-plus/blob/main/TSNet/AuthManager.swift)。用户报告 Mac 登录可用；iPhone 按钮连带误触修正后，用户已在 1.23.2 真机确认“已绑定，显示 100.x 地址”。蜂窝跨网远控与长期重连仍需单独验收。
+实现依据：[官方 tsnet 网页设备授权](https://tailscale.com/docs/features/tsnet/how-to/create-basic-tsnet-app)、[官方内嵌 iOS 认证示例](https://github.com/tailscale/aperture-plus/blob/main/TSNet/AuthManager.swift)。用户报告 Mac 登录可用；iPhone 按钮连带误触修正后，用户已在 1.23.2 真机确认“已绑定，显示 100.x 地址”。随后用户进一步确认“蜂窝网络下画面、触控都正常”。这确认当前设备组合的跨网基本功能；不同网络、长期重连及性能仍需单独验收。
 
 不同人使用各自的 Tailscale 账号与私人网络，不把所有 Chordesk 用户加进开发者账号。一个人可以保存多台自己的 Mac，一次控制一台。第一版只接受节点的 `100.64.0.0/10` IPv4 地址，不接受域名、普通公网 IP 或 IPv6。已有的系统 Tailscale 客户端节点与 Chordesk 内嵌节点不是同一个节点。
 
