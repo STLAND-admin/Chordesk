@@ -2,7 +2,7 @@
 
 ## 最新发行方向 · 2026-10-31
 
-内嵌 Tailscale 的 iOS 1.23.2 / 31＋Mac 0.19.0 / 27 已获用户确认蜂窝画面和触控正常；新版 Mac Release 与 iOS TestFlight 尚未发布。用户倾向下一步直接准备 **App Store 正式送审**，不先发布另一轮 TestFlight。最新 1.23.3／0.19.1 修正网络标签与首次授权重启。已准备[商店资料和审核备注草稿](APP-STORE-1.23-PREPARATION.md)，没有上传、提交或上架。
+内嵌 Tailscale 的 iOS 1.23.2 / 31＋Mac 0.19.0 / 27 已获用户确认蜂窝画面和触控正常；新版 Mac Release 与 iOS TestFlight 尚未发布。用户倾向下一步直接准备 **App Store 正式送审**，不先发布另一轮 TestFlight。1.23.3／0.19.1 修正网络标签与首次授权重启；最新本地开发版 1.24／0.20.0 新增[统一滚动惯性](VALIDATION-1.24.md)。已准备[商店资料和审核备注草稿](APP-STORE-1.23-PREPARATION.md)，没有上传、提交或上架。
 
 TestFlight 不是 App Store 的前置步骤；完成商店资料并选定构建后可提交正式审核。[Apple 提交流程](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app)
 

@@ -287,6 +287,12 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 
     override init() {
         super.init()
+        input.scrollPermission = { [weak self] in
+            guard let self else { return false }
+            return self.connected && self.controlAllowed && self.sharing && !self.switchingDisplay
+                && !self.scaleBusy && !self.systemSleeping && !self.captureRecovery.paused
+                && AXIsProcessTrusted() && CGPreflightPostEventAccess()
+        }
         // This standalone Mac build uses the file-based Keychain. Refuse optional
         // password dialogs rather than blocking startup on a legacy item ACL.
         // Access is still denied by Keychain when authentication is required.
@@ -1074,7 +1080,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             supportsTextInput: true, textFocus: controlAllowed ? textFocus : nil, mouseButtonDown: input.isDragging,
             videoQuality: videoQuality.rawValue, supportsWindowOverview: true, supportsDesktopSwitch: true,
             supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
-            supportsMicrophone: true, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity))
+            supportsMicrophone: true, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
+            supportsScrollDynamics: true))
     }
 
     func stop() {
@@ -1153,6 +1160,12 @@ private enum LANInputResult {
 @MainActor
 private final class LANMacInput {
     private let events = RemoteEventFactory()
+    var scrollPermission: () -> Bool = { false }
+    private lazy var scrolling = HostScrollDriver(allowed: { [weak self] in self?.scrollPermission() == true }, emit: { [weak self] output in
+        guard let self, let event = self.events.scroll(dy: output.y, dx: output.x, phase: output.phase, momentum: output.momentum) else { return false }
+        event.location = output.location; event.post(tap: .cghidEventTap)
+        return true
+    })
     var bounds = CGRect.zero
     private var dragging = false
     var isDragging: Bool { dragging }
@@ -1160,7 +1173,7 @@ private final class LANMacInput {
     private var lastClickPosition = CGPoint.zero
     private var clickCount: Int64 = 1
 
-    func release() { if dragging { mouse(.leftMouseUp) }; dragging = false }
+    func release() { scrolling.cancel(); if dragging { mouse(.leftMouseUp) }; dragging = false }
 
     func windowOverview(_ action: WindowOverviewAction) async -> LANInputResult {
         guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else { release(); return .permissionDenied }
@@ -1180,6 +1193,7 @@ private final class LANMacInput {
     }
 
     func typeText(_ edit: LANTextEdit) -> LANInputResult {
+        scrolling.cancel()
         guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else { release(); return .permissionDenied }
         guard edit.isValid, bounds.width > 0, bounds.height > 0, !dragging else { return .unsupported }
         for _ in 0..<edit.deleteCount { if key("delete", modifiers: 0) != .posted { return .creationFailed } }
@@ -1202,6 +1216,11 @@ private final class LANMacInput {
     func handle(_ event: LANInput) -> LANInputResult {
         guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else { release(); return .permissionDenied }
         guard bounds.width > 0, bounds.height > 0 else { release(); return .invalidDisplay }
+        if event.action == "scroll.gesture" {
+            guard !dragging, let sample = event.scrollGesture else { scrolling.cancel(); return .unsupported }
+            return scrolling.receive(sample, bounds: bounds, pointer: clampedPointer()) ? .posted : .unsupported
+        }
+        scrolling.cancel()
         if event.action.hasPrefix("touch.") {
             guard let direct = event.directTouch else { return .unsupported }
             return handleDirect(direct)
@@ -1304,10 +1323,13 @@ final class RemoteEventFactory {
         event.flags = []
         return event
     }
-    func scroll(dy: Int32, dx: Int32 = 0) -> CGEvent? {
+    func scroll(dy: Int32, dx: Int32 = 0, phase: ScrollWheelPhase = .none, momentum: ScrollMomentumPhase = .none) -> CGEvent? {
         guard let source, let event = CGEvent(scrollWheelEvent2Source: source, units: .pixel,
             wheelCount: 2, wheel1: dy, wheel2: dx, wheel3: 0) else { return nil }
         event.flags = []
+        event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase.rawValue)
+        event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum.rawValue)
         return event
     }
     func keyboard(code: CGKeyCode, modifiers: UInt) -> [CGEvent]? {

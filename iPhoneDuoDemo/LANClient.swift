@@ -32,6 +32,10 @@ final class LANClient: ObservableObject {
     private var supportsDisplaySelection = false
     @Published private(set) var captureRevision: String?
     @Published private(set) var supportsDirectTouch = false
+    @Published private(set) var supportsScrollDynamics = false
+    @Published var scrollInertia = ScrollTuning.coefficient(UserDefaults.standard.object(forKey: ScrollTuning.key) as? Double ?? ScrollTuning.defaultCoefficient) {
+        didSet { UserDefaults.standard.set(ScrollTuning.coefficient(scrollInertia), forKey: ScrollTuning.key); release() }
+    }
     @Published private(set) var supportsTextInput = false
     @Published private(set) var supportsWindowOverview = false
     @Published private(set) var supportsDesktopSwitch = false
@@ -260,6 +264,7 @@ final class LANClient: ObservableObject {
                     self.displayName = state.displayName ?? ""
                     self.supportsDisplaySelection = state.supportsDisplaySelection ?? false
                     self.supportsDirectTouch = state.supportsDirectTouch ?? false
+                    self.supportsScrollDynamics = state.supportsScrollDynamics ?? false
                     self.supportsTextInput = state.supportsTextInput ?? false
                     self.supportsWindowOverview = state.supportsWindowOverview ?? false
                     self.supportsDesktopSwitch = state.supportsDesktopSwitch ?? false
@@ -305,6 +310,20 @@ final class LANClient: ObservableObject {
     func touchpad(_ event: TouchpadEvent, origin: String = "inner") {
         if event == .leftClick || event == .rightClick || event == .dragBegan { textInputEpoch += 1 }
         var input = LANInput(event); input.origin = origin; send(input)
+    }
+
+    func scroll(_ sample: ScrollGestureEvent) {
+        guard acceptsInput, sample.isValid else { return }
+        if supportsScrollDynamics {
+            var value = sample; value.coefficient = ScrollTuning.coefficient(scrollInertia)
+            send(LANInput(scroll: value))
+        } else if sample.phase == .changed {
+            // Old hosts retain their existing scroll protocol; never run a second
+            // phone-side inertia simulation on top of the host's momentum.
+            if sample.mode == .direct {
+                directTouch(.init(action: .scroll, point: sample.anchor, delta: sample.delta))
+            } else { touchpad(.scrolled(amount: sample.delta.y)) }
+        }
     }
 
     func directTouch(_ event: DirectTouchEvent) {
@@ -413,6 +432,7 @@ final class LANClient: ObservableObject {
         displays = []; selectedDisplayID = nil; displayName = ""; canSwitchDisplays = false
         switchingDisplay = false; supportsDisplaySelection = false; captureRevision = nil
         supportsDirectTouch = false
+        supportsScrollDynamics = false
         supportsWindowOverview = false; supportsDesktopSwitch = false
         supportsTextInput = false; textFocus = nil; mouseButtonDown = false; textInputEpoch += 1
         displayMessage = "连接新版 Mac 主机后显示可用显示器"

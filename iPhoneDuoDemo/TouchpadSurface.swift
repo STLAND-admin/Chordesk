@@ -99,6 +99,7 @@ struct TouchpadSurface: UIViewRepresentable {
     var inputIsCurrent: () -> Bool = { true }
     var onContactCount: ((Int) -> Void)? = nil
     var onContactGesture: ((RearContactGesture) -> Void)? = nil
+    var onScroll: ((ScrollGestureEvent) -> Void)? = nil
     let onEvent: (TouchpadEvent) -> Void
     func makeUIView(context: Context) -> TouchSurfaceView {
         let view = TouchSurfaceView()
@@ -106,12 +107,14 @@ struct TouchpadSurface: UIViewRepresentable {
         view.behavior = behavior; view.edgeInsetFraction = TouchpadTuning.edgeInset(edgeInsetFraction)
         view.activeRegion = activeRegion
         view.onEvent = onEvent; view.onContactCount = onContactCount; view.onContactGesture = onContactGesture
+        view.onScroll = onScroll
         view.inputEpoch = inputEpoch; view.inputIsCurrent = inputIsCurrent
         view.inputEnabled = inputEnabled
         return view
     }
     func updateUIView(_ view: TouchSurfaceView, context: Context) {
         view.onEvent = onEvent; view.onContactCount = onContactCount; view.onContactGesture = onContactGesture
+        view.onScroll = onScroll
         view.inputIsCurrent = inputIsCurrent; view.inputEpoch = inputEpoch
         view.inputEnabled = inputEnabled
         view.behavior = behavior; view.contactGestureFingers = contactGestureFingers
@@ -122,6 +125,8 @@ struct TouchpadSurface: UIViewRepresentable {
 }
 
 final class TouchSurfaceView: UIView {
+    var onScroll: ((ScrollGestureEvent) -> Void)?
+    private var scrollTracker = ScrollGestureTracker()
     var activeRegion: RearActiveRegion? {
         didSet { if oldValue != activeRegion { cancelTouches() } }
     }
@@ -157,6 +162,8 @@ final class TouchSurfaceView: UIView {
     private var firstPoint = CGPoint.zero
     private var lastPoint = CGPoint.zero
     private var lastCentroid = CGPoint.zero
+    private var pendingScrollY: CGFloat = 0
+    private var scrollStarted = false
     private var maxTravel: CGFloat = 0
     private var observedFingerCount = 0
     private var lastFingerCount = 0
@@ -197,6 +204,12 @@ final class TouchSurfaceView: UIView {
         if contactGate.waitingForLift { contactGate.cancel(); return }
         guard !active.isEmpty else { return }
         guard touches.contains(where: { contactGate.accepts(ObjectIdentifier($0)) }) else { return }
+        if behavior != .contactsOnly {
+            if active.count <= 2 {
+                pendingScrollY = 0; scrollStarted = false
+                onScroll?(scrollTracker.begin(mode: .trackpad, at: event?.timestamp ?? active[0].timestamp))
+            } else if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
+        }
         reportContacts(active.count)
         if startedAt == nil {
             startedAt = active[0].timestamp
@@ -260,7 +273,15 @@ final class TouchSurfaceView: UIView {
             if active.count > 1 && active.count == lastFingerCount {
                 let dy = current.y - lastCentroid.y
                 maxTravel += hypot(current.x - lastCentroid.x, dy)
-                if abs(dy) > 0.2 { onEvent?(.scrolled(amount: dy / max(bounds.height, 1))) }
+                if let onScroll {
+                    pendingScrollY += dy
+                    // Accumulate initial travel: ignore tap tremor, not slow motion.
+                    if scrollStarted || maxTravel >= 3 {
+                        scrollStarted = true
+                        if let sample = scrollTracker.move(delta: CGPoint(x: 0, y: pendingScrollY / max(bounds.height, 1)), at: event?.timestamp ?? active[0].timestamp) { onScroll(sample) }
+                        pendingScrollY = 0
+                    }
+                } else if abs(dy) > 0.2 { onEvent?(.scrolled(amount: dy / max(bounds.height, 1))) }
             }
             lastFingerCount = active.count
             lastCentroid = current
@@ -295,6 +316,8 @@ final class TouchSurfaceView: UIView {
         if endedOutside { rearGestureValid = false; if behavior != .contactsOnly { cancelTouches() } }
         let active = acceptedTouches(event)
         let wasWaiting = contactGate.waitingForLift
+        if behavior != .contactsOnly, active.count < 2,
+           let sample = scrollTracker.end(at: event?.timestamp ?? touches.first?.timestamp ?? ProcessInfo.processInfo.systemUptime) { onScroll?(sample) }
         contactGate.synchronize(live: Set(ownedTouches(event).map(ObjectIdentifier.init)))
         if wasWaiting || contactGate.waitingForLift {
             return
@@ -315,7 +338,7 @@ final class TouchSurfaceView: UIView {
             reportContacts(active.count); return
         }
         if dragIsActive { onEvent?(.dragEnded) }
-        else if let startedAt, maxTravel < 10, (event?.timestamp ?? startedAt) - startedAt < 0.6 {
+        else if !scrollStarted, let startedAt, maxTravel < 10, (event?.timestamp ?? startedAt) - startedAt < 0.6 {
             onEvent?(observedFingerCount > 1 ? .rightClick : .leftClick)
         }
         reset()
@@ -337,6 +360,7 @@ final class TouchSurfaceView: UIView {
         super.willMove(toWindow: newWindow)
     }
     func cancelTouches() {
+        if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
         if dragIsActive { onEvent?(.dragEnded) }
         contactGate.cancel()
         reset(); reportContacts(0)
@@ -346,6 +370,7 @@ final class TouchSurfaceView: UIView {
         reportedContacts = count; onContactCount?(count)
     }
     private func reset() {
+        pendingScrollY = 0; scrollStarted = false
         holdTimer?.invalidate(); holdTimer = nil
         startedAt = nil; observedFingerCount = 0; lastFingerCount = 0
         rearGestureStartedAt = nil; rearGestureValid = false; rearOrigins.removeAll()

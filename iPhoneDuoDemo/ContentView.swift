@@ -522,6 +522,7 @@ struct ContentView: View {
                     Text("长按系统键盘空格后滑动可调整 Mac 文字光标。第三方键盘需支持系统浮动光标回调；无效果时用快捷菜单方向键。可选“手机布局 · 可调”提供 ABC／123／#+=，但不提供中文候选。")
                 }
                 Section("显示、画质与界面") {
+                    Text("单指直接触屏与双指触控板共用滚动惯性：快速滑动后抬手继续减速，慢滑或停住再抬手不会明显续滚。设置 → 统一滚动惯性可调 0–2，0 关闭、默认 1。重新落指、切换模式、打开菜单或断连会停止惯性；需两端均更新到支持版本。")
                     Text("目标太小：显示器按钮 → 适合触屏／更大文字／最大文字。文字模糊：设置选择清晰或超清。逻辑分辨率改变会同时影响实体 Mac，断连后尝试恢复连接前的显示模式与排列。")
                     Text("画质可选清晰、超清及高帧率。120／144 fps 是实验请求上限，实际取决于源屏、编码、网络和手机。右侧按钮位置、点击触感、放大镜和触控板灵敏度都可在设置调整。")
                 }
@@ -573,6 +574,7 @@ struct ContentView: View {
                     readRearHeld: { false },
                     inputIsCurrent: { frontInputIsCurrent(.direct, epoch: epoch) },
                     onContacts: { if frontInputIsCurrent(.direct, epoch: epoch) { grip.innerContacts($0) } },
+                    onScroll: { if frontInputIsCurrent(.direct, epoch: epoch) { client.scroll($0) } },
                     onEvent: { if frontInputIsCurrent(.direct, epoch: epoch) { client.directTouch($0) } })
             } else if client.connected && !client.supportsDirectTouch {
                 Text("直接触屏需要 Mac 主机 0.7 或更新版本")
@@ -584,6 +586,8 @@ struct ContentView: View {
                 guard frontInputIsCurrent(.trackpad, epoch: epoch) else { return }
                 grip.innerContacts(count)
                 if count > 0 { TouchFeedback.shared.prepare() }
+            }, onScroll: localDemo ? nil : { sample in
+                if frontInputIsCurrent(.trackpad, epoch: epoch) { client.scroll(sample) }
             }) { event in
                 guard frontInputIsCurrent(.trackpad, epoch: epoch) else { return }
                 grip.handle(TouchpadTuning.scale(event, by: innerSensitivity))
@@ -782,6 +786,17 @@ struct ContentView: View {
                     Text("默认 50%，100% 为原来的速度。移动和拖选同时生效，双指滚动保持原速度。设置自动保存。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button("恢复 50%") { innerSensitivity = TouchpadTuning.defaultSensitivity }
+                }
+                Section("统一滚动惯性 · \(client.scrollInertia, specifier: "%.1f")") {
+                    Slider(value: $client.scrollInertia, in: 0...2, step: 0.1) { Text("惯性系数") }
+                        .accessibilityIdentifier("scroll-inertia-slider")
+                    Text("直接触屏单指、触控板双指共用。0 为关闭，1 为默认；系数越大，抬手后减速越慢、滚动越远。重新落指即停止惯性，不改变接触时的跟随速度。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    if client.connected && !client.supportsScrollDynamics {
+                        Text("当前 Mac 主机不支持惯性，请更新主机；普通滚动仍可用。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Button("恢复惯性系数 1") { client.scrollInertia = ScrollTuning.defaultCoefficient }
                 }
                 RearAreaSettings(camera: camera)
                 Section("手机布局键盘占比 · \(Int((clampedKeyboardFraction * 100).rounded()))%") {

@@ -216,11 +216,12 @@ struct DirectTouchSurface: UIViewRepresentable {
     var readRearHeld: () -> Bool
     var inputIsCurrent: () -> Bool
     var onContacts: (Int) -> Void
+    var onScroll: ((ScrollGestureEvent) -> Void)? = nil
     var onEvent: (DirectTouchEvent) -> Void
 
     func makeUIView(context: Context) -> DirectTouchView { DirectTouchView() }
     func updateUIView(_ view: DirectTouchView, context: Context) {
-        view.onEvent = onEvent; view.onContacts = onContacts
+        view.onEvent = onEvent; view.onContacts = onContacts; view.onScroll = onScroll
         view.readRearHeld = readRearHeld
         view.inputIsCurrent = inputIsCurrent
         view.readRearContacts = readRearContacts; view.onWindowOverview = onWindowOverview
@@ -232,6 +233,9 @@ struct DirectTouchSurface: UIViewRepresentable {
 
 final class DirectTouchView: UIView {
     var onEvent: ((DirectTouchEvent) -> Void)?
+    var onScroll: ((ScrollGestureEvent) -> Void)?
+    private var scrollTracker = ScrollGestureTracker()
+    private var scrollTime = 0.0
     var onContacts: ((Int) -> Void)?
     var readRearHeld: (() -> Bool)?
     var readRearContacts: (() -> Int)?
@@ -301,10 +305,18 @@ final class DirectTouchView: UIView {
         picture.frame = viewport.imageRect
     }
     private func emit(_ events: [DirectTouchEvent]) {
-        for event in events where event.isValid { onEvent?(event) }
+        for event in events where event.isValid {
+            if event.action == .scroll, let onScroll {
+                if let sample = scrollTracker.move(delta: event.delta, at: scrollTime) { onScroll(sample) }
+            } else {
+                if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
+                onEvent?(event)
+            }
+        }
     }
     func cancelInput() {
         invalidateHold()
+        if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
         lens.isHidden = true; overviewSwipe.cancel()
         emit(state.cancel())
         ignored = !active.isEmpty
@@ -323,12 +335,14 @@ final class DirectTouchView: UIView {
     }
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         invalidateHold()
+        if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
         for touch in touches { active[ObjectIdentifier(touch)] = touch }
         guard inputIsCurrent?() != false else { cancelInput(); return }
         onContacts?(active.count)
         guard enabled, !ignored else { ignored = true; return }
         let fingers = Array(active.values)
         if fingers.count > 1 {
+            if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
             timer?.invalidate(); lens.isHidden = true; emit(state.cancel()); multi = true
             if fingers.count == 2 {
                 let a = fingers[0].location(in: self), b = fingers[1].location(in: self)
@@ -347,6 +361,7 @@ final class DirectTouchView: UIView {
         guard let touch = fingers.first else { return }
         last = touch.location(in: self)
         guard let point = viewport.normalized(last) else { ignored = true; return }
+        onScroll?(scrollTracker.begin(mode: .direct, at: touch.timestamp, anchor: point))
         emit(state.setRearHeld(readRearHeld?() ?? rearHeld))
         emit(state.begin(at: point, viewPoint: last))
         let token = sequence.token
@@ -363,6 +378,7 @@ final class DirectTouchView: UIView {
         self.timer = timer; RunLoop.main.add(timer, forMode: .common)
     }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        scrollTime = event?.timestamp ?? touches.first?.timestamp ?? ProcessInfo.processInfo.systemUptime
         guard inputIsCurrent?() != false else { cancelInput(); return }
         guard enabled, !ignored else { return }
         let fingers = Array(active.values)
@@ -395,6 +411,7 @@ final class DirectTouchView: UIView {
         if state.selectionArmed { updateMagnifier(at: position) }
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let sample = scrollTracker.end(at: event?.timestamp ?? touches.first?.timestamp ?? ProcessInfo.processInfo.systemUptime) { onScroll?(sample) }
         lens.isHidden = true; overviewSwipe.cancel()
         invalidateHold()
         for touch in touches { active.removeValue(forKey: ObjectIdentifier(touch)) }

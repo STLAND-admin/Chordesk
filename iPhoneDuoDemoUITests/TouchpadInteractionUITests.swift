@@ -2,6 +2,27 @@ import XCTest
 
 final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
+    func testSharedScrollInertiaSettingPersistsAndCanBeDisabled() {
+        let app = launchFixture()
+        func openSettings() {
+            shortPress(app.buttons["remote-options"]); shortPressMenuItem("键盘、画质与触控设置", in: app)
+        }
+        openSettings()
+        let slider = app.sliders["scroll-inertia-slider"]
+        reveal(slider, in: app.collectionViews.firstMatch)
+        XCTAssertTrue(slider.isHittable)
+        slider.adjust(toNormalizedSliderPosition: 0)
+        XCTAssertTrue(app.staticTexts["统一滚动惯性 · 0.0"].exists)
+        shortPress(app.buttons["完成"])
+        app.terminate(); app.launch()
+        openSettings(); reveal(slider, in: app.collectionViews.firstMatch)
+        XCTAssertTrue(app.staticTexts["统一滚动惯性 · 0.0"].exists)
+        shortPress(app.buttons["恢复惯性系数 1"])
+        XCTAssertTrue(app.staticTexts["统一滚动惯性 · 1.0"].exists)
+        shortPress(app.buttons["完成"])
+    }
+
+    @MainActor
     private func launchFixture() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
@@ -176,6 +197,13 @@ final class TouchpadInteractionUITests: XCTestCase {
 
     @MainActor
     private func shortPress(_ item: XCUIElement) {
+        if !item.exists {
+            let form = XCUIApplication().collectionViews.firstMatch
+            for _ in 0..<10 {
+                if item.exists || !form.exists { break }
+                form.swipeDown()
+            }
+        }
         XCTAssertTrue(item.waitForExistence(timeout: 5))
         XCTAssertTrue(item.isHittable)
         // Deliberately below every long-press threshold; do not rely on accessibility activation.

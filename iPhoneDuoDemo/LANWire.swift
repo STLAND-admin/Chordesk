@@ -295,6 +295,7 @@ struct LANStatus: Codable {
     var supportsMicrophone: Bool? = nil
     var sourceRefreshRate: Double? = nil
     var hostID: String? = nil
+    var supportsScrollDynamics: Bool? = nil
 }
 
 struct LANInput: Codable {
@@ -310,6 +311,11 @@ struct LANInput: Codable {
     var scrollX: Double? = nil
     var scrollY: Double? = nil
     var clickCount: Int? = nil
+    var scrollGesture: ScrollGestureEvent? = nil
+
+    init(scroll: ScrollGestureEvent) {
+        action = "scroll.gesture"; origin = "inner-scroll"; scrollGesture = scroll
+    }
 
     init(direct event: DirectTouchEvent) {
         action = "touch." + event.action.rawValue
