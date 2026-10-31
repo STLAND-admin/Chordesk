@@ -182,7 +182,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var displayID: CGDirectDisplayID?
     private var lastPing = Date()
     private var latestFrame: Data?
-    @Published private(set) var videoQuality = LANVideoQuality(rawValue: UserDefaults.standard.string(forKey: "DuoVideoQuality") ?? "") ?? .sharp
+    @Published private(set) var videoQuality = LANVideoQuality(rawValue: UserDefaults.standard.string(forKey: "DuoVideoQuality") ?? "") ?? .efficient
     @Published private(set) var videoMbps = 0.0
     @Published private(set) var videoFPS = 0.0
     private var traffic = VideoTrafficMeter()

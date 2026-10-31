@@ -1,5 +1,13 @@
 # Chordesk 分发准备
 
+## 最新发行方向 · 2026-10-31
+
+内嵌 Tailscale 的 iOS 1.23.2 / 31＋Mac 0.19.0 / 27 已获用户确认蜂窝画面和触控正常；新版 Mac Release 与 iOS TestFlight 尚未发布。用户倾向下一步直接准备 **App Store 正式送审**，不先发布另一轮 TestFlight。本轮记录发行方向，没有上传、提交或上架。
+
+TestFlight 不是 App Store 的前置步骤；完成商店资料并选定构建后可提交正式审核。[Apple 提交流程](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app)
+
+送审前更新内嵌 Tailscale 的隐私说明、数据收集项与加密申报（不可沿用旧“仅系统加密”答案），准备截图、配套 Mac 安装包及可复现的登录／配对／背面操作审核说明，并补齐发行回归。Tailscale 解决连接方式，不代表 Apple 已批准此新版。
+
 ## 试用交付
 
 2026-10-31 核验 iOS **1.22.1 / build 28** 已通过外部 Beta 审核，[公开 TestFlight 邀请](https://testflight.apple.com/join/WZDXKgvg)已可用；发行状态见 [发行与审核记录](IOS-RELEASE-1.22.md)。小范围试用执行清单、十分钟任务与反馈模板见 [BETA-TESTING.md](BETA-TESTING.md)；BetterDisplay 与虚拟音频依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。尚未提交正式 App Store 发行；Mac Developer ID 公证包也未生成。
@@ -18,7 +26,7 @@
 
 正式公开发行前，继续补足可下载机型的适配／验证。不能以“主要为 Duo 设计”替代[Apple 对可下载设备的兼容要求](https://developer.apple.com/help/app-review/before-submitting-for-review/test-compatible-devices)。当前 IPA 声明 iPhone／iPad family；本轮测试范围不等于已验证全部可下载设备。
 
-其他 Duo／iPhone 用户属于外部测试者，首个外部 TestFlight 构建需要 Beta App Review，通过后才能向这些测试者分发；不必先上架 App Store。少量指定设备也可用 [Ad Hoc](https://developer.apple.com/help/account/provisioning-profiles/create-an-ad-hoc-provisioning-profile/) 分发，但需预先登记设备并重新签名，不是可任意安装的 IPA。本轮采用 TestFlight，不授予测试者 App Store Connect 管理权限。
+其他 Duo／iPhone 用户属于外部测试者，首个外部 TestFlight 构建需要 Beta App Review，通过后才能向这些测试者分发；不必先上架 App Store。少量指定设备也可用 [Ad Hoc](https://developer.apple.com/help/account/provisioning-profiles/create-an-ad-hoc-provisioning-profile/) 分发，但需预先登记设备并重新签名，不是可任意安装的 IPA。现有公开试用采用 TestFlight，不授予测试者 App Store Connect 管理权限；新版发行方向见上文。
 
 ## iOS → App Store Connect
 

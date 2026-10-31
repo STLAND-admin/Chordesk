@@ -52,18 +52,19 @@ The rear activation area can be moved and resized. Text entry supports the iPhon
 
 ## Roadmap
 
-- [ ] **P0 — Cross-network validation:** the development build embeds Tailscale on both devices, with no companion app. The user confirmed picture and touch control over cellular on the current device pair; test other networks, relay performance and reconnection before release.
+- [x] **Cross-network remote control — solved, awaiting release:** embedded Tailscale connects both devices through the user’s private network, without an extra app or a self-hosted server. Picture and touch control over cellular are confirmed on the current device pair. The new Mac Release and iOS TestFlight build are not published yet.
 - [ ] **P1 — Background energy:** measure capture, JPEG encoding and keep-alive work without a viewer; capture on demand while keeping a low-cost listener available.
 - [ ] **Keyboard visibility:** explore a Liquid Glass preview so remote input fields remain visible while typing.
 - [ ] **RDP and client-side rendering:** validate Mac current-session feasibility and compare clarity, bandwidth and latency.
 - [ ] **Regular-iPhone hardware testing:** validate on-screen controls, keyboards, layouts and reconnection.
 
-These are planned tasks. See the [public roadmap](ROADMAP.md) for details and acceptance criteria.
+See the [public roadmap](ROADMAP.md) for completed work, remaining tests and release preparation. The next iOS distribution target is App Store review; another TestFlight release is optional.
 
 ## Current scope
 
 - iOS **1.22.1 / build 28** separates Forget from Connect, pins rear-contact lights above the desktop, and adds bounded capture recovery. The idle rear-control fix still needs device confirmation. The complete guide and default iPhone keyboard remain. Mac stays **0.18.1 / build 26**. [Current validation](docs/VALIDATION-1.22.1.md); [guide recording plan](docs/GUIDE-RECORDING.md).
-- **Published builds are LAN-only.** Development versions iOS **1.23.2 / build 31** and Mac **0.19.0 / build 27** add embedded Tailscale: LAN needs no login; cross-network mode uses each owner’s private Tailscale account. No additional Tailscale app or system VPN is installed. The user confirmed picture and touch control over cellular on this device pair. Broader network and long-session testing remain; these builds are not on TestFlight yet. [Setup and limits](docs/TAILSCALE.md).
+- **Published builds are LAN-only.** Development versions iOS **1.23.2 / build 31** and Mac **0.19.0 / build 27** add embedded Tailscale: LAN needs no login; cross-network mode uses each owner’s private Tailscale account. No additional Tailscale app or system VPN is installed. The user confirmed picture and touch control over cellular on this device pair. Broader network and long-session testing remain; the new Mac Release and iOS TestFlight build are unpublished. [Setup and limits](docs/TAILSCALE.md).
+- Development-source default quality is **Efficient · 15 fps**: up to 1280 pixels on the longest edge and JPEG quality 65%. Saved quality choices are retained. This is a frame-rate ceiling, not a fixed Mbps rate; bandwidth varies with the desktop content.
 - Development Mac builds request first-run permissions in sequence from one button, then restart once and start the built-in display service. macOS permission confirmations still require the owner.
 - Display scaling targets **1600 × 900 logical resolution**, using existing safe display modes. Some custom HiDPI modes still need the optional BetterDisplay fallback. [Dependencies](docs/DEPENDENCIES.md).
 - Microphone forwarding is off by default. Using Duo as a microphone for Mac apps currently requires a virtual audio device; an integrated driver is not implemented. [Audio details](docs/REMOTE-MICROPHONE.md).
