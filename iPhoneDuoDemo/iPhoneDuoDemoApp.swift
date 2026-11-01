@@ -4,6 +4,11 @@ import SwiftUI
 struct iPhoneDuoDemoApp: App {
     init() {
 #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["DUO_UI_RESET_CONTROLS"] == "1" {
+            for key in ["showPointerModeButtonV1", "showDisplayButtonV1", "showOverviewButtonV1", "showStreamMetadataV1"] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
         if ProcessInfo.processInfo.environment["DUO_UI_KEYBOARD_LAYOUT"] == "1" {
             // Seed a writable preference; launch arguments override UserDefaults
             // and cannot exercise persistence or an interactive settings switch.

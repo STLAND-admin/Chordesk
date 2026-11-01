@@ -288,7 +288,7 @@ struct VideoTrafficMeter {
     }
 }
 
-struct LANHello: Codable { var name: String; var displaySelection = true; var microphone: Bool? = true; var videoCodecs: [String]? = nil; var preferredVideoCodec: String? = nil }
+struct LANHello: Codable { var name: String; var displaySelection = true; var microphone: Bool? = ChordeskFeatures.remoteMicrophone; var videoCodecs: [String]? = nil; var preferredVideoCodec: String? = nil }
 struct LANVideoRequest: Codable { var codec: String; var keyframe = false }
 struct LANDisplay: Codable, Identifiable, Equatable {
     var id: UInt32

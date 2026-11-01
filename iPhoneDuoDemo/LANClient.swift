@@ -281,6 +281,7 @@ final class LANClient: ObservableObject {
 
     func setMicrophone(_ enabled: Bool) {
         if !enabled { stopMicrophone("麦克风已关闭"); return }
+        guard ChordeskFeatures.remoteMicrophone else { stopMicrophone("本版本已停用音频传输"); return }
         guard connected, supportsMicrophone, microphoneAvailable, !microphoneEnabled, !microphoneStarting,
               UIApplication.shared.applicationState == .active else { return }
         let token = generation, id = UUID()
@@ -308,6 +309,7 @@ final class LANClient: ObservableObject {
         microphone.stop(); microphoneEnabled = false; microphoneStarting = false; microphoneMessage = message
     }
     private func receiveMicrophoneState(_ state: LANMicrophoneState) {
+        guard ChordeskFeatures.remoteMicrophone else { microphoneAvailable = false; stopMicrophone(); return }
         microphoneAvailable = state.available
         if !state.available { stopMicrophone(state.message); return }
         if state.streamID == microphoneRequestID, let id = microphoneRequestID {
@@ -344,9 +346,11 @@ final class LANClient: ObservableObject {
 #if DEBUG && targetEnvironment(simulator)
         // Synthetic pixels for simulator UI checks; never captures or controls a Mac.
         if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" {
-            let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1600, height: 1000))
+            let fixtureSize = ProcessInfo.processInfo.environment["DUO_UI_TALL_REMOTE"] == "1"
+                ? CGSize(width: 1000, height: 1600) : CGSize(width: 1600, height: 1000)
+            let renderer = UIGraphicsImageRenderer(size: fixtureSize)
             image = renderer.image { context in
-                UIColor.systemBackground.setFill(); context.fill(CGRect(x: 0, y: 0, width: 1600, height: 1000))
+                UIColor.systemBackground.setFill(); context.fill(CGRect(origin: .zero, size: fixtureSize))
                 ("Duo Preview\nRemote text selection\nHigh quality desktop" as NSString).draw(at: CGPoint(x: 100, y: 140), withAttributes: [.font: UIFont.systemFont(ofSize: 48), .foregroundColor: UIColor.label])
             }.cgImage
             if ProcessInfo.processInfo.environment["DUO_UI_PAIRED_MACS"] == "1" {
@@ -544,7 +548,7 @@ final class LANClient: ObservableObject {
                     self.supportsTextInput = state.supportsTextInput ?? false
                     self.supportsWindowOverview = state.supportsWindowOverview ?? false
                     self.supportsDesktopSwitch = state.supportsDesktopSwitch ?? false
-                    self.supportsMicrophone = state.supportsMicrophone ?? false
+                    self.supportsMicrophone = ChordeskFeatures.remoteMicrophone && (state.supportsMicrophone ?? false)
                     self.textFocus = state.textFocus
                     self.mouseButtonDown = state.mouseButtonDown ?? false
                     self.switchingDisplay = state.switchingDisplay ?? false

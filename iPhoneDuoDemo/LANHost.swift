@@ -26,9 +26,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var microphoneRequestWindow = Date.distantPast
     private var microphoneStartCount = 0
     private var microphoneAvailable: Bool {
-        allowsMicrophone && microphoneDestinations.contains { $0.id == microphoneDestination }
+        ChordeskFeatures.remoteMicrophone && allowsMicrophone && microphoneDestinations.contains { $0.id == microphoneDestination }
     }
     func refreshMicrophoneDevices() {
+        guard ChordeskFeatures.remoteMicrophone else { return }
         microphoneDestinations = MicrophoneDevices.available()
         if microphoneActive && (!microphoneAvailable || !microphonePlayer.routeIsValid) {
             stopMicrophone("虚拟音频设备已断开，请重新选择后开启麦克风")
@@ -46,7 +47,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         sendMicrophoneState(requestID: previous)
     }
     private func requestMicrophone(_ request: LANMicrophoneRequest) {
-        guard peerSupportsMicrophone, configuredPeer != nil, connected, sharing else { return }
+        guard ChordeskFeatures.remoteMicrophone, peerSupportsMicrophone, configuredPeer != nil, connected, sharing else { return }
         if !request.enabled {
             if microphoneGate.streamID == request.streamID { stopMicrophone("Duo 麦克风已关闭") }
             return
@@ -909,7 +910,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 case .hello:
                     if let hello = try? JSONDecoder().decode(LANHello.self, from: data) {
                         self.clientName = String(hello.name.prefix(80)); self.peerSupportsDisplays = hello.displaySelection
-                        self.peerSupportsMicrophone = hello.microphone == true
+                        self.peerSupportsMicrophone = ChordeskFeatures.remoteMicrophone && hello.microphone == true
                         self.peerVideoCodecs = LANVideoCodec.allCases.map(\.rawValue).filter { hello.videoCodecs?.contains($0) == true }
                         self.requestedVideoCodec = LANVideoCodec.negotiate(preferred: hello.preferredVideoCodec, supported: self.peerVideoCodecs).rawValue
                     } else {
@@ -1189,7 +1190,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             supportsTextInput: true, textFocus: controlAllowed ? textFocus : nil, mouseButtonDown: input.isDragging,
             videoQuality: videoQuality.rawValue, supportsWindowOverview: true, supportsDesktopSwitch: true,
             supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
-            supportsMicrophone: true, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
+            supportsMicrophone: ChordeskFeatures.remoteMicrophone, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
             supportsScrollDynamics: true, supportsPresenceProbe: true, supportsH264: true, videoCodec: activeVideoCodec, supportedVideoCodecs: LANVideoCodec.allCases.map(\.rawValue),
             endpoints: ([pairing].compactMap { $0 } + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) }))
     }

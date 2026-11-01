@@ -2,6 +2,13 @@ import XCTest
 @testable import DuoWorkbench
 
 final class MicrophoneTests: XCTestCase {
+    func testRetiredMicrophoneCannotBeAdvertisedToNewPeers() throws {
+        XCTAssertFalse(ChordeskFeatures.remoteMicrophone)
+        let wire = try JSONEncoder().encode(LANHello(name: "test"))
+        let hello = try JSONDecoder().decode(LANHello.self, from: wire)
+        XCTAssertEqual(hello.microphone, false)
+    }
+
     func testPacketRoundTripAndExactFormatBounds() throws {
         let id = UUID(), pcm = Data((0..<960).map { UInt8($0 % 256) })
         let packet = MicrophonePacket(streamID: id, sequence: 0x12345678, pcm: pcm)

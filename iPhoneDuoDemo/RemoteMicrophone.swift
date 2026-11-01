@@ -1,6 +1,12 @@
 import Foundation
 import AVFoundation
 
+/// Product switch, deliberately not a persisted preference. Old preferences and
+/// peers cannot re-enable capture or route audio while the feature is retired.
+enum ChordeskFeatures {
+    static let remoteMicrophone = false
+}
+
 struct LANMicrophoneRequest: Codable {
     var streamID: UUID
     var enabled: Bool

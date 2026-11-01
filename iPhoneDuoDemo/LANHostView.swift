@@ -141,21 +141,6 @@ struct LANHostView: View {
                     }.disabled(host.switchingDisplay || host.scaleBusy)
                     Text(host.videoQuality.detail).font(.caption).foregroundStyle(.secondary)
                 }
-                DisclosureGroup("Duo 远程麦克风") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle("允许已配对 Duo 传入麦克风", isOn: $host.allowsMicrophone)
-                        Picker("发送到虚拟音频设备", selection: $host.microphoneDestination) {
-                            Text("请选择（默认不路由声音）").tag("")
-                            ForEach(host.microphoneDestinations) { Text($0.name).tag($0.id) }
-                        }
-                        Label(host.microphoneMessage, systemImage: host.microphoneActive ? "mic.fill" : "mic.slash")
-                        Button("刷新音频设备") { host.refreshMicrophoneDevices() }
-                        Text("安装 BlackHole 2ch 后，在此选择它；会议／语音应用也选择同名麦克风。只改变 Chordesk 的输出，不修改 Mac 默认音频设备。手机端默认关闭；开启时才传输。24 kHz 单声道 PCM，约 0.384 Mbps，不保存录音。")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Link("BlackHole 官方安装说明", destination: URL(string: "https://existential.audio/blackhole/")!)
-                    }.padding(5)
-                }
-
                 DisclosureGroup("网络与配对") {
                     Toggle("允许 Tailscale 公网连接", isOn: $host.allowsTailscale)
                     Text(host.tailscaleMessage).font(.caption).foregroundStyle(.secondary)

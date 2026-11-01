@@ -22,8 +22,8 @@ struct NativeKeyboardPresentation {
     }
 }
 
-/// The same frame is used by the picture and its input surface. Without a
-/// keyboard the existing full workspace and centered/pinchable viewport remain.
+/// Absolute touch follows the picture; relative trackpad input uses all available
+/// space above the keyboard, independently of the fitted picture dimensions.
 enum RemoteKeyboardLayout {
     static func frame(container: CGSize, content: CGSize, keyboardTop: CGFloat?) -> CGRect {
         guard container.width.isFinite, container.height.isFinite,
@@ -37,6 +37,13 @@ enum RemoteKeyboardLayout {
         let size = CGSize(width: content.width * scale, height: content.height * scale)
         return CGRect(x: (container.width - size.width) / 2, y: availableHeight - size.height,
                       width: size.width, height: size.height)
+    }
+    static func trackpadFrame(container: CGSize, keyboardTop: CGFloat?, railLeading: CGFloat?) -> CGRect {
+        guard container.width.isFinite, container.height.isFinite,
+              container.width > 0, container.height > 0 else { return .zero }
+        let width = railLeading.flatMap { $0.isFinite ? min(container.width, max(0, $0)) : nil } ?? container.width
+        let height = keyboardTop.flatMap { $0.isFinite ? min(container.height, max(0, $0)) : nil } ?? container.height
+        return CGRect(x: 0, y: 0, width: width, height: height)
     }
     static func top(of keyboard: CGRect, in workspace: CGRect) -> CGFloat? {
         let overlap = keyboard.intersection(workspace)

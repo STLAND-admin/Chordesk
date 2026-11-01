@@ -17,6 +17,11 @@ struct ContentView: View {
     @AppStorage("keyboardTransparency") private var keyboardTransparency = 0.45
     @AppStorage("primaryPointerMode") private var frontTouchMode = FrontTouchMode.direct.rawValue
     @AppStorage("showPointerModeButtonV1") private var showPointerModeButton = true
+    @AppStorage("showDisplayButtonV1") private var showDisplayButton = true
+    @AppStorage("showOverviewButtonV1") private var showOverviewButton = true
+    @AppStorage("metadataCornerV1") private var metadataCorner = MetadataCorner.topLeft.rawValue
+    @State private var settingsCategory = ControlSettingsCategory.shortcuts
+    @State private var railFrame = CGRect.zero
     @AppStorage("touchMagnifierEnabled") private var magnifierEnabled = true
     @State private var showingGuide = false
     @State private var showingAbout = false
@@ -136,9 +141,11 @@ struct ContentView: View {
         // Attach outside NavigationStack's inset content proposal. Ignoring the
         // safe area on the old child alone did not recover the window's width.
         .overlay { controlRail }
-        .overlay(alignment: .topLeading) {
+        .overlay(alignment: (MetadataCorner(rawValue: metadataCorner) ?? .topLeft).alignment) {
             if showStreamMetadata && client.connected && !modalVisible {
-                streamMetadata.padding(.horizontal, 8).padding(.top, 4).allowsHitTesting(false)
+                streamMetadata.padding(8)
+                    .padding(.trailing, MetadataCorner(rawValue: metadataCorner)?.isTrailing == true ? edgeBarWidth : 0)
+                    .allowsHitTesting(false)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -152,14 +159,6 @@ struct ContentView: View {
             }
             .background { RearStatusPositionReader(size: rearBadgeSize) { rearBadgeFrame = $0 }.allowsHitTesting(false) }
             .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
-        }
-        .overlay(alignment: .bottomLeading) {
-            if client.microphoneEnabled {
-                Button { client.setMicrophone(false) } label: {
-                    Label("麦克风传输中 · 关闭", systemImage: "mic.fill").font(.caption).padding(10)
-                }.buttonStyle(.plain).background(.ultraThinMaterial, in: Capsule()).padding()
-                    .accessibilityIdentifier("remote-microphone-live")
-            }
         }
         .overlay(alignment: .bottom) {
             if customKeyboardShown && !modalVisible {
@@ -193,37 +192,9 @@ struct ContentView: View {
                 showingCameraControls = false
             }
         }
-        .sheet(isPresented: $showingGuide) { operationGuide }
+        .sheet(isPresented: $showingGuide) { NavigationStack { operationGuide } }
         .sheet(isPresented: $showingAbout) { ChordAboutView() }
-        .sheet(isPresented: $showingLog) {
-            NavigationStack {
-                List {
-                    Section(client.connectionNetwork.title) {
-                        Text(client.status)
-                        Text(client.connectionTiming)
-                        Text("收到画面 \(client.receivedFrames) 帧 · \(client.videoMbps, specifier: "%.1f") Mbps · \(client.videoFPS, specifier: "%.0f") fps")
-                        Text("发送操作 \(client.sentEvents) · Mac 确认 \(client.acknowledged)")
-                        Text(client.lastScrollEnd)
-                        Text(overviewMessage)
-                        if overviewSequence > 0 {
-                            Text("总览请求 #\(overviewSequence) · 最近 Mac 确认 #\(client.acknowledged)；确认仅代表事件投递，效果以桌面为准")
-                        }
-                    }
-                    Section("相机辅助接口") {
-                        Text(camera.status)
-                        Text(camera.recoveryMessage)
-                        Text("控制模式：\(camera.mode.title)")
-                        Text("背面 \(grip.state.outerCount) 指 · 正面 \(grip.state.innerCount) 指 · \(grip.state.requestedFrontMode.title)")
-                        Text("背面接收：\(grip.controlsPresented ? "菜单期间暂停" : "已启用") · 远控输入：\(client.acceptsInput ? "允许" : "暂停")")
-                        Text("系统可用：\(camera.available ? "是" : "否")")
-                        Text("外屏场景出现：\(camera.presented ? "是" : "否")")
-                        Text("外屏触摸 \(camera.touchCount) · \(camera.lastTouch)")
-                    }
-                }
-                .navigationTitle("诊断信息")
-                .toolbar { ToolbarItem { Button("完成") { showingLog = false } } }
-            }
-        }
+        .sheet(isPresented: $showingLog) { NavigationStack { diagnosticsView } }
         .sheet(isPresented: $showingDemoLog) {
             NavigationStack {
                 InteractionLog(session: session).navigationTitle("交互记录")
@@ -239,29 +210,17 @@ struct ContentView: View {
     }
     private var controlMenuSections: [SystemMenuSection] {
         var sections = [SystemMenuSection(title: client.connected ? client.sourceName : "Chordesk", items: [
-            .init(id: "connect", title: "连接 Mac", symbol: "network"),
-            .init(id: directTouchSelected ? "trackpad" : "direct", title: directTouchSelected ? "切为触控板" : "切为直接触控", symbol: "hand.tap"),
-            .init(id: "displays", title: "显示器与文字大小", symbol: "display"),
-            .init(id: "magnifier", title: "选字放大镜", symbol: "magnifyingglass", selected: magnifierEnabled),
-            .init(id: "overview-show", title: "打开窗口总览", symbol: "rectangle.3.group", enabled: client.acceptsInput),
-            .init(id: "overview-hide", title: "退出窗口总览", symbol: "rectangle", enabled: client.acceptsInput),
-            .init(id: "desktop-previous", title: "上一个桌面", symbol: "arrow.left.square", enabled: client.acceptsInput && client.supportsDesktopSwitch),
-            .init(id: "desktop-next", title: "下一个桌面", symbol: "arrow.right.square", enabled: client.acceptsInput && client.supportsDesktopSwitch),
-            .init(id: "zoom-reset", title: "还原查看缩放", symbol: "arrow.down.right.and.arrow.up.left")
-        ]), SystemMenuSection(items: [
-            .init(id: "camera", title: "相机背面切换", symbol: "camera"),
-            .init(id: "microphone", title: client.microphoneEnabled || client.microphoneStarting ? "关闭 Duo 麦克风" : "开启 Duo 麦克风", symbol: client.microphoneEnabled ? "mic.fill" : "mic.slash", enabled: client.microphoneAvailable),
-            .init(id: "settings", title: "键盘、画质与触控设置", symbol: "slider.horizontal.3"),
-            .init(id: "guide", title: "Duo 操作手册", symbol: "book.closed"),
-            .init(id: "about", title: "关于 Chordesk", symbol: "info.circle"),
-            .init(id: "diagnostics", title: "诊断信息", symbol: "list.bullet.rectangle"),
-            .init(id: "demo", title: localDemo ? "返回远控" : "本地模拟", symbol: "rectangle.on.rectangle")
-        ])]
-        if localDemo { sections.append(.init(items: [.init(id: "demo-log", title: "交互记录", symbol: "text.badge.checkmark")])) }
+            .init(id: "connect", title: "连接 Mac", symbol: "network")
+        ]), SystemMenuSection(items: ControlSettingsCategory.allCases.map {
+            .init(id: $0.rawValue, title: $0.title, symbol: $0.symbol)
+        })]
         if client.connected { sections.append(.init(items: [.init(id: "disconnect", title: "断开 Mac", symbol: "network.slash", destructive: true)])) }
         return sections
     }
     private func selectControl(_ id: String) {
+        if let category = ControlSettingsCategory(rawValue: id) {
+            releaseInteractions(); settingsCategory = category; showingInputSettings = true; return
+        }
         switch id {
         case "connect": releaseInteractions(); showingConnect = true
         case "trackpad", "direct": releaseInteractions(); frontTouchMode = id
@@ -272,7 +231,6 @@ struct ContentView: View {
         case "desktop-previous": sendWindowOverview(.previousDesktop)
         case "desktop-next": sendWindowOverview(.nextDesktop)
         case "zoom-reset": releaseInteractions(); directResetToken += 1
-        case "microphone": client.setMicrophone(!(client.microphoneEnabled || client.microphoneStarting))
         case "camera": openCameraControls()
         case "settings": releaseInteractions(); showingInputSettings = true
         case "guide": releaseInteractions(); showingGuide = true
@@ -312,12 +270,24 @@ struct ContentView: View {
                                 .modifier(EdgeDockGlass())
                                 .accessibilityValue(directTouchSelected ? "直接触控" : "触控板")
                         }
-                        StableMenuButton(symbol: "display", title: "显示器与文字大小", identifier: "display-dock-button", sections: [],
-                            primaryAction: { releaseInteractions(); showingDisplays = true; client.requestDisplays() },
-                            onPresentation: { _ in }, onSelect: { _ in }).modifier(EdgeDockGlass())
+                        if showDisplayButton {
+                            StableMenuButton(symbol: "display", title: "显示器与文字大小", identifier: "display-dock-button", sections: [],
+                                primaryAction: { releaseInteractions(); showingDisplays = true; client.requestDisplays() },
+                                onPresentation: { _ in }, onSelect: { _ in }).modifier(EdgeDockGlass())
+                        }
+                        if showOverviewButton {
+                            StableMenuButton(symbol: "rectangle.3.group", title: "窗口总览", identifier: "overview-dock-button",
+                                sections: [.init(items: [
+                                    .init(id: "overview-show", title: "打开窗口总览", symbol: "rectangle.3.group", enabled: client.acceptsInput),
+                                    .init(id: "overview-hide", title: "退出窗口总览", symbol: "rectangle", enabled: client.acceptsInput)
+                                ])], primaryAction: { sendWindowOverview(.show) },
+                                onPresentation: setMenuPresented, onSelect: selectControl)
+                                .modifier(EdgeDockGlass()).accessibilityHint("轻点打开总览；长按可选择退出")
+                        }
                       }
                     }.scrollIndicators(.hidden)
                         .frame(maxWidth: edgeBarWidth > 0 ? edgeBarWidth : nil, alignment: .trailing)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { railFrame = $0 }
                         .padding(.top, geometry.size.height * ControlRailPosition.fraction(controlRailTop, maximum: 0.25))
                     Spacer(minLength: 0)
                     if !customKeyboardShown { keyboardDock
@@ -495,7 +465,6 @@ struct ContentView: View {
 
     private var videoSettings: some View {
         Section("远程画质") {
-            Toggle("显示左上角连接信息", isOn: $showStreamMetadata).accessibilityIdentifier("show-stream-metadata")
             Picker("视频编码", selection: $client.preferredVideoCodec) {
                 ForEach(LANVideoCodec.allCases) { Text($0.title).tag($0) }
             }.pickerStyle(.navigationLink).accessibilityIdentifier("video-codec-picker")
@@ -520,54 +489,46 @@ struct ContentView: View {
     }
 
     private var operationGuide: some View {
-        NavigationStack {
-            List {
-                Section("开始使用") {
-                    Text("Mac 首次点“授权并开启服务”，依次允许屏幕录制和控制，完整后自动重启 App 一次并继续共享。局域网无需账号；从“连接 Mac”扫码，之后点已配对电脑。可保存多台，每次连接一台；局域网 IP 改变需重新扫码。")
-                    Text("右侧从上到下是菜单、触控方式、显示器，键盘按钮在同列下方。按钮均可轻点；手指按钮可在设置中隐藏。菜单打开时远程触摸暂停，收起后请抬起背面手指再落下。")
-                }
-                Section("直接触控 · 默认模式") {
-                    Text("轻点：在相同位置左键点击。双击：沿用 Mac 应用双击行为，例如选择单词。快速单指横向／纵向滑动：滚动。")
-                    Text("选中文字或拖动：按住约半秒，再移动手指；从最初落点按住左键，抬手释放。长按后不移动、松手：右键菜单。它沿用 Mac 选区行为，不是 iOS 原生选择手柄。")
-                    Text("长按时显示选字放大镜；可从菜单或设置关闭。双指捏合放大／缩小手机查看画面（1–4 倍），双指平移查看局部；不会改变 Mac 文档。菜单“还原查看缩放”恢复。")
-                }
-                Section("触控板 · 精细移动") {
-                    Text("轻点右侧手指按钮或菜单“切为触控板”；也可通过背面双指长按临时进入。光标相对移动，不必把手指压在目标上。")
-                    Text("单指滑动：移动光标。单指轻点：左键；连续轻点两次：双击。按住约半秒再滑动：按住左键拖选，抬手释放。双指横向／纵向滑动：滚动；双指轻点：右键。")
-                    Text("灵敏度在“键盘、画质与触控设置”调整，默认 50%，范围 10%–150%，只影响触控板移动和拖选。直接触控不使用此速度。切换模式前先抬起正面手指。")
-                }
-                Section("背面和弦与三盏指示灯") {
-                    Text("连接并获得控制许可后，默认启用相机辅助背面场景。保持 Duo 展开、App 全屏，首次允许相机权限。相机帧不显示、不保存、不传输；断连、后台或打开扫码时会停止。")
-                    Text("右上三盏灯保持原位置：空心为未接触，实心依次表示 1／2／3 指及以上；暂停标志表示背面未就绪。灯只统计有效区域内的手指，点它可打开背面设置。三指不是额外手势。")
-                    Text("背面双指长按约 0.45 秒：临时切到另一指针模式，少于两指时恢复。也可设置“触发一次切换”，再次触发恢复；触发动作可选轻点／长按。背面不直接移动、点击、拖选或唤出键盘。")
-                    Text("背屏正常使用时为纯黑，仍接收有效区域内的手指。相机背面切换 → 可视化调整区域：仅编辑时显示边框；拖动矩形移动、拖四角缩放，也可用滑杆。关闭自定义区域则使用四周禁触比例（默认每边 12.5%）。区域外落下或滑出后，必须抬起再按。")
-                }
-                Section("窗口总览与桌面切换") {
-                    Text("直接触控时，先按住背面一指，再用正面双指同向上滑打开窗口总览，下滑发送 Esc 退出；左滑去下一个桌面，右滑回上一个桌面。每次抬起正面手指后才能再次触发。")
-                    Text("需要背面恰好一指，原地捏合不会触发。没有背面一指时，正面双指仍用于本地缩放／平移。可在设置关闭窗口组合手势；菜单保留总览和桌面切换入口。")
-                    Text("左右切桌面需 Mac 0.18.1+：在主机设置 → 桌面切换允许 System Events 自动化；在 macOS Mission Control 中创建至少两个桌面并开启 Control＋左右方向键。首尾不循环，多显示器使用当前活动屏幕。")
-                }
-                Section("iPhone 键盘与快捷键") {
-                    Text("默认使用 iPhone 输入法并自动唤起：点击 Mac 可编辑输入位置，正反面手指抬起后弹出。识别依赖 Mac 应用；不能识别时，轻点右下键盘按钮显示／收起。已有用户保存的偏好继续保留，可在设置或键盘长按菜单选择“自动唤起”。")
-                    Text("通过系统切换键选择已启用的第三方键盘。中文候选由输入法处理，只转发已确认文字。输入结果直接看远程桌面；默认将完整画面等比例放到键盘上方，也可在设置关闭。")
-                    Text("键盘上方靠右提供 Ctrl、Cmd、Option 和键盘按钮。修饰键可组合，下一次快捷键后释放；再次轻点可取消。长按键盘按钮打开 Esc、Tab、全选／复制／粘贴、方向键和 F1–F12。")
-                    Text("长按系统键盘空格后滑动可调整 Mac 文字光标。第三方键盘需支持系统浮动光标回调；无效果时用快捷菜单方向键。可选“手机布局 · 可调”提供 ABC／123／#+=，但不提供中文候选。")
-                }
-                Section("显示、画质与界面") {
-                    Text("键盘出现时，远程桌面默认保持原宽高比，随键盘动画完整放入键盘上方；右下键盘按钮紧贴键盘上沿。收起后恢复，可在设置关闭“键盘弹出时适配远程画面”。动画完成后可继续直接触控或使用触控板。")
-                    Text("单指直接触屏与双指触控板共用滚动惯性：快速滑动后抬手继续减速，慢滑或停住再抬手不会明显续滚。设置 → 统一滚动惯性可调 0–2，0 关闭、默认 1。重新落指、切换模式、打开菜单或断连会停止惯性；需两端均更新到支持版本。")
-                    Text("目标太小：显示器按钮 → 适合触屏／更大文字／最大文字。文字模糊：设置选择清晰或超清。逻辑分辨率改变会同时影响实体 Mac，断连后尝试恢复连接前的显示模式与排列。")
-                    Text("默认省流 15 fps、H.264。设置 → 视频编码可选择 H.264、H.265 / HEVC 或 JPEG；H.265 通常更省带宽，也适用于弱网，但画质与耗时需按实际设备比较。不支持时回退到兼容格式；左上角显示实际编码、像素、接收 fps、视频 Mbps 和往返 RTT，可关闭。RTT 不是触控到画面的完整延迟。120／144 fps 仍是实验上限。")
-                }
-                Section("麦克风、结束与排查") {
-                    Text("Duo → Mac 麦克风默认关闭。需要 Mac 配置双向虚拟音频设备并允许接收，再从手机菜单开启；不保存录音。当前没有内置虚拟音频驱动。")
-                    Text("退出前从菜单断开。断连、后台或控制撤销会释放按键／拖选并停止相机和麦克风。Mac 关闭窗口仍在菜单栏运行；停止服务或退出主机会断开。息屏不等于睡眠，真正睡眠／合盖不保证能连接。")
-                    Text("背面没有反应：检查暂停标志、有效区域和 App 是否全屏，抬起手指再试。菜单可用而手势不行：确认直接触控、背面一指和窗口手势设置。两者都不行：检查 Mac 控制／System Events 权限，查看“诊断信息”。")
-                    Text("自动连接并行检查两种已保存地址，优先 Tailscale；局域网先就绪时最多等 0.35 秒便回退。新版主机复用已验证连接，避免再次握手；不按名称合并电脑。Mac 两个入口同时服务，无需跟随手机切模式。公网首次仍需两端在 Chordesk 登录同一私人网络并允许 Mac 公网入口。诊断信息记录网络验证和首帧耗时。手机退后台仍断开；Mac 真正睡眠或合盖时不保证可达。")
-                }
-            }.navigationTitle("Duo 操作手册")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingGuide = false } } }
-        }
+        List {
+            Section("0 指背屏（直接触控 · 默认）") {
+                LabeledContent("正面轻点／双击", value: "左键／双击")
+                LabeledContent("单指滑动", value: "滚动页面")
+                LabeledContent("长按约半秒后拖动", value: "按住左键拖选；抬手释放")
+                LabeledContent("长按不动，松手", value: "右键菜单")
+                LabeledContent("双指捏合／平移", value: "放大／移动手机上的画面")
+            }
+            Section("1 指按住背屏（直接触控）") {
+                LabeledContent("正面双指上滑", value: "打开窗口总览")
+                LabeledContent("正面双指下滑", value: "退出窗口总览")
+                LabeledContent("正面双指左滑／右滑", value: "下一个／上一个桌面")
+                Text("左右切桌面需要 Mac 开启 System Events 权限和 Control＋方向键快捷键，并有至少两个桌面。").font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("2 指长按背屏（临时触控板 · 默认）") {
+                LabeledContent("正面单指滑动", value: "移动鼠标")
+                LabeledContent("单指轻点／双击", value: "左键／双击")
+                LabeledContent("单指长按后拖动", value: "按住左键拖选")
+                LabeledContent("双指滑动／轻点", value: "滚轮／右键")
+                LabeledContent("松开背面手指", value: "回到直接触控")
+                Text("键盘上方的黑边也可作为触控板，右侧快捷栏除外。也可用右侧操控模式按钮固定切换；背屏设置可改为触发一次切换，再触发一次恢复。").font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("iPhone 键盘与快捷键") {
+                Text("默认 iPhone 输入法、自动唤起。点 Mac 输入位置后抬起手指，键盘会弹出；无法识别时点右下键盘按钮。快捷键设置可改为手动唤起。")
+                Text("输入结果直接看远程桌面。画面默认等比例放到键盘上方，可在快捷键设置关闭。长按空格后滑动调整 Mac 文字光标；第三方输入法需支持系统光标回调。")
+                Text("键盘上方 Ctrl／⌘／⌥ 可组合，下次快捷键后释放，再点可取消。长按键盘按钮打开 Esc、Tab、复制粘贴、方向键和 F1–F12。")
+                Text("快捷键设置中可编辑右侧三个入口：显示器、操控模式、窗口总览。右侧栏可上下滑动。")
+            }
+            Section("显示与画质") {
+                Text("文字太小：显示器 → 更大文字。画面模糊：远程传输画质设置 → 清晰／超清。分辨率会影响实体 Mac，断连后尝试恢复。")
+                Text("默认省流 15 fps、H.264；可选 H.265 或 JPEG。120／144 fps 为实验上限。辅助功能设置 → 诊断信息，可开关画面信息并选择位置。")
+                Text("滚动惯性、指针灵敏度、长按放大镜在辅助功能设置。惯性 0 关闭、1 默认、2 更强；重新落指停止续滚。")
+            }
+            Section("连接与背屏") {
+                Text("Mac 首次按提示开启屏幕录制和控制权限；每次系统要求重启时照做，权限齐全后开启服务。手机首次扫码，之后点已配对 Mac。公网需两端登录同一 Tailscale 私人网络。")
+                Text("Duo 展开并保持 App 前台。三盏灯表示有效区域内接触数，暂停表示未就绪。正常背屏纯黑；仅调整区域时显示边框。菜单关闭后抬起背面手指再落下。")
+                Text("Mac 关闭窗口仍在后台服务；退出才停止。息屏与睡眠不同，真正睡眠／合盖不保证连接。")
+            }
+        }.navigationTitle("Duo 操作手册")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingInputSettings = false; showingGuide = false } } }
     }
 
     private var keyboardResizeAnimation: Animation? {
@@ -593,9 +554,12 @@ struct ContentView: View {
     private var workspace: some View {
         GeometryReader { geometry in
             let customTop = customKeyboardShown ? RemoteKeyboardLayout.top(of: customKeyboardFrame, in: geometry.frame(in: .global)) : nil
-            let top = fitDesktopAboveKeyboard ? (nativeKeyboardVisible && !menuPresented ? nativeKeyboardTop : customTop) : nil
+            let inputTop = nativeKeyboardVisible && !menuPresented ? nativeKeyboardTop : customTop
+            let top = fitDesktopAboveKeyboard ? inputTop : nil
             let contentSize = client.image.map { CGSize(width: $0.width, height: $0.height) } ?? geometry.size
             let desktop = RemoteKeyboardLayout.frame(container: geometry.size, content: contentSize, keyboardTop: top)
+            let relativeInput = RemoteKeyboardLayout.trackpadFrame(container: geometry.size, keyboardTop: inputTop,
+                railLeading: railFrame.isEmpty ? nil : railFrame.minX - geometry.frame(in: .global).minX)
             ZStack(alignment: .topLeading) {
                 Color.black
                 ZStack {
@@ -603,13 +567,20 @@ struct ContentView: View {
                         if localDemo { MonitorView(session: session) }
                         else { LANMonitor(client: client) { releaseInteractions(); camera.stop(); showingConnect = true } }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    workspaceInput.allowsHitTesting(!viewportAnimating)
+                    if directTouchSelected && !localDemo { workspaceInput.allowsHitTesting(!viewportAnimating) }
                 }
                 .frame(width: desktop.width, height: desktop.height)
                 .clipped()
                 .position(x: desktop.midX, y: desktop.midY)
                 .animation(keyboardResizeAnimation, value: desktop)
+                if !directTouchSelected || localDemo {
+                    workspaceInput
+                        .frame(width: relativeInput.width, height: relativeInput.height)
+                        .clipped().position(x: relativeInput.midX, y: relativeInput.midY)
+                        .allowsHitTesting(!viewportAnimating && !modalVisible)
+                }
             }
+            .onChange(of: relativeInput) { _, _ in inputEpoch += 1; client.release() }
             .background(KeyboardOcclusionReader { top, duration, curve in
                 keyboardResizeDuration = duration; keyboardResizeCurve = curve
                 nativeKeyboardTop = top
@@ -791,6 +762,25 @@ struct ContentView: View {
     private var inputSettings: some View {
         NavigationStack {
             Form {
+                switch settingsCategory {
+                case .shortcuts: shortcutSettings
+                case .rear: rearSettings
+                case .streaming: streamingSettings
+                case .assistance: assistanceSettings
+                }
+            }
+            .navigationTitle(settingsCategory.title)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingInputSettings = false } } }
+        }.presentationDetents([.large])
+    }
+
+    @ViewBuilder private var shortcutSettings: some View {
+        Section("编辑右侧快捷键") {
+            Toggle("切换显示器", isOn: $showDisplayButton).accessibilityIdentifier("show-display-button")
+            Toggle("切换操控模式", isOn: $showPointerModeButton).accessibilityIdentifier("show-pointer-mode-button")
+            Toggle("窗口总览", isOn: $showOverviewButton).accessibilityIdentifier("show-overview-button")
+            Text("三个快捷键默认显示。右侧栏可上下滑动；菜单和键盘按钮始终保留。窗口总览轻点打开、长按选择退出。").font(.footnote).foregroundStyle(.secondary)
+        }
                 Section("右侧按钮位置") {
                     Text("菜单与键盘按钮越过内容安全区，沿右侧系统状态区下方对齐。上下位置可调整；背面手指数提示固定在原位置，不随菜单移动。")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -813,7 +803,7 @@ struct ContentView: View {
                     Picker("键盘唤起", selection: $keyboardInvocation) {
                         ForEach(KeyboardInvocation.allCases) { Text($0.title).tag($0.rawValue) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("keyboard-invocation")
-                    Text("默认手动：右下玻璃按钮轻点显示／收起，长按打开快捷菜单。自动：点击识别出的 Mac 输入框后唤起。仅远程桌面显示输入结果，不显示本地输入栏。")
+                    Text("默认自动：点击识别出的 Mac 输入框后唤起；可切为手动。右下玻璃按钮轻点显示／收起，长按打开快捷菜单。仅远程桌面显示输入结果，不显示本地输入栏。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Text("iPhone 输入法使用你已启用的系统或微信输入法，通过键盘上的切换键选择。拼音候选确认后发送到 Mac；右下 Dock 提供 Ctrl、Cmd、Option 和键盘菜单。")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -822,9 +812,55 @@ struct ContentView: View {
                     Text("键盘由右下独立按钮或可编辑输入框唤出。背面不再控制键盘；只切换直接触控／触控板。自动弹出依赖 Mac 应用的辅助功能信息，无法识别时点右下键盘按钮。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("手机布局键盘 · 玻璃透明度") {
+                    LabeledContent("键盘", value: "\(Int(keyboardTransparency * 100))%")
+                    Slider(value: $keyboardTransparency, in: 0...0.95, step: 0.05) { Text("键盘透明度") }
+                        .accessibilityIdentifier("keyboard-transparency")
+                    Text("只在唤出键盘时显示玻璃覆盖层和高度分隔条。全屏触控不显示边界，直接保留完整桌面。透明度仅调整键盘背景；系统开启“降低透明度”时使用不透明背景。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("手机布局键盘占比 · \(Int((clampedKeyboardFraction * 100).rounded()))%") {
+                    Slider(value: $keyboardFraction, in: 0.20...0.45, step: 0.01) { Text("键盘高度") }
+                        .accessibilityIdentifier("keyboard-height-slider")
+                    Text("也可以拖动桌面与键盘之间的分隔条。调节范围为可用空间的 20%–45%，设置会自动保存。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Button("恢复 25%") { keyboardFraction = 0.25 }
+                }
+    }
+    @ViewBuilder private var rearSettings: some View {
+        Section("背屏控制") {
+            Toggle("连接后自动启用背面", isOn: $rearAutoStart)
+            Button("启用背面模式切换") {
+                rearAutoStart = true; camera.start(); showingInputSettings = false
+            }.accessibilityIdentifier("camera-mode-front-touch")
+            if camera.running || camera.starting {
+                Button("停止背屏控制", role: .destructive) {
+                    rearAutoStart = false; releaseInteractions(); camera.stop()
+                }
+            }
+            Text("相机辅助接口保持运行；画面不显示、不保存、不传输。").font(.footnote).foregroundStyle(.secondary)
+        }
+        RearControlSettings()
+                Section("窗口与桌面组合手势") {
+                    Toggle("背面一指＋正面双指上下／左右滑", isOn: $rearWindowGestures)
+                    Text("仅直接触控：先按住背面一指，再用正面双指上滑打开 Mission Control，下滑发送 Esc 退出。一次手势仅触发一次；抬手后可再次操作。无背面一指时仍为本机缩放。主机通过系统 Mission Control 应用打开；左滑下一个桌面、右滑上一个桌面，需 Mac 0.18+ 及系统 Control＋左右方向键快捷键。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+        RearAreaSettings(camera: camera)
+    }
+    @ViewBuilder private var streamingSettings: some View {
+        Section("显示器") {
+            NavigationLink("显示器与文字大小") { LANDisplaySettings(client: client).onAppear { client.requestDisplays() } }
+        }
+        videoSettings
+    }
+    @ViewBuilder private var assistanceSettings: some View {
+        Section("帮助与信息") {
+            NavigationLink("Duo 操作手册") { operationGuide }
+            NavigationLink("诊断信息") { diagnosticsView }
+            NavigationLink("关于 Chordesk") { ChordAboutView() }
+        }
                 Section("全屏触控方式") {
-                    Toggle("显示独立触控模式按钮", isOn: $showPointerModeButton).accessibilityIdentifier("show-pointer-mode-button")
-                    Text("按钮与显示器、菜单在右侧同一列，轻点切换直接触控／触控板。不依赖背面能力；使用背面和弦时可关闭此按钮。").font(.footnote).foregroundStyle(.secondary)
                     Picker("操作方式", selection: $frontTouchMode) {
                         ForEach(FrontTouchMode.allCases) { Text($0.title).tag($0.rawValue) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("front-touch-mode")
@@ -839,29 +875,6 @@ struct ContentView: View {
                 Section("选字放大镜") {
                     Toggle("长按时显示放大镜", isOn: $magnifierEnabled).accessibilityIdentifier("touch-magnifier-toggle")
                     Text("放大镜浮在手指上方，显示实际落点和选字位置；只改变本机查看，不修改 Mac 缩放。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("窗口与桌面组合手势") {
-                    Toggle("背面一指＋正面双指上下／左右滑", isOn: $rearWindowGestures)
-                    Text("仅直接触控：先按住背面一指，再用正面双指上滑打开 Mission Control，下滑发送 Esc 退出。一次手势仅触发一次；抬手后可再次操作。无背面一指时仍为本机缩放。主机通过系统 Mission Control 应用打开；左滑下一个桌面、右滑上一个桌面，需 Mac 0.18+ 及系统 Control＋左右方向键快捷键。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                videoSettings
-                Section("Duo 麦克风 → Mac") {
-                    Toggle("本次连接开启麦克风", isOn: Binding(get: { client.microphoneEnabled || client.microphoneStarting }, set: { client.setMicrophone($0) }))
-                        .disabled(!client.microphoneAvailable).accessibilityIdentifier("remote-microphone-toggle")
-                    Toggle("连接后自动开启（默认关闭）", isOn: $client.autoStartMicrophone)
-                        .accessibilityIdentifier("remote-microphone-autostart")
-                    Text(client.microphoneMessage).font(.caption)
-                    Text("Mac 主机需选择 BlackHole 等虚拟音频设备并允许接收；会议应用选择同名麦克风。仅在 App 前台传输，不保存录音。退到后台、断连或音频中断后停止。开启自动连接也不会绕过系统麦克风权限。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                RearControlSettings()
-                Section("手机布局键盘 · 玻璃透明度") {
-                    LabeledContent("键盘", value: "\(Int(keyboardTransparency * 100))%")
-                    Slider(value: $keyboardTransparency, in: 0...0.95, step: 0.05) { Text("键盘透明度") }
-                        .accessibilityIdentifier("keyboard-transparency")
-                    Text("只在唤出键盘时显示玻璃覆盖层和高度分隔条。全屏触控不显示边界，直接保留完整桌面。透明度仅调整键盘背景；系统开启“降低透明度”时使用不透明背景。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("内屏指针灵敏度 · \(Int((TouchpadTuning.sensitivity(innerSensitivity) * 100).rounded()))%") {
@@ -883,25 +896,52 @@ struct ContentView: View {
                     }
                     Button("恢复惯性系数 1") { client.scrollInertia = ScrollTuning.defaultCoefficient }
                 }
-                RearAreaSettings(camera: camera)
-                Section("手机布局键盘占比 · \(Int((clampedKeyboardFraction * 100).rounded()))%") {
-                    Slider(value: $keyboardFraction, in: 0.20...0.45, step: 0.01) { Text("键盘高度") }
-                        .accessibilityIdentifier("keyboard-height-slider")
-                    Text("也可以拖动桌面与键盘之间的分隔条。调节范围为可用空间的 20%–45%，设置会自动保存。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Button("恢复 25%") { keyboardFraction = 0.25 }
-                }
                 Section("触感") {
                     Toggle("点击震动反馈", isOn: $clickFeedback)
                     Text("点击、右键、按住及松开左键时给出短促反馈；移动时不震动。实际强度受设备和系统触感设置影响。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-
+        Section("本地演练") {
+            Button(localDemo ? "返回远控" : "本地模拟") {
+                releaseInteractions(); camera.stop(); client.disconnect(); localDemo.toggle(); showingInputSettings = false
             }
-            .navigationTitle("键盘与触控设置")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingInputSettings = false } } }
+            if localDemo { NavigationLink("交互记录") { InteractionLog(session: session).navigationTitle("交互记录") } }
         }
-        .presentationDetents([.large])
+    }
+    private var diagnosticsView: some View {
+        List {
+            Section("画面上的连接信息") {
+                Toggle("显示连接信息", isOn: $showStreamMetadata).accessibilityIdentifier("show-stream-metadata")
+                Picker("展示位置", selection: $metadataCorner) {
+                    ForEach(MetadataCorner.allCases) { Text($0.title).tag($0.rawValue) }
+                }.disabled(!showStreamMetadata).accessibilityIdentifier("metadata-position")
+                Text("分辨率、接收 fps、视频 Mbps、往返 RTT。RTT 不等于从触控到画面的完整延迟。").font(.footnote).foregroundStyle(.secondary)
+            }
+
+                    Section(client.connectionNetwork.title) {
+                        Text(client.status)
+                        Text(client.connectionTiming)
+                        Text("收到画面 \(client.receivedFrames) 帧 · \(client.videoMbps, specifier: "%.1f") Mbps · \(client.videoFPS, specifier: "%.0f") fps")
+                        Text("发送操作 \(client.sentEvents) · Mac 确认 \(client.acknowledged)")
+                        Text(client.lastScrollEnd)
+                        Text(overviewMessage)
+                        if overviewSequence > 0 {
+                            Text("总览请求 #\(overviewSequence) · 最近 Mac 确认 #\(client.acknowledged)；确认仅代表事件投递，效果以桌面为准")
+                        }
+                    }
+                    Section("相机辅助接口") {
+                        Text(camera.status)
+                        Text(camera.recoveryMessage)
+                        Text("控制模式：\(camera.mode.title)")
+                        Text("背面 \(grip.state.outerCount) 指 · 正面 \(grip.state.innerCount) 指 · \(grip.state.requestedFrontMode.title)")
+                        Text("背面接收：\(grip.controlsPresented ? "菜单期间暂停" : "已启用") · 远控输入：\(client.acceptsInput ? "允许" : "暂停")")
+                        Text("系统可用：\(camera.available ? "是" : "否")")
+                        Text("外屏场景出现：\(camera.presented ? "是" : "否")")
+                        Text("外屏触摸 \(camera.touchCount) · \(camera.lastTouch)")
+                    }
+
+        }.navigationTitle("诊断信息")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingInputSettings = false; showingLog = false } } }
     }
 
     private func releaseInteractions() { keyboardPolicy.suppress(through: client.sentEvents); inputEpoch += 1; grip.cancel(); keyboardController.reset(); client.release() }
@@ -932,5 +972,36 @@ private struct EdgeDockGlass: ViewModifier {
         if reduceTransparency { content.background(Color(uiColor: .secondarySystemBackground), in: shape) }
         else if #available(iOS 26.0, *) { content.background { shape.fill(.clear).glassEffect(.regular, in: shape).allowsHitTesting(false) } }
         else { content.background(.ultraThinMaterial, in: shape) }
+    }
+}
+
+private enum ControlSettingsCategory: String, CaseIterable {
+    case shortcuts = "shortcut-settings", rear = "rear-settings", streaming = "stream-settings", assistance = "assistance-settings"
+    var title: String {
+        switch self {
+        case .shortcuts: "快捷键设置"
+        case .rear: "背屏控制设置"
+        case .streaming: "远程传输画质设置"
+        case .assistance: "辅助功能设置"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .shortcuts: "keyboard"
+        case .rear: "hand.point.up.left"
+        case .streaming: "display"
+        case .assistance: "accessibility"
+        }
+    }
+}
+private enum MetadataCorner: String, CaseIterable, Identifiable {
+    case topLeft, topRight, bottomLeft, bottomRight
+    var id: String { rawValue }
+    var isTrailing: Bool { self == .topRight || self == .bottomRight }
+    var title: String {
+        switch self { case .topLeft: "左上"; case .topRight: "右上"; case .bottomLeft: "左下"; case .bottomRight: "右下" }
+    }
+    var alignment: Alignment {
+        switch self { case .topLeft: .topLeading; case .topRight: .topTrailing; case .bottomLeft: .bottomLeading; case .bottomRight: .bottomTrailing }
     }
 }

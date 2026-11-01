@@ -2,6 +2,25 @@ import XCTest
 @testable import DuoWorkbench
 
 final class KeyboardViewportTests: XCTestCase {
+    func testTrackpadIncludesLetterboxButNeverKeyboardOrShortcutRail() {
+        let container = CGSize(width: 900, height: 600)
+        let picture = RemoteKeyboardLayout.frame(container: container, content: CGSize(width: 1600, height: 1000), keyboardTop: 300)
+        let touch = RemoteKeyboardLayout.trackpadFrame(container: container, keyboardTop: 300, railLeading: 828)
+        XCTAssertFalse(picture.contains(CGPoint(x: 40, y: 120)))
+        XCTAssertTrue(touch.contains(CGPoint(x: 40, y: 120)))
+        XCTAssertTrue(touch.contains(CGPoint(x: 790, y: 120)))
+        XCTAssertFalse(touch.contains(CGPoint(x: 850, y: 120)))
+        XCTAssertFalse(touch.contains(CGPoint(x: 40, y: 320)))
+        XCTAssertEqual(touch, CGRect(x: 0, y: 0, width: 828, height: 300))
+    }
+    func testTrackpadBoundsClampToAvailableSpaceAcrossKeyboardAndRailChanges() {
+        let size = CGSize(width: 400, height: 800)
+        XCTAssertEqual(RemoteKeyboardLayout.trackpadFrame(container: size, keyboardTop: nil, railLeading: nil), CGRect(origin: .zero, size: size))
+        XCTAssertEqual(RemoteKeyboardLayout.trackpadFrame(container: size, keyboardTop: 900, railLeading: 500), CGRect(origin: .zero, size: size))
+        XCTAssertEqual(RemoteKeyboardLayout.trackpadFrame(container: size, keyboardTop: -1, railLeading: -1), .zero)
+        XCTAssertEqual(RemoteKeyboardLayout.trackpadFrame(container: size, keyboardTop: .nan, railLeading: .infinity), CGRect(origin: .zero, size: size))
+    }
+
     func testPortraitDesktopMovesUpWithoutCroppingAndCoordinatesStillMatch() {
         let content = CGSize(width: 1600, height: 900)
         let frame = RemoteKeyboardLayout.frame(container: CGSize(width: 400, height: 800), content: content, keyboardTop: 460)

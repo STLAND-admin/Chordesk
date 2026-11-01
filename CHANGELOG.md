@@ -2,9 +2,17 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](docs/FIRST-RUN-CHECKLIST.md)
 
-Baseline: **iOS 1.22.1 / build 28**, with **Mac 0.18.1 / build 26**. Current development versions: **iOS 1.28 / build 37 and Mac 0.23.1 / build 36**, as of November 1, 2026.
+Baseline: **iOS 1.22.1 / build 28**, with **Mac 0.18.1 / build 26**. Current development versions: **iOS 1.29 / build 38 and Mac 0.24.0 / build 37**, as of November 1, 2026.
 
 The public TestFlight and Mac downloads still use the baseline above. These updates are source/local development builds, not a new public Mac Release, TestFlight release, or App Store submission.
+
+## Development 1.29 / Mac 0.24.0 interface update
+
+- Trackpad input covers black margins above the keyboard, excluding the scrollable right rail. Absolute touch still maps to the picture.
+- Display switching, pointer-mode switching and Mission Control can each be shown or hidden. Four setting categories replace the long action menu.
+- The guide uses 0/1/2-rear-finger action tables. Diagnostics controls HUD visibility and corner placement.
+- Audio forwarding is temporarily disabled on both ends, including saved auto-start preferences. About uses a transparent monochrome STLAND wordmark.
+- The user confirmed black-margin control, shortcuts and menu short taps on Duo. Frosted icon concept B was selected; production app icons remain unchanged. [Validation](docs/VALIDATION-1.29.md).
 
 ## Connectivity
 

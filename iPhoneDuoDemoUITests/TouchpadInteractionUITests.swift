@@ -2,11 +2,84 @@ import XCTest
 
 final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
+    func testKeyboardLetterboxAcceptsRelativeInputButRailDoesNot() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_KEYBOARD_LAYOUT"] = "1"
+        app.launchEnvironment["DUO_UI_TALL_REMOTE"] = "1"
+        app.launchArguments += ["-phoneKeyboardStyle", "system", "-keyboardInvocationV1", "manual", "-primaryPointerMode", "trackpad", "-showStreamMetadataV1", "YES", "-controlRailTopV1", "0", "-showPointerModeButtonV1", "YES"]
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.launch()
+        shortPress(app.buttons["keyboard-dock-toggle"])
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        let surface = app.otherElements["grip-front-touchpad"], monitor = app.images["lan-remote-monitor"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            surface.exists && monitor.exists && surface.frame.minX + 20 < monitor.frame.minX
+                && surface.frame.maxY <= app.keyboards.firstMatch.frame.minY + 2
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed,
+            "surface=\(surface.frame) picture=\(monitor.frame)")
+        let counter = app.staticTexts["stream-metadata"]
+        let before = counter.value as? String
+        let origin = surface.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            .withOffset(CGVector(dx: 12, dy: surface.frame.height * 0.4))
+        origin.press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 20, dy: 45)))
+        let sent = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (counter.value as? String) != before }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [sent], timeout: 3), .completed)
+        let rail = app.buttons["remote-options"]
+        XCTAssertLessThanOrEqual(surface.frame.maxX, rail.frame.minX + 2)
+        // Use the gap between shortcuts, not a button that intentionally sends input.
+        let mode = app.buttons["pointer-mode-toggle"]
+        let gap = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: rail.frame.midX, dy: (rail.frame.maxY + mode.frame.minY) / 2))
+        let after = counter.value as? String
+        gap.press(forDuration: 0.05)
+        XCTAssertEqual(counter.value as? String, after)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+    }
+
+    @MainActor
+    func testFourCategoriesShortcutEditingAndDiagnosticVisibility() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_RESET_CONTROLS"] = "1"
+        app.launch()
+        app.launchEnvironment.removeValue(forKey: "DUO_UI_RESET_CONTROLS")
+        for id in ["pointer-mode-toggle", "display-dock-button", "overview-dock-button"] {
+            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 5))
+        }
+        shortPress(app.buttons["remote-options"])
+        for title in ["快捷键设置", "背屏控制设置", "远程传输画质设置", "辅助功能设置"] {
+            XCTAssertTrue(app.tables["remote-action-list"].staticTexts[title].exists)
+        }
+        shortPressMenuItem("快捷键设置", in: app)
+        for id in ["show-display-button", "show-pointer-mode-button", "show-overview-button"] {
+            let toggle = app.switches[id]
+            XCTAssertEqual(toggle.value as? String, "1")
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        }
+        shortPress(app.buttons["完成"])
+        for id in ["pointer-mode-toggle", "display-dock-button", "overview-dock-button"] { XCTAssertFalse(app.buttons[id].exists) }
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("诊断信息", in: app)
+        let metadata = app.switches["show-stream-metadata"]
+        if metadata.value as? String == "1" { metadata.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
+        XCTAssertEqual(metadata.value as? String, "0")
+        shortPress(app.buttons["完成"])
+        XCTAssertFalse(app.staticTexts["stream-metadata"].exists)
+        app.terminate(); app.launch()
+        XCTAssertFalse(app.buttons["overview-dock-button"].exists)
+        XCTAssertFalse(app.staticTexts["stream-metadata"].exists)
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("Duo 操作手册", in: app)
+        XCTAssertTrue(app.staticTexts["0 指背屏（直接触控 · 默认）"].exists)
+        XCTAssertTrue(app.staticTexts["1 指按住背屏（直接触控）"].exists)
+    }
+
+    @MainActor
     func testVideoCodecChoicesUseShortTapsAndPersist() {
         let app = launchFixture()
         func openCodecChoices() {
             shortPress(app.buttons["remote-options"])
-            shortPressMenuItem("键盘、画质与触控设置", in: app)
+            shortPressMenuItem("远程传输画质设置", in: app)
             let picker = app.buttons["video-codec-picker"]
             reveal(picker, in: app.collectionViews.firstMatch)
             XCTAssertTrue(picker.isHittable)
@@ -19,7 +92,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         shortPress(app.buttons["H.265 / HEVC"])
         app.terminate(); app.launch()
         shortPress(app.buttons["remote-options"])
-        shortPressMenuItem("键盘、画质与触控设置", in: app)
+        shortPressMenuItem("远程传输画质设置", in: app)
         let picker = app.buttons["video-codec-picker"]
         reveal(picker, in: app.collectionViews.firstMatch)
         XCTAssertTrue(picker.label.contains("H.265") || (picker.value as? String)?.contains("H.265") == true, picker.debugDescription)
@@ -64,7 +137,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 8), .completed)
         shortPress(app.buttons["remote-options"])
-        shortPressMenuItem("键盘、画质与触控设置", in: app)
+        shortPressMenuItem("快捷键设置", in: app)
         let fit = app.switches["fit-desktop-above-keyboard"]
         reveal(fit, in: app.collectionViews.firstMatch)
         fit.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
@@ -113,7 +186,7 @@ final class TouchpadInteractionUITests: XCTestCase {
     func testSharedScrollInertiaSettingPersistsAndCanBeDisabled() {
         let app = launchFixture()
         func openSettings() {
-            shortPress(app.buttons["remote-options"]); shortPressMenuItem("键盘、画质与触控设置", in: app)
+            shortPress(app.buttons["remote-options"]); shortPressMenuItem("辅助功能设置", in: app)
         }
         openSettings()
         let slider = app.sliders["scroll-inertia-slider"]
@@ -134,16 +207,18 @@ final class TouchpadInteractionUITests: XCTestCase {
     private func launchFixture() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_RESET_CONTROLS"] = "1"
         app.launchArguments += ["-phoneKeyboardStyle", "system", "-controlRailTopV1", "0", "-controlRailBottomV1", "0"]
         app.launchEnvironment["DUO_UI_LIVE_FRAMES"] = "1"
         app.launch()
+        app.launchEnvironment.removeValue(forKey: "DUO_UI_RESET_CONTROLS")
         return app
     }
 
     @MainActor
     func testPointerButtonSwitchesWithShortTapAndCanBeHidden() {
         let app = launchFixture()
-        shortPress(app.buttons["remote-options"]); shortPressMenuItem("键盘、画质与触控设置", in: app)
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("快捷键设置", in: app)
         let option = app.switches["show-pointer-mode-button"]
         reveal(option, in: app.collectionViews.firstMatch)
         if option.value as? String != "1" { option.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).press(forDuration: 0.05) }
@@ -164,7 +239,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         shortPress(display)
         XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 5))
         shortPress(app.buttons["完成"])
-        shortPress(menu); shortPressMenuItem("键盘、画质与触控设置", in: app)
+        shortPress(menu); shortPressMenuItem("快捷键设置", in: app)
         reveal(option, in: app.collectionViews.firstMatch)
         option.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).press(forDuration: 0.05)
         XCTAssertEqual(option.value as? String, "0")
@@ -277,8 +352,8 @@ final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
     func testRearRegionEditorMovesResizesAndSticksToEdge() {
         let app = launchFixture()
-        shortPress(app.buttons["remote-options"]); shortPressMenuItem("相机背面切换", in: app)
-        XCTAssertTrue(app.buttons["camera-control-done"].waitForExistence(timeout: 5))
+        shortPress(app.buttons["remote-options"]); shortPressMenuItem("背屏控制设置", in: app)
+        XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 5))
         let link = app.buttons["rear-area-editor-link"]
         reveal(link, in: app.collectionViews.firstMatch)
         shortPress(link)
@@ -343,6 +418,16 @@ final class TouchpadInteractionUITests: XCTestCase {
 
     @MainActor
     private func shortPressMenuItem(_ title: String, in app: XCUIApplication) {
+        if ["Duo 操作手册", "诊断信息", "关于 Chordesk"].contains(title) {
+            shortPressMenuItem("辅助功能设置", in: app)
+            shortPress(app.buttons[title]); return
+        }
+        if title == "选字放大镜" {
+            shortPressMenuItem("辅助功能设置", in: app)
+            let toggle = app.switches["touch-magnifier-toggle"]
+            reveal(toggle, in: app.collectionViews.firstMatch)
+            shortPress(toggle); shortPress(app.buttons["完成"]); return
+        }
         let list = app.tables["remote-action-list"]
         XCTAssertTrue(list.waitForExistence(timeout: 5))
         let item = list.descendants(matching: .any).matching(NSPredicate(format: "label == %@", title)).firstMatch
@@ -352,25 +437,17 @@ final class TouchpadInteractionUITests: XCTestCase {
     }
 
     @MainActor
-    func testMicrophoneDefaultsOffAndLegacyHostCannotStartIt() {
-        let app = launchFixture()
+    func testRetiredMicrophoneHasNoCaptureEntryEvenWithOldAutoStartPreference() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchArguments += ["-ChordeskMicrophoneAutoStart", "YES"]
+        app.launch()
         XCTAssertFalse(app.buttons["remote-microphone-live"].exists)
         shortPress(app.buttons["remote-options"])
-        shortPressMenuItem("键盘、画质与触控设置", in: app)
-        XCTAssertTrue(app.sliders["control-rail-top"].waitForExistence(timeout: 5))
-        let automatic = app.switches["remote-microphone-autostart"]
-        for _ in 0..<12 where !automatic.isHittable { app.collectionViews.firstMatch.swipeUp() }
-        XCTAssertTrue(automatic.exists)
-        XCTAssertEqual(automatic.value as? String, "0")
-        let current = app.switches["remote-microphone-toggle"]
-        if !current.exists {
-            let form = app.collectionViews.firstMatch
-            form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
-                .press(forDuration: 0.1, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
-        }
-        XCTAssertEqual(current.value as? String, "0")
-        XCTAssertFalse(current.isEnabled)
-        XCTAssertFalse(app.buttons["remote-microphone-live"].exists)
+        XCTAssertFalse(app.tables["remote-action-list"].staticTexts["开启 Duo 麦克风"].exists)
+        shortPressMenuItem("辅助功能设置", in: app)
+        XCTAssertFalse(app.switches["remote-microphone-toggle"].exists)
+        XCTAssertFalse(app.switches["remote-microphone-autostart"].exists)
     }
 
     @MainActor
@@ -379,14 +456,14 @@ final class TouchpadInteractionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["remote-options"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars.element.exists, "Desktop is no longer inset by a title/menu bar.")
         app.buttons["remote-options"].tap()
-        shortPressMenuItem("相机背面切换", in: app)
+        shortPressMenuItem("背屏控制设置", in: app)
         XCTAssertTrue(app.buttons["camera-mode-front-touch"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["camera-mode-direct"].exists)
-        app.buttons["camera-control-done"].tap()
+        app.buttons["完成"].tap()
         app.buttons["remote-options"].tap()
         shortPressMenuItem("Duo 操作手册", in: app)
         XCTAssertTrue(app.navigationBars["Duo 操作手册"].waitForExistence(timeout: 5))
-        let rearGuide = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "背面不直接移动")).firstMatch
+        let rearGuide = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "2 指长按背屏")).firstMatch
         reveal(rearGuide, in: app.collectionViews.firstMatch)
         if !rearGuide.exists { print(app.debugDescription) }
         XCTAssertTrue(rearGuide.exists)
@@ -416,7 +493,7 @@ final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
     func testMagnifierPreferenceAndPointerModePersist() {
         let app = launchFixture()
-        app.buttons["remote-options"].tap(); shortPressMenuItem("键盘、画质与触控设置", in: app)
+        app.buttons["remote-options"].tap(); shortPressMenuItem("辅助功能设置", in: app)
         let picker = app.segmentedControls["front-touch-mode"]
         for _ in 0..<6 where !picker.buttons["直接触屏"].isHittable { app.swipeUp() }
         picker.buttons["直接触屏"].tap()
@@ -428,7 +505,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         let after = magnifier.value as? String
         XCTAssertNotEqual(before, after)
         app.terminate(); app.launch()
-        app.buttons["remote-options"].tap(); shortPressMenuItem("键盘、画质与触控设置", in: app)
+        app.buttons["remote-options"].tap(); shortPressMenuItem("辅助功能设置", in: app)
         for _ in 0..<6 where !magnifier.isHittable { app.swipeUp() }
         XCTAssertEqual(magnifier.value as? String, after)
         magnifier.tap()
@@ -450,8 +527,9 @@ final class TouchpadInteractionUITests: XCTestCase {
                 glass.name = "Glass menu with short-tap rows"; glass.lifetime = .keepAlways; add(glass)
             }
             XCTAssertFalse(app.buttons["显示键盘"].exists)
-            shortPressMenuItem("键盘、画质与触控设置", in: app)
-            XCTAssertTrue(app.sliders["control-rail-top"].waitForExistence(timeout: 5))
+            shortPressMenuItem("快捷键设置", in: app)
+            reveal(app.sliders["control-rail-top"], in: app.collectionViews.firstMatch)
+            XCTAssertTrue(app.sliders["control-rail-top"].exists)
             app.buttons["完成"].tap()
         }
         keyboard.tap()
@@ -530,7 +608,8 @@ final class TouchpadInteractionUITests: XCTestCase {
         app.typeText("duo")
         shortPress(keyboard)
         shortPress(menu)
-        shortPressMenuItem("键盘、画质与触控设置", in: app)
+        shortPressMenuItem("快捷键设置", in: app)
+        reveal(app.sliders["control-rail-top"], in: app.collectionViews.firstMatch)
         app.sliders["control-rail-top"].adjust(toNormalizedSliderPosition: 1)
         shortPress(app.buttons["完成"])
         XCTAssertEqual(badge.frame.minX, originalBadge.minX, accuracy: 2)
