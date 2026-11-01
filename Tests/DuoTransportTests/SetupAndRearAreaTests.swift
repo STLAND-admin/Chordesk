@@ -2,6 +2,35 @@ import XCTest
 @testable import DuoWorkbench
 
 final class SetupAndRearAreaTests: XCTestCase {
+    func testScreenDenialWithoutPromptStillOffersSettingsAndNeverCountsAsGrant() {
+        var requested = 0, opened = 0
+        let result = ScreenPermissionRequest.perform(request: { requested += 1; return false },
+            isGranted: { false }, openSettings: { opened += 1; return .paneRequested })
+        XCTAssertEqual(result, .needsSettings(.paneRequested))
+        XCTAssertEqual(requested, 1)
+        XCTAssertEqual(opened, 1)
+        XCTAssertEqual(ScreenPermissionRequest.perform(request: { false }, isGranted: { false },
+            openSettings: { .unavailable }), .needsSettings(.unavailable))
+    }
+    func testScreenGrantDoesNotNavigateAwayAndAChangedPreflightIsRespected() {
+        XCTAssertEqual(ScreenPermissionRequest.perform(request: { true }, isGranted: { false },
+            openSettings: { XCTFail("No Settings redirect after a grant"); return .unavailable }), .granted)
+        XCTAssertEqual(ScreenPermissionRequest.perform(request: { false }, isGranted: { true },
+            openSettings: { XCTFail("Grant arrived during the request"); return .unavailable }), .granted)
+    }
+    @MainActor
+    func testSettingsNavigationFallsBackWithoutClaimingAuthorization() {
+        let settings = URL(fileURLWithPath: "/Applications/System Settings.app")
+        var urls: [URL] = []
+        XCTAssertEqual(HostPrivacySettings.openScreenCapture(open: { urls.append($0); return $0 == settings },
+            settingsApp: { settings }), .settingsOpened)
+        XCTAssertEqual(urls.count, 2)
+        XCTAssertEqual(urls[0].scheme, "x-apple.systempreferences")
+        XCTAssertEqual(urls[1], settings)
+        XCTAssertEqual(HostPrivacySettings.openScreenCapture(open: { _ in false }, settingsApp: { nil }), .unavailable)
+        XCTAssertEqual(HostPrivacySettings.openScreenCapture(open: { _ in true },
+            settingsApp: { XCTFail("No second launch when the first was accepted"); return nil }), .paneRequested)
+    }
     func testManualRestartAllowsPartialGrantsButNeverAnActiveSession() {
         XCTAssertTrue(ManualPermissionPolicy.canRestart(busy: false))
         XCTAssertFalse(ManualPermissionPolicy.canRestart(busy: true))

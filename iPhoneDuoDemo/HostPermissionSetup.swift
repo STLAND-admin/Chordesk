@@ -26,6 +26,33 @@ struct ManualPermissionPolicy {
     static func canRestart(busy: Bool) -> Bool { !busy }
 }
 
+/// Requesting access may return false without showing another system prompt.
+/// Opening Settings is navigation only: it never counts as a grant.
+struct ScreenPermissionRequest {
+    enum SettingsResult: Equatable { case paneRequested, settingsOpened, unavailable }
+    enum Result: Equatable { case granted, needsSettings(SettingsResult) }
+    static func perform(request: () -> Bool, isGranted: () -> Bool,
+                        openSettings: () -> SettingsResult) -> Result {
+        if request() || isGranted() { return .granted }
+        return .needsSettings(openSettings())
+    }
+}
+
+@MainActor
+enum HostPrivacySettings {
+    static func openScreenCapture(
+        open: (URL) -> Bool = { NSWorkspace.shared.open($0) },
+        settingsApp: () -> URL? = { NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences") }
+    ) -> ScreenPermissionRequest.SettingsResult {
+        // The pane URL is a best-effort Settings navigation hint, not an
+        // authorization API. Keep a plain app launch and readable path fallback.
+        let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+        if open(pane) { return .paneRequested }
+        if let app = settingsApp(), open(app) { return .settingsOpened }
+        return .unavailable
+    }
+}
+
 /// Launch only this bundle after its old process has actually exited. Starting
 /// another host before termination can race the listener and embedded node.
 enum HostRelaunchHelper {
@@ -132,8 +159,18 @@ final class HostPermissionSetup: ObservableObject {
     }
     func requestScreen(_ host: LANHost) {
         guard beginRequest(host) else { return }
-        message = "第 1 项：允许屏幕录制后，请按系统提示退出并重新打开 Chordesk。重开后继续控制授权。"
-        _ = CGRequestScreenCaptureAccess()
+        message = "正在请求屏幕录制；若系统不再弹窗，将打开对应设置。"
+        let result = ScreenPermissionRequest.perform(request: CGRequestScreenCaptureAccess,
+            isGranted: CGPreflightScreenCaptureAccess, openSettings: { HostPrivacySettings.openScreenCapture() })
+        switch result {
+        case .granted:
+            message = "屏幕录制已允许。请按系统提示退出并重新打开 Chordesk；没有提示时点重启按钮。"
+        case .needsSettings(let navigation):
+            let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Chordesk"
+            let path = "系统设置 → 隐私与安全 → 录屏与系统录音（部分系统称为屏幕录制）"
+            let guidance = "在\(path)中开启“\(name)”，然后按系统提示退出重开。若已开启仍显示待允许，请先重启 App。"
+            message = navigation == .unavailable ? "未能打开系统设置，请手动前往。" + guidance : guidance
+        }
         Task { await check(host) }
     }
     func requestControl(_ host: LANHost) {

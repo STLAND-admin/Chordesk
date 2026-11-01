@@ -2,7 +2,7 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](docs/FIRST-RUN-CHECKLIST.md)
 
-Baseline: **iOS 1.22.1 / build 28**, with **Mac 0.18.1 / build 26**. Current development versions: **iOS 1.28 / build 37 and Mac 0.23.1 / build 35**, as of November 1, 2026.
+Baseline: **iOS 1.22.1 / build 28**, with **Mac 0.18.1 / build 26**. Current development versions: **iOS 1.28 / build 37 and Mac 0.23.1 / build 36**, as of November 1, 2026.
 
 The public TestFlight and Mac downloads still use the baseline above. These updates are source/local development builds, not a new public Mac Release, TestFlight release, or App Store submission.
 
@@ -41,6 +41,7 @@ The public TestFlight and Mac downloads still use the baseline above. These upda
 ## Mac onboarding and recovery
 
 - Version 0.23.1 replaces the earlier automatic sequence with two explicit permission buttons. Grant screen recording, follow the system quit/reopen prompt, then request control and reopen again as prompted. A manual restart is available even after a partial grant; service still requires all permissions. Polling never prompts or schedules restarts.
+- Build 36 opens Screen Recording settings when a request still reports no access, with the current app name and a manual navigation fallback. Opening Settings never counts as permission granted.
 - Fixed exit/relaunch cleanup ordering; the replacement process waits for the old process to exit before continuing service.
 - Temporarily missing displays preserve the listener and trigger bounded recovery of the original display. No silent switch to another screen or restoration of revoked permissions.
 - New sessions without fresh frames can rebuild the original capture stream; session/power boundaries reset the app's own input source without global key injection or password automation.
@@ -61,7 +62,7 @@ The public TestFlight and Mac downloads still use the baseline above. These upda
 | 1.27 / 36 | 0.22.0 / 32 | Automatic routing, H.264, HUD, keyboard animation/input fixes |
 | 1.27 / 36 | 0.22.1 / 33 | Closed-lid network activity experiment; still failing |
 | 1.28 / 37 | 0.23.0 / 34 | Black rear content, HEVC, Tailscale preference and connection reuse |
-| 1.28 / 37 | 0.23.1 / 35 | Manual per-permission restart, versioned QA app outside Documents |
+| 1.28 / 37 | 0.23.1 / 35–36 | Manual permission restarts; versioned QA outside Documents; Settings fallback when screen access remains denied |
 
 ## Validation and remaining work
 
