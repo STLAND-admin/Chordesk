@@ -1,6 +1,6 @@
 # 1.30：IPv6、隐私与试用分发准备
 
-2026-11-02。iOS **1.30 / build 39**、Mac **0.25.0 / build 38**。基于 1.29/0.24.0 本地工作树；尚未上传 TestFlight、公开 GitHub Release、安装真机或提交正式 App Store。用户明确暂停 Mac Developer ID 与公证，本轮不继续。
+2026-11-02。iOS **1.30 / build 39**、Mac **0.25.0 / build 38**。基于 1.29/0.24.0 本地工作树；iOS 已上传并等待外部 Beta 审核，Mac 试用 Release 已公开；未替换日常安装，也未提交正式 App Store。用户明确暂停 Mac Developer ID 与公证，本轮不继续。
 
 ## 2026-11-02 后续发行确认
 
@@ -51,4 +51,4 @@ IPv6 地址族不构成性能保证：Tailscale 原引擎已能自行选择底�
 
 大陆备案/隐私填报路线见 `CHINA-FILING-AND-DISTRIBUTION.md`。工信部材料齐备后的办理时限可达 20 个工作日，无法保证一周内大陆正式上架；优先准备新外部 TestFlight，正式港美/大陆材料并行。TestFlight 仍需 Apple Beta Review 和新版外部标准加密申报，不能沿用 build 28 的系统加密分类，也不是法律豁免。
 
-Xcode 当前 Apple Accounts 界面未登录；Edge 已登录 App Store Connect，但网页“构建版本上传”仅显示上传记录，不能直接把 IPA 当网页附件上传。已请用户自行在 Xcode 登录后再上传；未收取密码/验证码。没有创建 App Store Connect API 私钥或绕过登录。正式 App Store 草稿 1.29 保留，最后提交仍由用户执行。
+本地导出阶段 Xcode 的 Apple Accounts 尚未登录（后续已由用户登录并上传，见上文）；当时 Edge 已登录 App Store Connect，但网页“构建版本上传”仅显示上传记录，不能直接把 IPA 当网页附件上传。已请用户自行在 Xcode 登录后再上传；未收取密码/验证码。没有创建 App Store Connect API 私钥或绕过登录。正式 App Store 草稿 1.29 保留，最后提交仍由用户执行。
