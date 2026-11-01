@@ -49,7 +49,7 @@ swift test --scratch-path /private/tmp/ChordeskTests
 
 ## 代码导航
 
-已安装过的 Mac 可用 [独立首次安装测试副本](MAC-FIRST-RUN-QA.md) 复测授权流程，无需清除原版的权限、配对或 Tailscale 节点。正式发行准备见 [App Store 1.23](APP-STORE-1.23-PREPARATION.md)。
+已安装过的 Mac 和 iPhone 可用 [双端首次安装检查](FIRST-RUN-CHECKLIST.md) 复测空白偏好、授权和配对。`python3 scripts/build-first-run-qa.py --platform both --team TEAM_ID` 生成隔离副本；默认 `--platform macos` 保留 Mac 单端流程。无需清除原版的权限、配对或 Tailscale 节点。[Mac 隔离原理与历史记录](MAC-FIRST-RUN-QA.md)。正式发行准备见 [App Store 1.23](APP-STORE-1.23-PREPARATION.md)。
 
 - `ContentView.swift`、`StableControls.swift`：iOS 浮动菜单与键盘入口。
 - `CameraAccessory.swift`、`GripInputState.swift`、`RearAreaEditor.swift`：背面和弦与有效区。

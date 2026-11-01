@@ -8,7 +8,7 @@ English · [简体中文](README.zh-CN.md)
 
 A remote desktop app designed for iPhone Duo. Use your thumbs for touch and typing on the front, while fingers on the back switch interaction modes like holding a chord. Includes an **iOS client** and a **Mac host**.
 
-[Concept & 3D demo](https://stland-admin.github.io/Chordesk-site/) · [Operation guide](OPERATION-GUIDE.md) · [Roadmap](ROADMAP.md)
+[Concept & 3D demo](https://stland-admin.github.io/Chordesk-site/) · [Operation guide](OPERATION-GUIDE.md) · [Roadmap](ROADMAP.md) · [Changes since TestFlight](CHANGELOG.md)
 
 The website supports Chinese and English. Detailed operation guides are currently in Chinese.
 
@@ -73,7 +73,7 @@ See the [public roadmap](ROADMAP.md) for completed work, remaining tests and rel
 - Microphone forwarding is off by default. Using Duo as a microphone for Mac apps currently requires a virtual audio device; an integrated driver is not implemented. [Audio details](docs/REMOTE-MICROPHONE.md).
 - Rear-screen interaction uses the experimental camera accessory path. Camera frames are not displayed, saved, or transmitted. This does not establish a general-purpose rear-screen API or App Store approval.
 
-[Development & builds](docs/DEVELOPMENT.md) · [Development history](docs/DEVELOPMENT-HISTORY.md) · [Brand assets](Branding/README.md)
+[First-run checklist · Mac + iOS](docs/FIRST-RUN-CHECKLIST.md) · [Development & builds](docs/DEVELOPMENT.md) · [Development history](docs/DEVELOPMENT-HISTORY.md) · [Brand assets](Branding/README.md)
 
 ## License
 
