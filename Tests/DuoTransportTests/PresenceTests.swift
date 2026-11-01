@@ -1,0 +1,137 @@
+import Foundation
+import Network
+import XCTest
+@testable import DuoWorkbench
+
+final class PresenceTests: XCTestCase {
+    func testProbeCannotClaimControlOrUpgradeToHelloWhileHostIsBusy() throws {
+        var gate = LANAdmission()
+        let request = LANPresenceRequest(nonce: UUID())
+        XCTAssertEqual(gate.receive(.presenceRequest, data: try JSONEncoder().encode(request), busy: true), .probe(request))
+        XCTAssertEqual(gate.receive(.hello, data: Data("iPhone".utf8), busy: false), .reject)
+        XCTAssertEqual(gate.receive(.input, data: Data(), busy: false), .reject)
+    }
+    func testOldHelloStillJoinsButBusyOrUnsolicitedInputCannotClaimSession() throws {
+        var legacy = LANAdmission()
+        XCTAssertEqual(legacy.receive(.hello, data: Data("legacy iPhone".utf8), busy: false), .join)
+        XCTAssertEqual(legacy.receive(.ping, data: Data(), busy: true), .remote)
+        var modern = LANAdmission()
+        XCTAssertEqual(modern.receive(.hello, data: try JSONEncoder().encode(LANHello(name: "phone")), busy: false), .join)
+        var busy = LANAdmission()
+        XCTAssertEqual(busy.receive(.hello, data: Data("phone".utf8), busy: true), .reject)
+        for kind: LANPacket in [.input, .release, .ping, .textInput, .presenceResponse] {
+            var gate = LANAdmission()
+            XCTAssertEqual(gate.receive(kind, data: Data(), busy: false), .reject)
+        }
+    }
+    func testMalformedAndRepeatedProbeRejected() throws {
+        for data in [Data(), Data("{}".utf8), Data(repeating: 65, count: 256)] {
+            var gate = LANAdmission()
+            XCTAssertEqual(gate.receive(.presenceRequest, data: data, busy: false), .reject)
+        }
+        var gate = LANAdmission()
+        let data = try JSONEncoder().encode(LANPresenceRequest(nonce: UUID()))
+        _ = gate.receive(.presenceRequest, data: data, busy: false)
+        XCTAssertEqual(gate.receive(.presenceRequest, data: data, busy: false), .reject)
+    }
+    func testLegacySavedHostDoesNotGainProbeCapabilityFromNameOrIP() throws {
+        let pairing = LANPairing(host: "192.168.1.4", port: 49491, secret: "00112233445566778899aabbccddeeff")
+        let legacy = RememberedMac(pairing: pairing, hostName: "Mac")
+        let decoded = try JSONDecoder().decode(RememberedMac.self, from: JSONEncoder().encode(legacy))
+        XCTAssertNil(decoded.supportsPresenceProbe)
+        var library = PairedMacLibrary(hosts: [decoded])
+        let identity = UUID().uuidString
+        library.remember(pairing, name: "Mac", hostID: identity, supportsPresenceProbe: true)
+        XCTAssertEqual(library.hosts.count, 1)
+        XCTAssertEqual(library.hosts[0].id, legacy.id)
+        XCTAssertEqual(library.hosts[0].supportsPresenceProbe, true)
+        library.remember(pairing, name: "Mac", hostID: identity)
+        XCTAssertNil(library.hosts[0].supportsPresenceProbe, "Downgraded hosts must not be probed.")
+    }
+
+    @MainActor
+    func testProbeTimeoutAndLateRouteCleanupCompleteOnlyOnce() async {
+        var callbacks = 0, cleaned = 0
+        let done = expectation(description: "bounded timeout")
+        let probe = LANPresenceProbe(hostID: UUID().uuidString) { reply in
+            XCTAssertNil(reply); callbacks += 1; done.fulfill()
+        }
+        probe.start(timeout: 0.03)
+        await fulfillment(of: [done], timeout: 1)
+        probe.cleanup = { cleaned += 1 }
+        probe.cancel(); probe.fail()
+        XCTAssertTrue(probe.finished); XCTAssertEqual(callbacks, 1); XCTAssertEqual(cleaned, 1)
+    }
+    @MainActor
+    func testCancellationReleasesRouteWithoutWaitingForHandshake() {
+        var callbacks = 0, cleaned = 0
+        let probe = LANPresenceProbe(hostID: UUID().uuidString) { _ in callbacks += 1 }
+        probe.cleanup = { cleaned += 1 }; probe.start(); probe.cancel(); probe.cancel()
+        XCTAssertTrue(probe.finished); XCTAssertEqual(callbacks, 1); XCTAssertEqual(cleaned, 1)
+    }
+
+    @MainActor
+    func testEncryptedProbeReportsBusyWithoutJoiningOrSendingFrames() async throws {
+        try await roundTrip(alterNonce: false, alterIdentity: false)
+    }
+    @MainActor
+    func testEncryptedProbeRejectsWrongIdentity() async throws {
+        try await roundTrip(alterNonce: false, alterIdentity: true)
+    }
+    @MainActor
+    func testEncryptedProbeRejectsStaleResponse() async throws {
+        try await roundTrip(alterNonce: true, alterIdentity: false)
+    }
+    @MainActor
+    private func roundTrip(alterNonce: Bool, alterIdentity: Bool) async throws {
+        let secret = "00112233445566778899aabbccddeeff", identity = UUID().uuidString
+        let listener = try LANTransport.listener(secret: secret, localAddress: "127.0.0.1", port: .any)
+        let done = expectation(description: "authenticated presence result")
+        var servers: [LANLink] = [], probe: LANPresenceProbe?
+        defer { probe?.cancel(); listener.cancel(); servers.forEach { $0.close() } }
+        listener.newConnectionHandler = { connection in
+            Task { @MainActor in
+                let server = LANLink(connection); servers.append(server)
+                var gate = LANAdmission()
+                server.onPacket = { kind, data in
+                    Task { @MainActor in
+                        XCTAssertEqual(kind, .presenceRequest, "No hello, input, release, or frame request.")
+                        guard case .probe(let request) = gate.receive(kind, data: data, busy: true) else {
+                            XCTFail("Probe must remain read-only even while another peer is connected"); return
+                        }
+                        server.send(.presenceResponse, value: LANPresenceResponse(
+                            nonce: alterNonce ? UUID() : request.nonce, hostID: alterIdentity ? UUID().uuidString : identity,
+                            busy: true, displayAvailable: false, sessionActive: false))
+                    }
+                }
+                server.start()
+            }
+        }
+        listener.stateUpdateHandler = { state in
+            if case .ready = state, let port = listener.port {
+                Task { @MainActor in
+                    let check = LANPresenceProbe(hostID: identity) { reply in
+                        if alterNonce || alterIdentity { XCTAssertNil(reply) }
+                        else { XCTAssertEqual(reply?.busy, true); XCTAssertEqual(reply?.displayAvailable, false); XCTAssertEqual(reply?.sessionActive, false) }
+                        done.fulfill()
+                    }
+                    probe = check; check.start()
+                    check.attach(NWConnection(host: "127.0.0.1", port: port, using: LANTransport.parameters(secret: secret)))
+                }
+            }
+        }
+        listener.start(queue: DispatchQueue(label: "chordesk-presence-test"))
+        await fulfillment(of: [done], timeout: 8)
+        XCTAssertTrue(probe?.finished == true)
+    }
+
+    func testInputSourceResetDoesNotInheritModifiersOrPostGlobalEvents() throws {
+        let factory = RemoteEventFactory()
+        _ = try XCTUnwrap(factory.keyboard(code: 12, modifiers: 15))
+        factory.reset()
+        let keys = try XCTUnwrap(factory.keyboard(code: 0, modifiers: 0))
+        XCTAssertEqual(keys.count, 2)
+        XCTAssertEqual(keys.map(\.flags), [[], []])
+        XCTAssertEqual(factory.mouse(.leftMouseDown, at: .zero)?.flags, [])
+    }
+}

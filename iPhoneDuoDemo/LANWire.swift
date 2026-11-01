@@ -100,6 +100,7 @@ struct RememberedMac: Codable, Equatable, Identifiable {
     var hostName: String
     var hostID: String? = nil
     var alternativePairings: [LANPairing]? = nil
+    var supportsPresenceProbe: Bool? = nil
     func pairing(for network: RemoteNetwork) -> LANPairing? {
         if pairing.connectionNetwork == network { return pairing }
         return alternativePairings?.first { $0.isValid && $0.connectionNetwork == network && $0.secret == pairing.secret }
@@ -107,7 +108,7 @@ struct RememberedMac: Codable, Equatable, Identifiable {
 }
 struct PairedMacLibrary: Codable, Equatable {
     var hosts: [RememberedMac] = []
-    mutating func remember(_ pairing: LANPairing, name: String, hostID: String?) {
+    mutating func remember(_ pairing: LANPairing, name: String, hostID: String?, supportsPresenceProbe: Bool? = nil) {
         guard pairing.isValid else { return }
         let identity = hostID.flatMap(UUID.init(uuidString:))?.uuidString
         let match = hosts.firstIndex { existing in
@@ -122,6 +123,7 @@ struct PairedMacLibrary: Codable, Equatable {
         }
         item.pairing = pairing; item.hostName = String(name.prefix(80))
         item.hostID = identity ?? item.hostID
+        item.supportsPresenceProbe = supportsPresenceProbe
         if let match { hosts.remove(at: match) }
         hosts.insert(item, at: 0)
     }
@@ -170,7 +172,7 @@ enum LANCredentialStore {
 }
 
 enum LANWireError: Error { case random, malformed }
-enum LANPacket: UInt8 { case hello = 1, status = 2, frame = 3, input = 4, ping = 5, release = 6, acknowledgement = 7, displays = 8, selectDisplay = 9, requestDisplays = 10, adjustScale = 11, textInput = 12, videoQuality = 13, microphoneRequest = 14, microphoneState = 15, microphoneAudio = 16 }
+enum LANPacket: UInt8 { case hello = 1, status = 2, frame = 3, input = 4, ping = 5, release = 6, acknowledgement = 7, displays = 8, selectDisplay = 9, requestDisplays = 10, adjustScale = 11, textInput = 12, videoQuality = 13, microphoneRequest = 14, microphoneState = 15, microphoneAudio = 16, presenceRequest = 17, presenceResponse = 18 }
 
 enum LANVideoQuality: String, CaseIterable, Identifiable, Codable {
     case efficient, sharp, ultra, responsive60, experimental120, experimental144
@@ -296,6 +298,95 @@ struct LANStatus: Codable {
     var sourceRefreshRate: Double? = nil
     var hostID: String? = nil
     var supportsScrollDynamics: Bool? = nil
+    var supportsPresenceProbe: Bool? = nil
+}
+
+struct LANPresenceRequest: Codable, Equatable { var nonce: UUID }
+struct LANPresenceResponse: Codable, Equatable {
+    var version = 1
+    var nonce: UUID
+    var hostID: String
+    var busy: Bool
+    var displayAvailable: Bool
+    // A GUI session being active is not proof that its lock screen accepts input.
+    var sessionActive: Bool
+}
+
+/// TLS authentication alone must not claim a desktop or run pairing side effects.
+/// One connection is either a read-only probe or a remote session, never both.
+struct LANAdmission {
+    enum Decision: Equatable { case probe(LANPresenceRequest), join, remote, reject }
+    private enum State { case waiting, probe, remote, rejected }
+    private var state = State.waiting
+    mutating func receive(_ kind: LANPacket, data: Data, busy: Bool) -> Decision {
+        switch state {
+        case .remote: return .remote
+        case .probe, .rejected: state = .rejected; return .reject
+        case .waiting:
+            if kind == .presenceRequest, data.count < 256,
+               let request = try? JSONDecoder().decode(LANPresenceRequest.self, from: data) {
+                state = .probe; return .probe(request)
+            }
+            if kind == .hello, !busy, !data.isEmpty, data.count < 4096,
+               String(data: data, encoding: .utf8) != nil {
+                state = .remote; return .join
+            }
+            state = .rejected; return .reject
+        }
+    }
+}
+
+/// Bounded, authenticated query. It never sends hello/input, and cancels its
+/// transport and any local tailnet forwarding route on every terminal path.
+@MainActor
+final class LANPresenceProbe {
+    private let nonce = UUID()
+    private let hostID: String
+    private let completion: (LANPresenceResponse?) -> Void
+    private var link: LANLink?
+    private var timeout: Task<Void, Never>?
+    private(set) var finished = false
+    var cleanup: (() -> Void)? { didSet { if finished { let action = cleanup; cleanup = nil; action?() } } }
+
+    init(hostID: String, completion: @escaping (LANPresenceResponse?) -> Void) {
+        self.hostID = hostID; self.completion = completion
+    }
+    func start(timeout seconds: Double = 12) {
+        guard timeout == nil, !finished else { return }
+        timeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.finish(nil)
+        }
+    }
+    func attach(_ connection: NWConnection) {
+        guard !finished, link == nil else { connection.cancel(); return }
+        let wire = LANLink(connection); link = wire
+        let request = LANPresenceRequest(nonce: nonce)
+        wire.onReady = { [weak wire] in wire?.send(.presenceRequest, value: request) }
+        wire.onPacket = { [weak self] kind, data in
+            Task { @MainActor in
+                guard let self, !self.finished else { return }
+                guard kind == .presenceResponse, data.count < 2048,
+                      let reply = try? JSONDecoder().decode(LANPresenceResponse.self, from: data),
+                      reply.version == 1, reply.nonce == self.nonce,
+                      UUID(uuidString: reply.hostID) == UUID(uuidString: self.hostID),
+                      UUID(uuidString: self.hostID) != nil else { self.finish(nil); return }
+                self.finish(reply)
+            }
+        }
+        wire.onClose = { [weak self] _ in Task { @MainActor in self?.finish(nil) } }
+        wire.start()
+    }
+    func fail() { finish(nil) }
+    func cancel() { finish(nil) }
+    private func finish(_ response: LANPresenceResponse?) {
+        guard !finished else { return }
+        finished = true; timeout?.cancel(); timeout = nil
+        link?.close(); link = nil
+        let action = cleanup; cleanup = nil; action?()
+        completion(response)
+    }
 }
 
 struct LANInput: Codable {

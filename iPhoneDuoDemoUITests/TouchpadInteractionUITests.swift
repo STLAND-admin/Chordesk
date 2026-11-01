@@ -128,6 +128,14 @@ final class TouchpadInteractionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["我的 Mac"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["同学的 Mac"].exists)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "lan-reconnect-")).count, 2)
+        let statuses = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "lan-presence-"))
+        XCTAssertEqual(statuses.count, 2)
+        XCTAssertTrue(statuses.element(boundBy: 0).label.contains("在线"))
+        let refresh = app.buttons["lan-refresh-presence"]
+        reveal(refresh, in: app.collectionViews.firstMatch)
+        shortPress(refresh)
+        XCTAssertEqual(statuses.count, 2)
+        XCTAssertTrue(app.navigationBars["连接 Mac"].exists, "Refreshing status must not connect or dismiss the pairing screen.")
         // The UI fixture never authenticates or writes credentials to a real host.
     }
 

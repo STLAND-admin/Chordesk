@@ -333,6 +333,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 Task { @MainActor in
                     guard let self else { return }
                     self.displaySleeping = false; self.systemSleeping = false
+                    self.input.resetEventSource()
                     self.retryInterruptedCapture()
                 }
             })
@@ -343,11 +344,19 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     guard let self else { return }
                     if name == NSWorkspace.willSleepNotification { self.systemSleeping = true }
                     self.setControl(false)
+                    self.input.resetEventSource()
                     self.stopMicrophone("Mac 会话失活，麦克风已停止")
                     self.availabilityMessage = "会话已离开或系统将睡眠；控制已撤销，恢复后需重新授权或重连"
                 }
             })
         }
+        observers.append(center.addObserver(forName: NSWorkspace.sessionDidBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.input.resetEventSource()
+                self.availabilityMessage = "用户会话已恢复；请重连，控制不会因会话恢复自动开启"
+            }
+        })
         restoreSessionSettings()
     }
 
@@ -817,7 +826,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
 
     private func accept(_ connection: NWConnection, token: UUID, network: RemoteNetwork = .lan) {
-        guard link == nil, candidates.count < 3 else { connection.cancel(); return }
+        guard candidates.count < 3 else { connection.cancel(); return }
         let id = UUID()
         let candidate = LANLink(connection)
         candidates[id] = candidate
@@ -828,24 +837,33 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 self.traffic.record(bytes: bytes, now: ProcessInfo.processInfo.systemUptime)
             }
         }
-        candidate.onReady = { [weak self, weak candidate] in
-            Task { @MainActor in
-                guard let self, let candidate, self.generation == token, self.link == nil else { candidate?.close(); return }
-                guard network == .lan || (self.allowsTailscale && self.tailnet.ready && self.tailnetListener != nil) else { candidate.close(); return }
-                self.link = candidate
-                self.candidates.removeValue(forKey: id)
-                self.candidateNetworks.removeValue(forKey: id)
-                self.peerNetwork = network
-                self.connected = true; self.lastPing = Date(); self.configuredPeer = nil
-                self.traffic = VideoTrafficMeter(); self.videoMbps = 0; self.videoFPS = 0
-                self.status = self.autoConfigurePairing ? "手机已安全配对 · 正在准备自动控制与显示设置" : "手机已安全配对 · 仅查看"
-                self.sendStatus()
-                if let frame = self.latestFrame { candidate.send(.frame, data: frame, droppable: true) }
-            }
-        }
+        var admission = LANAdmission()
         candidate.onPacket = { [weak self, weak candidate] kind, data in
             Task { @MainActor in
-                guard let self, let candidate, self.generation == token, self.link === candidate else { return }
+                guard let self, let candidate, self.generation == token else { return }
+                guard network == .lan || (self.allowsTailscale && self.tailnet.ready && self.tailnetListener != nil) else { candidate.close(); return }
+                switch admission.receive(kind, data: data, busy: self.link != nil) {
+                case .probe(let request):
+                    let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+                    candidate.send(.presenceResponse, value: LANPresenceResponse(nonce: request.nonce,
+                        hostID: self.hostIdentity, busy: self.link != nil,
+                        displayAvailable: self.sharing && !self.systemSleeping && !self.captureRecovery.paused
+                            && self.displayID.map { CGDisplayIsOnline($0) != 0 } == true,
+                        sessionActive: !self.systemSleeping && session?[kCGSessionOnConsoleKey as String] as? Bool == true))
+                    return
+                case .join:
+                    self.link = candidate
+                    self.candidates.removeValue(forKey: id)
+                    self.candidateNetworks.removeValue(forKey: id)
+                    self.peerNetwork = network
+                    self.connected = true; self.lastPing = Date(); self.configuredPeer = nil
+                    self.traffic = VideoTrafficMeter(); self.videoMbps = 0; self.videoFPS = 0
+                    self.status = self.autoConfigurePairing ? "手机已安全配对 · 正在准备自动控制与显示设置" : "手机已安全配对 · 仅查看"
+                    if let frame = self.latestFrame { candidate.send(.frame, data: frame, droppable: true) }
+                case .remote:
+                    guard self.link === candidate else { candidate.close(); return }
+                case .reject: candidate.close(); return
+                }
                 self.lastPing = Date()
                 switch kind {
                 case .hello:
@@ -931,6 +949,13 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             }
         }
         candidate.start()
+        // Includes TLS and first application packet. Probes remain candidates;
+        // closing them never restores a desktop or changes the real peer.
+        Task { @MainActor [weak self, weak candidate] in
+            try? await Task.sleep(for: .seconds(12))
+            guard let self, let candidate, self.generation == token, self.candidates[id] === candidate else { return }
+            candidate.close()
+        }
     }
 
     func setControl(_ enabled: Bool) {
@@ -1007,7 +1032,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 
     private func handlePointer(_ event: LANInput) async {
         inputCount += 1
-        let description = "\(event.origin.prefix(12)) · " + (event.action == "key" ? "键盘 \(event.key)" : event.action)
+        let description = "\(event.origin.prefix(12)) · " + (event.action == "key" ? "键盘按键" : event.action)
         guard controlAllowed else { lastInput = description + " · 控制已关闭"; sendStatus(); return }
         let token = generation, controlToken = controlRevision, queueToken = inputQueueEpoch
         let result: LANInputResult
@@ -1105,7 +1130,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             videoQuality: videoQuality.rawValue, supportsWindowOverview: true, supportsDesktopSwitch: true,
             supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
             supportsMicrophone: true, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
-            supportsScrollDynamics: true))
+            supportsScrollDynamics: true, supportsPresenceProbe: true))
     }
 
     func stop() {
@@ -1199,6 +1224,7 @@ private final class LANMacInput {
     private var clickCount: Int64 = 1
 
     func release() { scrolling.cancel(); if dragging { mouse(.leftMouseUp) }; dragging = false }
+    func resetEventSource() { release(); events.reset() }
 
     func windowOverview(_ action: WindowOverviewAction) async -> LANInputResult {
         guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else { release(); return .permissionDenied }
@@ -1341,7 +1367,10 @@ private final class LANMacInput {
 /// Kept separate from posting so regressions can inspect real CGEvents without
 /// injecting test input into the user's desktop.
 final class RemoteEventFactory {
-    private let source = CGEventSource(stateID: .privateState)
+    private var source = CGEventSource(stateID: .privateState)
+    // Replace only our own source after session/sleep transitions. Do not send
+    // global modifier key-ups that could interfere with a physical keyboard.
+    func reset() { source = CGEventSource(stateID: .privateState) }
     func mouse(_ type: CGEventType, at point: CGPoint) -> CGEvent? {
         guard let source, let event = CGEvent(mouseEventSource: source, mouseType: type,
             mouseCursorPosition: point, mouseButton: [.rightMouseDown, .rightMouseUp].contains(type) ? .right : .left) else { return nil }

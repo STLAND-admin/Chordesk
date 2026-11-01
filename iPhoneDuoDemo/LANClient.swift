@@ -6,6 +6,92 @@ import ImageIO
 
 @MainActor
 final class LANClient: ObservableObject {
+    struct PresenceObservation {
+        var network: RemoteNetwork
+        var message: String
+        var checkedAt: Date?
+    }
+    @Published private(set) var presence: [UUID: PresenceObservation] = [:]
+    @Published private(set) var checkingPresence = false
+    private var presenceGeneration = UUID()
+    private var presenceTask: Task<Void, Never>?
+    private var presenceProbes: [UUID: LANPresenceProbe] = [:]
+
+    func presenceMessage(_ saved: RememberedMac, network: RemoteNetwork) -> String {
+        if connected, currentPairing == saved.pairing(for: network), Date().timeIntervalSince(lastPacket) < 6 {
+            return "在线 · 当前已连接"
+        }
+        if saved.pairing(for: network) == nil { return "此模式尚未配对" }
+        if network == .tailscale && !EmbeddedTailnet.shared.ready { return "请先连接此 iPhone 的 Tailscale" }
+        if let value = presence[saved.id], value.network == network { return value.message }
+        return saved.supportsPresenceProbe == true ? "尚未检查" : "状态未知 · 连接新版 Mac 一次后可检查"
+    }
+    func cancelPresenceChecks() {
+        presenceGeneration = UUID(); presenceTask?.cancel(); presenceTask = nil; checkingPresence = false
+        let probes = Array(presenceProbes.values); presenceProbes.removeAll()
+        probes.forEach { $0.cancel() }
+        for (id, value) in presence where value.checkedAt == nil { presence.removeValue(forKey: id) }
+    }
+    func refreshPresence(network: RemoteNetwork) {
+        cancelPresenceChecks()
+#if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" {
+            for saved in rememberedMacs { presence[saved.id] = .init(network: network, message: "在线 · 服务可连接（模拟）", checkedAt: Date()) }
+            return
+        }
+#endif
+        guard UIApplication.shared.applicationState == .active,
+              network == .lan || EmbeddedTailnet.shared.ready else { return }
+        let token = presenceGeneration, hosts = rememberedMacs
+        checkingPresence = true
+        presenceTask = Task { [weak self] in
+            guard let self else { return }
+            for saved in hosts {
+                guard !Task.isCancelled, self.presenceGeneration == token else { return }
+                guard saved.supportsPresenceProbe == true, saved.hostID.flatMap(UUID.init(uuidString:)) != nil,
+                      let pairing = saved.pairing(for: network), pairing.isValid,
+                      !(self.connected && self.currentPairing == pairing) else { continue }
+                await self.checkPresence(saved, pairing: pairing, token: token)
+            }
+            if self.presenceGeneration == token { self.checkingPresence = false; self.presenceTask = nil }
+        }
+    }
+    private func checkPresence(_ saved: RememberedMac, pairing: LANPairing, token: UUID) async {
+        presence[saved.id] = .init(network: pairing.connectionNetwork, message: "正在检查…", checkedAt: nil)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let probe = LANPresenceProbe(hostID: saved.hostID ?? "") { [weak self] reply in
+                if let self, self.presenceGeneration == token {
+                    self.presenceProbes.removeValue(forKey: saved.id)
+                    let message: String
+                    if let reply {
+                        if !reply.sessionActive { message = "在线 · 用户会话暂不可用，未验证锁屏输入" }
+                        else if !reply.displayAvailable { message = "在线 · 显示器／画面暂不可用" }
+                        else if reply.busy { message = "在线 · 已有设备连接" }
+                        else { message = "在线 · 服务可连接" }
+                    } else { message = "暂时无法连接 · 检查 Mac 服务、网络或睡眠状态" }
+                    self.presence[saved.id] = .init(network: pairing.connectionNetwork, message: message, checkedAt: Date())
+                }
+                continuation.resume()
+            }
+            presenceProbes[saved.id] = probe
+            probe.start()
+            if pairing.connectionNetwork == .tailscale {
+                Task {
+                    do {
+                        let route = try await EmbeddedTailnet.shared.dial(pairing)
+                        probe.cleanup = { EmbeddedTailnet.shared.closeDial(route.identifier) }
+                        guard !probe.finished else { return }
+                        probe.attach(NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: route.port)!,
+                            using: LANTransport.parameters(secret: pairing.secret)))
+                    } catch { probe.fail() }
+                }
+            } else {
+                probe.attach(NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!,
+                    using: LANTransport.parameters(secret: pairing.secret)))
+            }
+        }
+    }
+
     @Published private(set) var rememberedMacs: [RememberedMac] = []
     @Published private(set) var rememberedPairingSaveFailed = false
     @Published private(set) var connected = false
@@ -161,6 +247,7 @@ final class LANClient: ObservableObject {
     }
 
     func forgetRememberedMac(_ id: UUID) {
+        cancelPresenceChecks(); presence.removeValue(forKey: id)
         var library = PairedMacLibrary(hosts: rememberedMacs); library.forget(id)
         _ = saveLibrary(library)
     }
@@ -181,9 +268,9 @@ final class LANClient: ObservableObject {
         LANCredentialStore.remove(account: "remembered-mac-v1")
         return true
     }
-    private func remember(_ pairing: LANPairing, hostName: String, hostID: String?) {
+    private func remember(_ pairing: LANPairing, hostName: String, hostID: String?, supportsPresenceProbe: Bool?) {
         var library = PairedMacLibrary(hosts: rememberedMacs)
-        library.remember(pairing, name: hostName, hostID: hostID)
+        library.remember(pairing, name: hostName, hostID: hostID, supportsPresenceProbe: supportsPresenceProbe)
         if library.hosts != rememberedMacs || rememberedPairingSaveFailed { _ = saveLibrary(library) }
     }
 
@@ -277,7 +364,7 @@ final class LANClient: ObservableObject {
                     self.availableVideoQualities = LANVideoQuality.supported(by: state.supportedVideoQualities)
                     self.sourceRefreshRate = state.sourceRefreshRate.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
                     self.sourceName = state.name
-                    if let pairing = self.currentPairing { self.remember(pairing, hostName: state.name, hostID: state.hostID) }
+                    if let pairing = self.currentPairing { self.remember(pairing, hostName: state.name, hostID: state.hostID, supportsPresenceProbe: state.supportsPresenceProbe) }
                     self.controlAllowed = state.canControl
                     self.status = "\(self.connectionNetwork.title) · \(state.message)"
                 case .microphoneState:
@@ -423,6 +510,7 @@ final class LANClient: ObservableObject {
     }
 
     func disconnect() {
+        cancelPresenceChecks()
         stopMicrophone()
         supportsMicrophone = false; microphoneAvailable = false; microphoneAutoStartAttempted = false
         release()
@@ -582,6 +670,7 @@ private final class FrameRateView: UIView {
 struct LANConnectView: View {
     @ObservedObject var client: LANClient
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var host = ""
     @State private var port = ""
     @State private var secret = ""
@@ -616,11 +705,24 @@ struct LANConnectView: View {
                                     .accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
                                 Text(saved.pairing(for: network).map { "\($0.connectionNetwork.title)配对 · \($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
                                     .font(.caption).foregroundStyle(.secondary)
+                                Text(client.presenceMessage(saved, network: network))
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("lan-presence-" + saved.id.uuidString)
+                                if let checked = client.presence[saved.id], checked.network == network, let date = checked.checkedAt {
+                                    Text("上次检查：\(date.formatted(date: .omitted, time: .standard))")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
                                 Button("忘记这台 Mac", role: .destructive) { forgetting = saved }
                                     .buttonStyle(.borderless)
                                     .accessibilityIdentifier("lan-forget-" + saved.id.uuidString)
                             }
                         }
+                        Button { client.refreshPresence(network: network) } label: {
+                            Label(client.checkingPresence ? "正在检查在线状态…" : "刷新在线状态", systemImage: "arrow.clockwise")
+                        }.buttonStyle(.borderless).disabled(client.checkingPresence)
+                            .accessibilityIdentifier("lan-refresh-presence")
+                        Text("在线表示 Chordesk 服务刚刚通过加密验证，不代表屏幕已唤醒或锁屏可输入。无法连接也可能是地址变化或网络不通，不等于 Mac 已关机。")
+                            .font(.footnote).foregroundStyle(.secondary)
                         Text("每台 Mac 分别记忆局域网和 Tailscale 地址，凭据仅保存在此 iPhone 钥匙串；同名不会合并。首次使用某种模式需扫描对应二维码，之后直接点选。一次连接一台。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
@@ -658,8 +760,16 @@ struct LANConnectView: View {
             .tint(.gray)
             .onAppear {
                 if !initialized { initialized = true; network = client.connectionNetwork; port = String(LANPairing.defaultPort) }
+                client.refreshPresence(network: network)
             }
-            .onChange(of: network) { _, _ in host = ""; secret = ""; error = "" }
+            .onChange(of: network) { _, _ in
+                host = ""; secret = ""; error = ""; client.refreshPresence(network: network)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { client.cancelPresenceChecks() }
+                else { client.refreshPresence(network: network) }
+            }
+            .onDisappear { client.cancelPresenceChecks() }
             .alert("忘记这台 Mac？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), presenting: forgetting) { saved in
                 Button("忘记", role: .destructive) { client.forgetRememberedMac(saved.id); forgetting = nil }
                 Button("取消", role: .cancel) { forgetting = nil }
