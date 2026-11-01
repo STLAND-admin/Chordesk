@@ -200,6 +200,7 @@ struct ContentView: View {
                 List {
                     Section(client.connectionNetwork.title) {
                         Text(client.status)
+                        Text(client.connectionTiming)
                         Text("收到画面 \(client.receivedFrames) 帧 · \(client.videoMbps, specifier: "%.1f") Mbps · \(client.videoFPS, specifier: "%.0f") fps")
                         Text("发送操作 \(client.sentEvents) · Mac 确认 \(client.acknowledged)")
                         Text(client.lastScrollEnd)
@@ -495,7 +496,11 @@ struct ContentView: View {
     private var videoSettings: some View {
         Section("远程画质") {
             Toggle("显示左上角连接信息", isOn: $showStreamMetadata).accessibilityIdentifier("show-stream-metadata")
-            Toggle("优先使用 H.264 硬件编码", isOn: $client.prefersH264)
+            Picker("视频编码", selection: $client.preferredVideoCodec) {
+                ForEach(LANVideoCodec.allCases) { Text($0.title).tag($0) }
+            }.pickerStyle(.navigationLink).accessibilityIdentifier("video-codec-picker")
+            Text("H.264 兼容性好；H.265 通常更省带宽，也适用于弱网。硬件或旧主机不支持时自动回退，左上角显示实际编码。切换不会改变画质档位。")
+                .font(.caption).foregroundStyle(.secondary)
             Text(client.streamMetadata).font(.caption.monospaced())
             Text("延迟为应用层往返 RTT，包含处理和排队时间，不是触控到显示的端到端延迟；fps 为接收画面帧率。")
                 .font(.caption).foregroundStyle(.secondary)
@@ -535,7 +540,7 @@ struct ContentView: View {
                     Text("连接并获得控制许可后，默认启用相机辅助背面场景。保持 Duo 展开、App 全屏，首次允许相机权限。相机帧不显示、不保存、不传输；断连、后台或打开扫码时会停止。")
                     Text("右上三盏灯保持原位置：空心为未接触，实心依次表示 1／2／3 指及以上；暂停标志表示背面未就绪。灯只统计有效区域内的手指，点它可打开背面设置。三指不是额外手势。")
                     Text("背面双指长按约 0.45 秒：临时切到另一指针模式，少于两指时恢复。也可设置“触发一次切换”，再次触发恢复；触发动作可选轻点／长按。背面不直接移动、点击、拖选或唤出键盘。")
-                    Text("相机背面切换 → 可视化调整区域：拖动矩形移动、拖四角缩放，也可用位置和尺寸滑杆。关闭自定义区域则使用四周禁触比例（默认每边 12.5%）。区域外落下或滑出后，必须抬起再按。")
+                    Text("背屏正常使用时为纯黑，仍接收有效区域内的手指。相机背面切换 → 可视化调整区域：仅编辑时显示边框；拖动矩形移动、拖四角缩放，也可用滑杆。关闭自定义区域则使用四周禁触比例（默认每边 12.5%）。区域外落下或滑出后，必须抬起再按。")
                 }
                 Section("窗口总览与桌面切换") {
                     Text("直接触控时，先按住背面一指，再用正面双指同向上滑打开窗口总览，下滑发送 Esc 退出；左滑去下一个桌面，右滑回上一个桌面。每次抬起正面手指后才能再次触发。")
@@ -552,13 +557,13 @@ struct ContentView: View {
                     Text("键盘出现时，远程桌面默认保持原宽高比，随键盘动画完整放入键盘上方；右下键盘按钮紧贴键盘上沿。收起后恢复，可在设置关闭“键盘弹出时适配远程画面”。动画完成后可继续直接触控或使用触控板。")
                     Text("单指直接触屏与双指触控板共用滚动惯性：快速滑动后抬手继续减速，慢滑或停住再抬手不会明显续滚。设置 → 统一滚动惯性可调 0–2，0 关闭、默认 1。重新落指、切换模式、打开菜单或断连会停止惯性；需两端均更新到支持版本。")
                     Text("目标太小：显示器按钮 → 适合触屏／更大文字／最大文字。文字模糊：设置选择清晰或超清。逻辑分辨率改变会同时影响实体 Mac，断连后尝试恢复连接前的显示模式与排列。")
-                    Text("默认省流 15 fps，优先 H.264 硬件编解码，不支持或失败时回退 JPEG，可在设置关闭 H.264。左上角统计可关闭：显示实际视频像素、接收 fps、视频载荷 Mbps 和应用往返 RTT；RTT 不等于触控到画面的完整延迟。120／144 fps 仍是实验上限。")
+                    Text("默认省流 15 fps、H.264。设置 → 视频编码可选择 H.264、H.265 / HEVC 或 JPEG；H.265 通常更省带宽，也适用于弱网，但画质与耗时需按实际设备比较。不支持时回退到兼容格式；左上角显示实际编码、像素、接收 fps、视频 Mbps 和往返 RTT，可关闭。RTT 不是触控到画面的完整延迟。120／144 fps 仍是实验上限。")
                 }
                 Section("麦克风、结束与排查") {
                     Text("Duo → Mac 麦克风默认关闭。需要 Mac 配置双向虚拟音频设备并允许接收，再从手机菜单开启；不保存录音。当前没有内置虚拟音频驱动。")
                     Text("退出前从菜单断开。断连、后台或控制撤销会释放按键／拖选并停止相机和麦克风。Mac 关闭窗口仍在菜单栏运行；停止服务或退出主机会断开。息屏不等于睡眠，真正睡眠／合盖不保证能连接。")
                     Text("背面没有反应：检查暂停标志、有效区域和 App 是否全屏，抬起手指再试。菜单可用而手势不行：确认直接触控、背面一指和窗口手势设置。两者都不行：检查 Mac 控制／System Events 权限，查看“诊断信息”。")
-                    Text("连接默认自动：对已保存的局域网与 Tailscale 地址做认证检查，先可达的路径连接，不按电脑名称合并。Mac 两个入口同时服务，无需跟随手机切模式。公网首次仍需两端在 Chordesk 登录同一私人网络并允许 Mac 公网入口；不另装 Tailscale。旧记录先连接新版一次即可同步可用地址。手机退后台仍断开；Mac 真正睡眠时不保证可达。")
+                    Text("自动连接并行检查两种已保存地址，优先 Tailscale；局域网先就绪时最多等 0.35 秒便回退。新版主机复用已验证连接，避免再次握手；不按名称合并电脑。Mac 两个入口同时服务，无需跟随手机切模式。公网首次仍需两端在 Chordesk 登录同一私人网络并允许 Mac 公网入口。诊断信息记录网络验证和首帧耗时。手机退后台仍断开；Mac 真正睡眠或合盖时不保证可达。")
                 }
             }.navigationTitle("Duo 操作手册")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingGuide = false } } }

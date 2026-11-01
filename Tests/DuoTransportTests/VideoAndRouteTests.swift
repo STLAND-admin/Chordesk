@@ -22,7 +22,7 @@ final class VideoAndRouteTests: XCTestCase {
         gate.completed()
         XCTAssertTrue(gate.admit(interFrame: true, keyframe: false))
     }
-    func testFirstAuthenticatedReachableRouteWinsAndLateResultsCannotReplaceIt() {
+    func testTailscalePreferenceWithBoundedLANFallbackAndNoLateReplacement() {
         var race = AutomaticRouteRace([.lan, .tailscale])
         XCTAssertFalse(race.complete(.lan, reachable: false))
         XCTAssertFalse(race.exhausted)
@@ -30,8 +30,20 @@ final class VideoAndRouteTests: XCTestCase {
         XCTAssertFalse(race.complete(.lan, reachable: true))
         XCTAssertEqual(race.winner, .tailscale)
         var another = AutomaticRouteRace([.lan, .tailscale])
-        XCTAssertTrue(another.complete(.lan, reachable: true))
-        XCTAssertFalse(another.complete(.tailscale, reachable: true))
+        XCTAssertFalse(another.complete(.lan, reachable: true))
+        XCTAssertTrue(another.complete(.tailscale, reachable: true))
+        XCTAssertEqual(another.winner, .tailscale)
+        var fallback = AutomaticRouteRace([.lan, .tailscale])
+        XCTAssertFalse(fallback.complete(.lan, reachable: true))
+        XCTAssertTrue(fallback.allowFallback())
+        XCTAssertFalse(fallback.complete(.tailscale, reachable: true))
+        XCTAssertEqual(fallback.winner, .lan)
+        var rejected = AutomaticRouteRace([.lan, .tailscale])
+        XCTAssertFalse(rejected.complete(.lan, reachable: true))
+        XCTAssertTrue(rejected.complete(.tailscale, reachable: false))
+        XCTAssertEqual(rejected.winner, .lan)
+        var localOnly = AutomaticRouteRace([.lan])
+        XCTAssertTrue(localOnly.complete(.lan, reachable: true))
         var failed = AutomaticRouteRace([.lan, .tailscale])
         XCTAssertFalse(failed.complete(.lan, reachable: false)); XCTAssertFalse(failed.complete(.tailscale, reachable: false))
         XCTAssertTrue(failed.exhausted)
@@ -59,16 +71,16 @@ final class VideoAndRouteTests: XCTestCase {
         XCTAssertNil(LANEndpoint(host: "8.8.8.8", port: 443, network: .tailscale).pairing(secret: key))
     }
     func testH264WireRejectsTruncationOversizedGeometryAndMalformedNALUnits() throws {
-        let packet = H264Packet(header: .init(stream: UUID(), sequence: 1, keyframe: true, width: 320, height: 180,
+        let packet = VideoPacket(header: .init(stream: UUID(), sequence: 1, keyframe: true, width: 320, height: 180,
             parameterSets: [Data([0x67, 1]), Data([0x68, 1])]), bytes: Data([0, 0, 0, 2, 0x65, 0]))
         let wire = try XCTUnwrap(packet.data)
-        XCTAssertEqual(H264Packet(wire)?.header, packet.header)
-        XCTAssertNil(H264Packet(wire.dropLast()))
-        XCTAssertNil(H264Packet(Data([255, 255, 255, 255, 1])))
+        XCTAssertEqual(VideoPacket(wire)?.header, packet.header)
+        XCTAssertNil(VideoPacket(wire.dropLast()))
+        XCTAssertNil(VideoPacket(Data([255, 255, 255, 255, 1])))
         var bad = packet; bad.header.width = 50000; XCTAssertNil(bad.data)
         bad = packet; bad.header.parameterSets = []; XCTAssertNil(bad.data)
-        XCTAssertFalse(H264Packet.nalUnitsValid(Data([0, 0, 0, 255, 1])))
-        XCTAssertFalse(H264Packet.nalUnitsValid(Data([0, 0, 0, 0])))
+        XCTAssertFalse(VideoPacket.nalUnitsValid(Data([0, 0, 0, 255, 1])))
+        XCTAssertFalse(VideoPacket.nalUnitsValid(Data([0, 0, 0, 0])))
     }
     private func pixel() throws -> CVPixelBuffer {
         var output: CVPixelBuffer?
@@ -82,9 +94,18 @@ final class VideoAndRouteTests: XCTestCase {
         return value
     }
     func testHardwareH264RoundTripAndMissingFrameRecovery() throws {
-        let encoder = H264Encoder(), decoder = H264Decoder(), pixels = try pixel()
+        try hardwareRoundTrip(.h264)
+    }
+    func testHardwareHEVCRoundTripAndMissingFrameRecovery() throws {
+        try hardwareRoundTrip(.hevc)
+    }
+    private func hardwareRoundTrip(_ codec: LANVideoCodec) throws {
+        let encoder = HardwareVideoEncoder(codec: codec), decoder = HardwareVideoDecoder(), pixels = try pixel()
         let first = try XCTUnwrap(encoder.encode(pixels, time: CMTime(value: 0, timescale: 15), quality: .efficient), "Hardware H.264 must encode a generated frame on this Mac")
         XCTAssertTrue(first.header.keyframe)
+        XCTAssertEqual(first.header.resolvedCodec, codec)
+        XCTAssertEqual(first.header.parameterSets.count, codec.parameterSetCount)
+        XCTAssertEqual(VideoPacket(try XCTUnwrap(first.data))?.header, first.header)
         let image = try XCTUnwrap(decoder.decode(first))
         XCTAssertEqual(image.width, 320); XCTAssertEqual(image.height, 180)
         _ = try XCTUnwrap(encoder.encode(pixels, time: CMTime(value: 1, timescale: 15), quality: .efficient))
@@ -99,5 +120,32 @@ final class VideoAndRouteTests: XCTestCase {
         let renewed = try XCTUnwrap(encoder.encode(pixels, time: CMTime(value: 4, timescale: 15), quality: .efficient))
         XCTAssertNotEqual(renewed.header.stream, first.header.stream)
         XCTAssertNotNil(decoder.decode(renewed))
+    }
+
+    func testCodecNegotiationLegacyPreferenceAndMalformedHEVC() throws {
+        XCTAssertEqual(LANVideoCodec.negotiate(preferred: "hevc", supported: ["h264", "jpeg"]), .h264)
+        XCTAssertEqual(LANVideoCodec.negotiate(preferred: "hevc", supported: ["jpeg"]), .jpeg)
+        XCTAssertEqual(LANVideoCodec.negotiate(preferred: "jpeg", supported: ["hevc", "h264", "jpeg"]), .jpeg)
+        XCTAssertEqual(LANVideoCodec.negotiate(preferred: "hevc", supported: ["hevc", "h264", "jpeg"]), .hevc)
+        let suite = "chordesk-codec-test-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(LANVideoCodec.storedPreference(defaults), .h264)
+        defaults.set(false, forKey: "preferH264V1")
+        XCTAssertEqual(LANVideoCodec.storedPreference(defaults), .jpeg)
+        defaults.set("hevc", forKey: "videoCodecV2")
+        XCTAssertEqual(LANVideoCodec.storedPreference(defaults), .hevc)
+        var packet = try XCTUnwrap(HardwareVideoEncoder(codec: .hevc).encode(try pixel(), time: .zero, quality: .efficient))
+        packet.header.parameterSets.removeLast(); XCTAssertNil(packet.data)
+        packet.header.codec = .jpeg; XCTAssertNil(packet.data)
+    }
+
+    func testLiveCodecChangesRequireNewKeyframeAndRebuildDecoder() throws {
+        let decoder = HardwareVideoDecoder(), pixels = try pixel()
+        for codec: LANVideoCodec in [.h264, .hevc, .h264] {
+            let encoder = HardwareVideoEncoder(codec: codec)
+            let packet = try XCTUnwrap(encoder.encode(pixels, time: .zero, quality: .efficient))
+            XCTAssertNotNil(decoder.decode(packet)); XCTAssertFalse(decoder.failed)
+        }
     }
 }

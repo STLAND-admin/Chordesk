@@ -52,14 +52,14 @@ Mac 上生成图像的真实硬件编码／解码、缺帧恢复与流重建测�
 
 用户澄清开盖锁屏正常，问题是合盖后短暂连上、键盘出现后整体卡住，LAN／Tailscale 均如此。最新电源日志确认接电状态仍出现 Clamshell Sleep，短暂 Full Wake 后重入 Dark Wake／睡眠；单纯改编码无法修复系统睡眠。
 
-新增只在接电、已认证活动会话且原防睡眠偏好开启时的 NetworkClientActive 请求，断连／拔电／停止即释放。公开 IOPMLib.h 说明它可保持 Dark Wake 的 CPU、磁盘和网络，但不保证 framebuffer／GPU；系统仍可忽略请求。现有远程用户活动请求保留，不模拟密码／输入，也不安装系统 helper。158 项回归通过，已部署 Mac 0.22.1，合盖效果待实测。[验证记录](VALIDATION-1.27.md)
+新增只在接电、已认证活动会话且原防睡眠偏好开启时的 NetworkClientActive 请求，断连／拔电／停止即释放。公开 IOPMLib.h 说明它可保持 Dark Wake 的 CPU、磁盘和网络，但不保证 framebuffer／GPU；系统仍可忽略请求。现有远程用户活动请求保留，不模拟密码／输入，也不安装系统 helper。158 项回归通过，已部署 Mac 0.22.1，用户复测仍失败：不输入密码也会卡住／断开。日志显示持有 NetworkClientActive 时仍重入 Dark Wake／睡眠，因此不把回车视为必要触发条件。[验证记录](VALIDATION-1.27.md)
 
 ## 后续编码选择
 
-2026-11-01 本机 M4 Pro 的 VideoToolbox 枚举显示 H.264、HEVC 硬件编码器，未列 AV1 编码器；三者均报告硬件解码能力。下一步优先比较 HEVC 与 H.264 的实时模式；不能把支持播放 AV1 当成能硬件编码 AV1。
+2026-11-01 本机 M4 Pro 的 VideoToolbox 枚举显示 H.264、HEVC 硬件编码器，未列 AV1 编码器；三者均报告硬件解码能力。1.28 / Mac 0.23.0 已加入可选 HEVC，与 H.264 共用硬件编解码和有界队列；不能把支持播放 AV1 当成能硬件编码 AV1。
 
 Apple 在文件编码场景给出 HEVC 相比 H.264 同等视觉质量下体积最多降低 40% 的参考；Meta 在视频点播说明中给出 AV1 相比 HEVC／VP9 约 30% 的编码效率优势。这些不是 Chordesk 实时桌面基准，不能直接套到低码率文字、无重排编码或推导延迟同比减少。[Apple HEVC](https://support.apple.com/en-la/101939) · [Meta AV1](https://engineering.fb.com/2023/02/21/video-engineering/av1-codec-facebook-instagram-reels/)
 
 输入上行、Mac 处理／等帧、编码、视频下行、解码与呈现共同组成感知延迟，排队存在于各段。Tailscale 直连通常比中继低延迟，但当前尚未测定本次 direct／relay。RTT 也包含应用调度与共用流排队，不应与这些重复相加。[Tailscale 连接类型](https://tailscale.com/docs/reference/connection-types)
 
-保持当前默认不变；下一步以同分辨率、同帧率和目标质量比较 H.264／HEVC 的实际 Mbps、文字清晰度、P50/P95 时延与功耗，再决定自动策略。本轮未实现 H.265／AV1。
+默认保持 H.264 / 省流 15 fps；1.28 可选 H.265（HEVC），当前目标为相同画质档 H.264 预算的 75%（省流 1.125 Mbps），是初始参数，不是同等画质保证。两种格式的本机真实硬件编码／解码、丢帧恢复和互切测试通过；尚待 Duo 及公网实测清晰度、耗时和耗电。AV1 按用户要求不实现／不测试。

@@ -114,13 +114,26 @@ enum ConnectionPreference: String, CaseIterable, Identifiable {
 struct AutomaticRouteRace {
     private(set) var pending: Set<RemoteNetwork>
     private(set) var winner: RemoteNetwork?
+    private var reachable: Set<RemoteNetwork> = []
+    private var fallbackAllowed = false
     init(_ networks: [RemoteNetwork]) { pending = Set(networks) }
-    mutating func complete(_ network: RemoteNetwork, reachable: Bool) -> Bool {
+    mutating func complete(_ network: RemoteNetwork, reachable isReachable: Bool) -> Bool {
         guard winner == nil, pending.remove(network) != nil else { return false }
-        if reachable { winner = network; return true }
+        if isReachable { reachable.insert(network) }
+        return choose()
+    }
+    /// Give an already reachable LAN only a short grace period for Tailscale,
+    /// never the public route's full handshake timeout.
+    mutating func allowFallback() -> Bool { fallbackAllowed = true; return choose() }
+    private mutating func choose() -> Bool {
+        guard winner == nil else { return false }
+        if reachable.contains(.tailscale) { winner = .tailscale; return true }
+        if reachable.contains(.lan), fallbackAllowed || !pending.contains(.tailscale) {
+            winner = .lan; return true
+        }
         return false
     }
-    var exhausted: Bool { winner == nil && pending.isEmpty }
+    var exhausted: Bool { winner == nil && pending.isEmpty && reachable.isEmpty }
 }
 
 /// Identity comes from the authenticated host, never its display name or IP.
@@ -333,10 +346,16 @@ struct LANStatus: Codable {
     var supportsPresenceProbe: Bool? = nil
     var supportsH264: Bool? = nil
     var videoCodec: String? = nil
+    var supportedVideoCodecs: [String]? = nil
     var endpoints: [LANEndpoint]? = nil
 }
 
-struct LANPresenceRequest: Codable, Equatable { var nonce: UUID }
+struct LANPresenceRequest: Codable, Equatable {
+    var nonce: UUID
+    // Only an explicit connect attempt may retain this authenticated transport.
+    // Ordinary online checks remain strictly read-only, including on old hosts.
+    var wantsSession: Bool? = nil
+}
 struct LANPresenceResponse: Codable, Equatable {
     var version = 1
     var nonce: UUID
@@ -345,22 +364,31 @@ struct LANPresenceResponse: Codable, Equatable {
     var displayAvailable: Bool
     // A GUI session being active is not proof that its lock screen accepts input.
     var sessionActive: Bool
+    var canJoin: Bool? = nil
 }
 
 /// TLS authentication alone must not claim a desktop or run pairing side effects.
-/// One connection is either a read-only probe or a remote session, never both.
+/// A read-only probe cannot upgrade. An explicit route offer may join exactly
+/// once, and only if no other phone claimed the session in the meantime.
 struct LANAdmission {
     enum Decision: Equatable { case probe(LANPresenceRequest), join, remote, reject }
-    private enum State { case waiting, probe, remote, rejected }
+    private enum State { case waiting, probe, offered, remote, rejected }
     private var state = State.waiting
     mutating func receive(_ kind: LANPacket, data: Data, busy: Bool) -> Decision {
         switch state {
         case .remote: return .remote
         case .probe, .rejected: state = .rejected; return .reject
+        case .offered:
+            if kind == .hello, !busy, !data.isEmpty, data.count < 4096,
+               String(data: data, encoding: .utf8) != nil {
+                state = .remote; return .join
+            }
+            state = .rejected; return .reject
         case .waiting:
             if kind == .presenceRequest, data.count < 256,
                let request = try? JSONDecoder().decode(LANPresenceRequest.self, from: data) {
-                state = .probe; return .probe(request)
+                state = request.wantsSession == true && !busy ? .offered : .probe
+                return .probe(request)
             }
             if kind == .hello, !busy, !data.isEmpty, data.count < 4096,
                String(data: data, encoding: .utf8) != nil {
@@ -373,18 +401,21 @@ struct LANAdmission {
 
 /// Bounded, authenticated query. It never sends hello/input, and cancels its
 /// transport and any local tailnet forwarding route on every terminal path.
+/// An explicit connect offer can transfer ownership to the winning session;
+/// late, cancelled, busy, mismatched or legacy replies cannot transfer it.
 @MainActor
 final class LANPresenceProbe {
     private let nonce = UUID()
     private let hostID: String
+    private let wantsSession: Bool
     private let completion: (LANPresenceResponse?) -> Void
     private var link: LANLink?
     private var timeout: Task<Void, Never>?
     private(set) var finished = false
     var cleanup: (() -> Void)? { didSet { if finished { let action = cleanup; cleanup = nil; action?() } } }
 
-    init(hostID: String, completion: @escaping (LANPresenceResponse?) -> Void) {
-        self.hostID = hostID; self.completion = completion
+    init(hostID: String, wantsSession: Bool = false, completion: @escaping (LANPresenceResponse?) -> Void) {
+        self.hostID = hostID; self.wantsSession = wantsSession; self.completion = completion
     }
     func start(timeout seconds: Double = 12) {
         guard timeout == nil, !finished else { return }
@@ -397,7 +428,7 @@ final class LANPresenceProbe {
     func attach(_ connection: NWConnection) {
         guard !finished, link == nil else { connection.cancel(); return }
         let wire = LANLink(connection); link = wire
-        let request = LANPresenceRequest(nonce: nonce)
+        let request = LANPresenceRequest(nonce: nonce, wantsSession: wantsSession ? true : nil)
         wire.onReady = { [weak wire] in wire?.send(.presenceRequest, value: request) }
         wire.onPacket = { [weak self] kind, data in
             Task { @MainActor in
@@ -414,12 +445,21 @@ final class LANPresenceProbe {
         wire.start()
     }
     func fail() { finish(nil) }
-    func cancel() { finish(nil) }
+    func cancel() { finish(nil); closeTransport() }
+    /// Must be taken before cancelling the losing route attempts.
+    func takeTransport() -> (link: LANLink, cleanup: (() -> Void)?)? {
+        guard finished, let link else { return nil }
+        self.link = nil; let action = cleanup; cleanup = nil
+        return (link, action)
+    }
+    private func closeTransport() {
+        link?.close(); link = nil
+        let action = cleanup; cleanup = nil; action?()
+    }
     private func finish(_ response: LANPresenceResponse?) {
         guard !finished else { return }
         finished = true; timeout?.cancel(); timeout = nil
-        link?.close(); link = nil
-        let action = cleanup; cleanup = nil; action?()
+        if !(wantsSession && response?.canJoin == true && response?.busy == false) { closeTransport() }
         completion(response)
     }
 }

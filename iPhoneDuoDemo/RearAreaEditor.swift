@@ -104,6 +104,8 @@ struct RearAreaEditor: View {
             }.buttonStyle(.bordered)
         }.navigationTitle("背面有效区域").navigationBarTitleDisplayMode(.inline)
         }
+        .onAppear { camera.editingRearRegion = true }
+        .onDisappear { camera.editingRearRegion = false }
     }
     @ViewBuilder private func regionSlider(_ title: String, path: WritableKeyPath<RearActiveRegion, Double>, range: ClosedRange<Double>) -> some View {
         LabeledContent(title, value: String(format: "%.0f%%", region[keyPath: path] * 100))

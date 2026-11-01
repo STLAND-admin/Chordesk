@@ -2,6 +2,30 @@ import XCTest
 
 final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
+    func testVideoCodecChoicesUseShortTapsAndPersist() {
+        let app = launchFixture()
+        func openCodecChoices() {
+            shortPress(app.buttons["remote-options"])
+            shortPressMenuItem("键盘、画质与触控设置", in: app)
+            let picker = app.buttons["video-codec-picker"]
+            reveal(picker, in: app.collectionViews.firstMatch)
+            XCTAssertTrue(picker.isHittable)
+            shortPress(picker)
+        }
+        openCodecChoices()
+        if !app.buttons["H.264"].waitForExistence(timeout: 3) { print(app.debugDescription) }
+        XCTAssertTrue(app.buttons["H.264"].exists)
+        XCTAssertTrue(app.buttons["JPEG（兼容）"].exists)
+        shortPress(app.buttons["H.265 / HEVC"])
+        app.terminate(); app.launch()
+        shortPress(app.buttons["remote-options"])
+        shortPressMenuItem("键盘、画质与触控设置", in: app)
+        let picker = app.buttons["video-codec-picker"]
+        reveal(picker, in: app.collectionViews.firstMatch)
+        XCTAssertTrue(picker.label.contains("H.265") || (picker.value as? String)?.contains("H.265") == true, picker.debugDescription)
+    }
+
+    @MainActor
     func testDesktopFitsAboveNativeKeyboardInBothOrientations() {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"

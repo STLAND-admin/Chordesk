@@ -4,6 +4,102 @@ import XCTest
 @testable import DuoWorkbench
 
 final class PresenceTests: XCTestCase {
+    func testExplicitRouteOfferOnlyJoinsOnHelloAndRechecksBusy() throws {
+        let offer = try JSONEncoder().encode(LANPresenceRequest(nonce: UUID(), wantsSession: true))
+        let hello = try JSONEncoder().encode(LANHello(name: "phone"))
+        var gate = LANAdmission()
+        guard case .probe = gate.receive(.presenceRequest, data: offer, busy: false) else { return XCTFail() }
+        XCTAssertEqual(gate.receive(.hello, data: hello, busy: false), .join)
+        for blocked: LANPacket in [.input, .ping, .textInput, .presenceRequest] {
+            var invalid = LANAdmission()
+            _ = invalid.receive(.presenceRequest, data: offer, busy: false)
+            XCTAssertEqual(invalid.receive(blocked, data: hello, busy: false), .reject)
+        }
+        var contested = LANAdmission()
+        _ = contested.receive(.presenceRequest, data: offer, busy: false)
+        XCTAssertEqual(contested.receive(.hello, data: hello, busy: true), .reject)
+        var busyFromStart = LANAdmission()
+        _ = busyFromStart.receive(.presenceRequest, data: offer, busy: true)
+        XCTAssertEqual(busyFromStart.receive(.hello, data: hello, busy: false), .reject)
+    }
+
+    @MainActor
+    func testFastConnectReusesOneTLSHandshakeAndTransfersCleanupOnce() async throws {
+        try await offeredConnection(reuse: true, cancel: false)
+    }
+    @MainActor
+    func testLegacyOfferResponseFallsBackWithoutLeakingConnection() async throws {
+        try await offeredConnection(reuse: false, cancel: false)
+    }
+    @MainActor
+    func testLosingOfferedRouteCancelsWithoutJoiningOrLosingCleanup() async throws {
+        try await offeredConnection(reuse: true, cancel: true)
+    }
+    @MainActor
+    private func offeredConnection(reuse: Bool, cancel: Bool) async throws {
+        let secret = "00112233445566778899aabbccddeeff", identity = UUID().uuidString
+        let listener = try LANTransport.listener(secret: secret, localAddress: "127.0.0.1", port: .any)
+        let done = expectation(description: "offer completed")
+        var servers: [LANLink] = [], probe: LANPresenceProbe?, handed: LANLink?
+        var cleanup: (() -> Void)?, cleaned = 0, joins = 0, connections = 0
+        defer { probe?.cancel(); handed?.close(); cleanup?(); listener.cancel(); servers.forEach { $0.close() } }
+        listener.newConnectionHandler = { connection in
+            Task { @MainActor in
+                connections += 1
+                let server = LANLink(connection); servers.append(server)
+                var gate = LANAdmission()
+                server.onPacket = { kind, data in
+                    Task { @MainActor in
+                        switch gate.receive(kind, data: data, busy: false) {
+                        case .probe(let request):
+                            XCTAssertEqual(request.wantsSession, true)
+                            server.send(.presenceResponse, value: LANPresenceResponse(nonce: request.nonce, hostID: identity,
+                                busy: false, displayAvailable: true, sessionActive: true, canJoin: reuse ? true : nil))
+                        case .join:
+                            joins += 1
+                            server.send(.ping)
+                        default: XCTFail("No input permitted before selecting and joining the winning route")
+                        }
+                    }
+                }
+                server.start()
+            }
+        }
+        listener.stateUpdateHandler = { state in
+            if case .ready = state, let port = listener.port {
+                Task { @MainActor in
+                    let check = LANPresenceProbe(hostID: identity, wantsSession: true) { reply in
+                        XCTAssertNotNil(reply)
+                        if reuse && !cancel {
+                            let transferred = probe?.takeTransport()
+                            XCTAssertNotNil(transferred)
+                            handed = transferred?.link; cleanup = transferred?.cleanup
+                            probe?.cancel()
+                            XCTAssertEqual(cleaned, 0, "Cancellation must not close the winner after handoff")
+                            handed?.onPacket = { kind, _ in
+                                Task { @MainActor in
+                                    XCTAssertEqual(kind, .ping); done.fulfill()
+                                }
+                            }
+                            handed?.send(.hello, value: LANHello(name: "test"))
+                        } else {
+                            probe?.cancel()
+                            XCTAssertNil(probe?.takeTransport()); XCTAssertEqual(cleaned, 1)
+                            done.fulfill()
+                        }
+                    }
+                    probe = check; check.cleanup = { cleaned += 1 }; check.start()
+                    check.attach(NWConnection(host: "127.0.0.1", port: port, using: LANTransport.parameters(secret: secret)))
+                }
+            }
+        }
+        listener.start(queue: DispatchQueue(label: "chordesk-fast-route-test"))
+        await fulfillment(of: [done], timeout: 5)
+        XCTAssertEqual(connections, 1); XCTAssertEqual(joins, reuse && !cancel ? 1 : 0)
+        handed?.close(); handed = nil; cleanup?(); cleanup = nil
+        XCTAssertEqual(cleaned, 1)
+    }
+
     func testProbeCannotClaimControlOrUpgradeToHelloWhileHostIsBusy() throws {
         var gate = LANAdmission()
         let request = LANPresenceRequest(nonce: UUID())

@@ -124,6 +124,7 @@ final class CameraAccessory: ObservableObject {
     @Published private(set) var touchCount = 0
     @Published private(set) var lastTouch = "尚未收到外屏触摸"
     @Published var rearViewportSize = CGSize.zero
+    @Published var editingRearRegion = false
     @Published private(set) var surfaceEpoch = 0
     @Published private(set) var recoveryMessage = "尚未自动恢复"
     private(set) var requested = false
@@ -311,21 +312,18 @@ struct OuterRemoteTouchpad: View {
     private var inputReady: Bool { !grip.controlsPresented && camera.running && camera.enabled && client.acceptsInput }
     var body: some View {
         ZStack {
-            Color.black
-            GeometryReader { geometry in
-                let bounds = CGRect(origin: .zero, size: geometry.size)
-                let active = region.rect(in: bounds)
-                Path { path in path.addRect(bounds); path.addRect(active) }
-                    .fill(.gray.opacity(0.3), style: FillStyle(eoFill: true))
-                Path { $0.addRect(active) }.stroke(.mint.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-            }.allowsHitTesting(false)
+            // Only the editor visualizes the active region. Keep the receiver
+            // mounted and the capture session alive; black pixels do not imply
+            // that the accessory display or camera hardware is powered off.
+            Color.black.ignoresSafeArea().allowsHitTesting(false)
+            Color.clear.allowsHitTesting(false)
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { camera.rearViewportSize = $0 }
-            VStack(spacing: 12) {
-                Label("背面模式切换", systemImage: "hand.point.up.left")
-                Text(grip.state.requestedFrontMode.title).font(.title2)
-                Text("双指 · \(grip.state.activation.title) · \(grip.state.trigger == .longPress ? "长按" : "接触／轻点")")
-                Text("点击 · 滚动 · 拖选均在正面完成").font(.caption)
-            }.padding().allowsHitTesting(false)
+            if camera.editingRearRegion {
+                GeometryReader { geometry in
+                    Path { $0.addRect(region.rect(in: CGRect(origin: .zero, size: geometry.size))) }
+                        .stroke(.gray, style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                }.allowsHitTesting(false)
+            }
             TouchpadSurface(behavior: .contactsOnly, inputEnabled: inputReady,
                             edgeInsetFraction: outerEdgeInset, activeRegion: region, contactGestureFingers: 2,
                             inputEpoch: camera.surfaceEpoch,

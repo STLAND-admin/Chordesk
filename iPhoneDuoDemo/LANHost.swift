@@ -189,7 +189,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         }
         return invitation
     }
-    private var peerSupportsH264 = false
+    private var peerVideoCodecs: [String] = []
     private var requestedVideoCodec = "jpeg"
     private var activeVideoCodec = "jpeg"
     private var latestFrame: Data?
@@ -813,9 +813,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 self.captureResumed()
                 self.latestFrame = codec == "jpeg" ? data : nil; self.frameCount += 1
                 if self.activeVideoCodec != codec { self.activeVideoCodec = codec; self.sendStatus() }
-                if codec == "h264", self.peerSupportsH264 {
+                if codec != "jpeg", self.peerVideoCodecs.contains(codec) {
                     self.link?.send(.videoFrame, data: data, droppable: true, keyframe: keyframe)
                 } else if codec == "jpeg" { self.link?.send(.frame, data: data, droppable: true) }
+                else { self.frames?.setCodec("jpeg") } // Peer may lack a hardware fallback format.
             }
         }, pause: { [weak self] in
             Task { @MainActor in
@@ -887,7 +888,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                         hostID: self.hostIdentity, busy: self.link != nil,
                         displayAvailable: self.sharing && !self.systemSleeping && !self.captureRecovery.paused
                             && self.displayID.map { CGDisplayIsOnline($0) != 0 } == true,
-                        sessionActive: !self.systemSleeping && session?[kCGSessionOnConsoleKey as String] as? Bool == true))
+                        sessionActive: !self.systemSleeping && session?[kCGSessionOnConsoleKey as String] as? Bool == true,
+                        canJoin: request.wantsSession == true && self.link == nil ? true : nil))
                     return
                 case .join:
                     self.link = candidate
@@ -908,11 +910,11 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     if let hello = try? JSONDecoder().decode(LANHello.self, from: data) {
                         self.clientName = String(hello.name.prefix(80)); self.peerSupportsDisplays = hello.displaySelection
                         self.peerSupportsMicrophone = hello.microphone == true
-                        self.peerSupportsH264 = hello.videoCodecs?.contains("h264") == true
-                        self.requestedVideoCodec = self.peerSupportsH264 && hello.preferredVideoCodec != "jpeg" ? "h264" : "jpeg"
+                        self.peerVideoCodecs = LANVideoCodec.allCases.map(\.rawValue).filter { hello.videoCodecs?.contains($0) == true }
+                        self.requestedVideoCodec = LANVideoCodec.negotiate(preferred: hello.preferredVideoCodec, supported: self.peerVideoCodecs).rawValue
                     } else {
                         self.clientName = (String(data: data, encoding: .utf8) ?? "iPhone").prefix(80).description
-                        self.peerSupportsDisplays = false; self.peerSupportsMicrophone = false; self.peerSupportsH264 = false; self.requestedVideoCodec = "jpeg"
+                        self.peerSupportsDisplays = false; self.peerSupportsMicrophone = false; self.peerVideoCodecs = []; self.requestedVideoCodec = "jpeg"
                     }
                     self.frames?.setCodec(self.requestedVideoCodec)
                     self.frames?.requestKeyframe()
@@ -935,9 +937,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     }
                     self.sendMicrophoneState()
                 case .videoRequest:
-                    guard data.count < 256, self.peerSupportsH264,
+                    guard data.count < 256, !self.peerVideoCodecs.isEmpty,
                           let request = try? JSONDecoder().decode(LANVideoRequest.self, from: data),
-                          ["jpeg", "h264"].contains(request.codec) else { return }
+                          LANVideoCodec(rawValue: request.codec) != nil,
+                          self.peerVideoCodecs.contains(request.codec) || request.codec == "jpeg" else { return }
                     self.requestedVideoCodec = request.codec; self.frames?.setCodec(request.codec)
                     if request.keyframe { self.frames?.requestKeyframe() }
                 case .microphoneRequest:
@@ -992,7 +995,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 if let candidate, self.link === candidate {
                     self.inputQueueEpoch += 1; self.pendingInputs.removeAll(); self.textFocus = nil; self.focusRequest = 0; self.latestFocusClick = 0
                     self.stopMicrophone("手机已断开，麦克风已停止"); self.peerSupportsMicrophone = false
-                    self.peerSupportsH264 = false; self.requestedVideoCodec = "jpeg"; self.frames?.setCodec("jpeg")
+                    self.peerVideoCodecs = []; self.requestedVideoCodec = "jpeg"; self.frames?.setCodec("jpeg")
                     self.input.release(); self.link = nil
                     self.peerNetwork = .lan
                     self.controlRevision += 1
@@ -1187,14 +1190,14 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             videoQuality: videoQuality.rawValue, supportsWindowOverview: true, supportsDesktopSwitch: true,
             supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
             supportsMicrophone: true, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
-            supportsScrollDynamics: true, supportsPresenceProbe: true, supportsH264: true, videoCodec: activeVideoCodec,
+            supportsScrollDynamics: true, supportsPresenceProbe: true, supportsH264: true, videoCodec: activeVideoCodec, supportedVideoCodecs: LANVideoCodec.allCases.map(\.rawValue),
             endpoints: ([pairing].compactMap { $0 } + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) }))
     }
 
     func stop() {
         captureRepair?.cancel(); captureRepair = nil; captureInterrupted = false; pendingAutomaticPeer = nil
         displayPresence = HostDisplayPresence()
-        peerSupportsH264 = false; requestedVideoCodec = "jpeg"; activeVideoCodec = "jpeg"
+        peerVideoCodecs = []; requestedVideoCodec = "jpeg"; activeVideoCodec = "jpeg"
         stopMicrophone("共享已停止，麦克风已停止"); peerSupportsMicrophone = false
         inputQueueEpoch += 1; pendingInputs.removeAll(); textFocus = nil; focusRequest = 0; latestFocusClick = 0
         generation = UUID(); captureGeneration = UUID()
@@ -1227,12 +1230,12 @@ private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
     private let context = CIContext(options: [.cacheIntermediates: false])
     private var quality: LANVideoQuality
     private var codec = "jpeg"
-    private var encoder = H264Encoder()
+    private var encoder = HardwareVideoEncoder()
     func setQuality(_ value: LANVideoQuality) { queue.async { self.quality = value } }
     func setCodec(_ value: String) {
         queue.async {
             guard self.codec != value else { return }
-            self.codec = value; self.encoder = H264Encoder()
+            self.codec = value; self.encoder = HardwareVideoEncoder(codec: LANVideoCodec(rawValue: value) ?? .h264)
         }
     }
     func requestKeyframe() { queue.async { self.encoder.forceKeyframe = true } }
@@ -1249,12 +1252,15 @@ private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
         if [.blank, .suspended, .stopped].contains(status) { pause(); return }
         guard status == .complete, let pixels = buffer.imageBuffer else { return }
         autoreleasepool {
-            if codec == "h264" {
+            while codec != "jpeg" {
                 if let packet = encoder.encode(pixels, time: buffer.presentationTimeStamp, quality: quality), let data = packet.data {
-                    frame(data, "h264", packet.header.keyframe); return
+                    frame(data, codec, packet.header.keyframe); return
                 }
                 if !encoder.failed { return }
-                codec = "jpeg" // Hardware unavailable/error: retain the existing stream and report actual JPEG.
+                // Bound fallback to HEVC -> H.264 -> JPEG. Never repeatedly
+                // retry unsupported hardware until the user changes the codec.
+                codec = encoder.codec.fallback.rawValue
+                encoder = HardwareVideoEncoder(codec: LANVideoCodec(rawValue: codec) ?? .h264)
             }
             let source = CIImage(cvPixelBuffer: pixels)
             if let image = context.createCGImage(source, from: source.extent),
