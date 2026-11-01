@@ -20,6 +20,7 @@ struct RemoteInterfaceAddress: Equatable {
     var name: String
     var address: String
     var isUp: Bool
+    var netmask: String? = nil
     static func current() -> [Self] {
         var pointer: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&pointer) == 0 else { return [] }
@@ -27,14 +28,76 @@ struct RemoteInterfaceAddress: Equatable {
         var current = pointer, result: [Self] = []
         while let entry = current {
             defer { current = entry.pointee.ifa_next }
-            guard let address = entry.pointee.ifa_addr, address.pointee.sa_family == UInt8(AF_INET) else { continue }
+            guard let address = entry.pointee.ifa_addr, [UInt8(AF_INET), UInt8(AF_INET6)].contains(address.pointee.sa_family) else { continue }
             var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             guard getnameinfo(address, socklen_t(address.pointee.sa_len), &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
+            var mask: String?
+            if let netmask = entry.pointee.ifa_netmask {
+                var maskBuffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(netmask, socklen_t(netmask.pointee.sa_len), &maskBuffer, socklen_t(maskBuffer.count), nil, 0, NI_NUMERICHOST) == 0 {
+                    mask = String(cString: maskBuffer)
+                }
+            }
             result.append(.init(name: String(cString: entry.pointee.ifa_name), address: String(cString: buffer),
-                                isUp: entry.pointee.ifa_flags & UInt32(IFF_UP) != 0))
+                                isUp: entry.pointee.ifa_flags & UInt32(IFF_UP) != 0, netmask: mask))
         }
         return result
     }
+}
+
+/// Strict IP literals only. Global IPv6 LAN hints are usable only when an
+/// active local interface has a matching subnet. No arbitrary public listener.
+enum LANAddress {
+    static func unscoped(_ value: String) -> String { value.split(separator: "%", maxSplits: 1).first.map(String.init) ?? "" }
+    static func ipv6(_ value: String) -> [UInt8]? {
+        guard !value.isEmpty, value.utf8.count <= 96, !value.contains("."), !value.contains("[") else { return nil }
+        let parts = value.split(separator: "%", omittingEmptySubsequences: false)
+        guard parts.count <= 2, parts.count == 1 || (!parts[1].isEmpty && parts[1].utf8.count <= 16
+            && parts[1].allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
+        var address = in6_addr()
+        guard String(parts[0]).withCString({ inet_pton(AF_INET6, $0, &address) }) == 1 else { return nil }
+        let bytes = withUnsafeBytes(of: address) { Array($0) }
+        guard parts.count == 1 || isLinkLocal(bytes) else { return nil }
+        return bytes
+    }
+    static func isLinkLocal(_ bytes: [UInt8]) -> Bool { bytes.count == 16 && bytes[0] == 0xfe && bytes[1] & 0xc0 == 0x80 }
+    static func isLoopback(_ bytes: [UInt8]) -> Bool { bytes == Array(repeating: 0, count: 15) + [1] }
+    static func sameSubnet(_ a: [UInt8], _ b: [UInt8], mask: [UInt8]) -> Bool {
+        guard a.count == 16, b.count == 16, mask.count == 16 else { return false }
+        // Reject missing/invalid masks, especially /0, which would allow public routing.
+        let bits = mask.flatMap { byte in (0..<8).reversed().map { (byte >> $0) & 1 } }
+        let length = bits.prefix(while: { $0 == 1 }).count
+        guard length >= 48, bits.dropFirst(length).allSatisfy({ $0 == 0 }) else { return false }
+        return zip(zip(a, b), mask).allSatisfy { pair, m in pair.0 & m == pair.1 & m }
+    }
+    static func connectionHosts(_ host: String, interfaces: [RemoteInterfaceAddress] = RemoteInterfaceAddress.current()) -> [String] {
+        guard LANPairing.isLocalHost(host) else { return [] }
+        guard let bytes = ipv6(host) else { return [host] }
+        if isLoopback(bytes) { return ["::1"] }
+        let candidates = interfaces.filter { item in
+            guard item.isUp, let local = ipv6(item.address), let mask = item.netmask.flatMap(ipv6),
+                  !isLoopback(local), sameSubnet(bytes, local, mask: mask) else { return false }
+            if host.contains("%") { return host.split(separator: "%").last.map(String.init) == item.name }
+            return true
+        }
+        return Array(Set(candidates.map { isLinkLocal(bytes) ? unscoped(host) + "%" + $0.name : unscoped(host) })).sorted()
+    }
+    static func permitsPeer(_ peer: String, boundAddress: String, interfaces: [RemoteInterfaceAddress] = RemoteInterfaceAddress.current()) -> Bool {
+        guard let local = ipv6(boundAddress) else { return LANPairing.isLocalHost(peer) && ipv6(peer) == nil }
+        guard let remote = ipv6(peer) else { return false }
+        if isLoopback(local) { return isLoopback(remote) }
+        guard !isLoopback(remote), LANPairing.isLocalHost(peer) else { return false }
+        return interfaces.contains { item in
+            item.isUp && ipv6(item.address) == local && item.netmask.flatMap(ipv6).map { sameSubnet(local, remote, mask: $0) } == true
+        }
+    }
+    static func host(of endpoint: NWEndpoint) -> String? {
+        guard case .hostPort(let host, _) = endpoint else { return nil }
+        switch host { case .ipv4(let value): return value.debugDescription
+        case .ipv6(let value): return value.debugDescription
+        default: return nil }
+    }
+    static func label(host: String, port: UInt16) -> String { host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)" }
 }
 
 /// Chordesk pairing remains independent of the optional Tailscale account.
@@ -72,6 +135,13 @@ struct LANPairing: Codable, Equatable {
     }
 
     static func isLocalHost(_ value: String) -> Bool {
+        if let bytes = LANAddress.ipv6(value) {
+            // Parsing is independent of the current network, so remembered
+            // hosts remain valid off-LAN. Dial/accept separately enforce on-link.
+            guard !Self.isTailscaleHost(value) else { return false }
+            return LANAddress.isLoopback(bytes) || LANAddress.isLinkLocal(bytes)
+                || bytes[0] & 0xfe == 0xfc || bytes[0] & 0xe0 == 0x20
+        }
         let parts = value.split(separator: ".").compactMap { UInt8($0) }
         guard parts.count == 4, parts.map(String.init).joined(separator: ".") == value else { return false }
         return parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168)
@@ -79,6 +149,9 @@ struct LANPairing: Codable, Equatable {
     }
 
     static func isTailscaleHost(_ value: String) -> Bool {
+        if let bytes = LANAddress.ipv6(value) {
+            return !value.contains("%") && Array(bytes.prefix(6)) == [0xfd, 0x7a, 0x11, 0x5c, 0xa1, 0xe0]
+        }
         let parts = value.split(separator: ".").compactMap { UInt8($0) }
         guard parts.count == 4, parts.map(String.init).joined(separator: ".") == value else { return false }
         return parts[0] == 100 && (64...127).contains(parts[1])
@@ -145,8 +218,10 @@ struct RememberedMac: Codable, Equatable, Identifiable {
     var alternativePairings: [LANPairing]? = nil
     var supportsPresenceProbe: Bool? = nil
     func pairing(for network: RemoteNetwork) -> LANPairing? {
-        if pairing.connectionNetwork == network { return pairing }
-        return alternativePairings?.first { $0.isValid && $0.connectionNetwork == network && $0.secret == pairing.secret }
+        pairings(for: network).first
+    }
+    func pairings(for network: RemoteNetwork) -> [LANPairing] {
+        ([pairing] + (alternativePairings ?? [])).filter { $0.isValid && $0.connectionNetwork == network && $0.secret == pairing.secret }
     }
 }
 struct PairedMacLibrary: Codable, Equatable {
@@ -158,12 +233,13 @@ struct PairedMacLibrary: Codable, Equatable {
             (identity != nil && existing.hostID == identity) || existing.pairing.secret == pairing.secret
         }
         var item = match.map { hosts[$0] } ?? RememberedMac(pairing: pairing, hostName: "Mac")
-        // Preserve one authenticated endpoint per mode, but never retain an old
+        // Preserve bounded authenticated dual-stack endpoints, never an old
         // key after a credential rotation. Legacy single-endpoint records decode unchanged.
         let advertised = identity == nil ? [] : (endpoints ?? []).prefix(8).compactMap { $0.pairing(secret: pairing.secret) }
         let previous = advertised + [item.pairing] + (item.alternativePairings ?? [])
-        item.alternativePairings = RemoteNetwork.allCases.filter { $0 != pairing.connectionNetwork }.compactMap { network in
-            previous.first { $0.isValid && $0.secret == pairing.secret && $0.connectionNetwork == network }
+        item.alternativePairings = previous.reduce(into: [LANPairing]()) { result, value in
+            guard value.isValid, value.secret == pairing.secret, value != pairing, !result.contains(value), result.count < 7 else { return }
+            result.append(value)
         }
         item.pairing = pairing; item.hostName = String(name.prefix(80))
         item.hostID = identity ?? item.hostID
@@ -536,8 +612,11 @@ enum LANTransport {
     static func listener(secret: String, localAddress: String, port: NWEndpoint.Port = NWEndpoint.Port(rawValue: LANPairing.defaultPort)!, network: RemoteNetwork = .lan) throws -> NWListener {
         guard network.accepts(localAddress), LANPairing.isValidSecret(secret) else { throw LANWireError.malformed }
         let options = parameters(secret: secret)
-        // NWListener sets its port itself. Supplying a concrete port in both
-        // requiredLocalEndpoint and init(using:on:) produces EINVAL.
+        // Separate listeners use separate ports, advertised in LANEndpoint.
+        // Keep the family explicit, and never request a wildcard local address.
+        if let ip = options.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
+            ip.version = localAddress.contains(":") ? .v6 : .v4
+        }
         options.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(localAddress), port: .any)
         return try NWListener(using: options, on: port)
     }

@@ -148,7 +148,7 @@ struct LANHostView: View {
                     Picker("局域网地址", selection: $host.selectedAddress) { ForEach(host.addresses, id: \.self) { Text($0).tag($0) } }.disabled(host.sharing)
                     Button("刷新地址") { host.refreshAddresses() }.disabled(host.sharing)
                     if let pairing = displayedPairing {
-                        LabeledContent("地址", value: "\(pairing.host):\(pairing.port)")
+                        LabeledContent("地址", value: LANAddress.label(host: pairing.host, port: pairing.port))
                         Button("复制配对信息") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(pairing.code, forType: .string)
                         }

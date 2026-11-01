@@ -282,6 +282,7 @@ final class EmbeddedTailnet: ObservableObject {
 struct EmbeddedTailnetControls: View {
     @ObservedObject var tailnet = EmbeddedTailnet.shared
     @State private var confirmLogout = false
+    @State private var showPrivacy = false
     @State private var fixtureActions: [String] = []
     @State private var fixtureEnabled = false
     private var interactionFixture: Bool {
@@ -333,6 +334,10 @@ struct EmbeddedTailnetControls: View {
                 }
                 if tailnet.busy { ProgressView().controlSize(.small) }
             }
+            Button("公网数据与隐私说明") { showPrivacy = true }
+                .accessibilityIdentifier("tailscale-own-privacy")
+            Text("启用公网后，Tailscale 及身份提供商会处理账号、节点、IP 和连接元数据，可能涉及境外处理；画面和输入加密传输。可不启用公网，继续使用局域网。")
+                .font(.caption).foregroundStyle(.secondary)
             Text("两端 Chordesk 登录同一 Tailscale 私人网络，无需额外安装 App。仅 Chordesk 的远程连接走此网络；局域网免登录。个人免费计划以 Tailscale 条件为准。")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
@@ -353,6 +358,12 @@ struct EmbeddedTailnetControls: View {
             if interactionFixture { fixtureActions.append("link-" + url.lastPathComponent); return .handled }
             return .systemAction
         })
+        .sheet(isPresented: $showPrivacy) {
+            NavigationStack {
+                LegalDocumentView(resource: "PrivacyPolicy", title: "隐私政策")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showPrivacy = false } } }
+            }
+        }
         .confirmationDialog("退出此设备的 Tailscale 账号？", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("退出账号", role: .destructive) { tailnet.logout() }
         } message: { Text("公网连接会断开，局域网配对不会删除。再次使用公网需重新登录。") }

@@ -12,6 +12,9 @@ final class LANClient: ObservableObject {
     private var routeGeneration = UUID()
     private var routeProbes: [RemoteNetwork: LANPresenceProbe] = [:]
     private var routeRace = AutomaticRouteRace([])
+    private var routeCandidates: [UUID: LANPresenceProbe] = [:]
+    private var routePending: [RemoteNetwork: Int] = [:]
+    private var winningPairings: [RemoteNetwork: LANPairing] = [:]
     private var routeFallbackTask: Task<Void, Never>?
     private var retainedRouteCleanup: (() -> Void)?
     private var connectionStartedAt: TimeInterval = 0
@@ -25,7 +28,9 @@ final class LANClient: ObservableObject {
     private func cancelRouteAttempts() {
         routeGeneration = UUID(); autoRetryTask?.cancel(); autoRetryTask = nil
         routeFallbackTask?.cancel(); routeFallbackTask = nil
-        let probes = Array(routeProbes.values); routeProbes.removeAll(); probes.forEach { $0.cancel() }
+        let probes = Array(routeCandidates.values) + Array(routeProbes.values)
+        routeCandidates.removeAll(); routeProbes.removeAll(); routePending.removeAll(); winningPairings.removeAll()
+        probes.forEach { $0.cancel() }
         autoTargetID = nil; autoRetryCount = 0
     }
     func connectInvitation(_ invitation: LANPairing) {
@@ -35,36 +40,48 @@ final class LANClient: ObservableObject {
         let routes = endpoints.compactMap { $0.pairing(secret: primary.secret) }
         // QR gives out-of-band identity/PSK; only LANStatus after TLS saves a host.
         let saved = RememberedMac(pairing: primary, hostName: "Mac", hostID: identity,
-            alternativePairings: routes.filter { $0.connectionNetwork != primary.connectionNetwork }, supportsPresenceProbe: true)
+            alternativePairings: routes.filter { $0 != primary }, supportsPresenceProbe: true)
         connectSaved(saved, preference: connectionPreference)
     }
     func connectSaved(_ saved: RememberedMac, preference: ConnectionPreference, retry: Int = 0) {
         connectionPreference = preference
         if connected, currentPairing == saved.pairing(for: connectionNetwork),
            preference.network == nil || preference.network == connectionNetwork { return }
-        if let network = preference.network {
-            if let pairing = saved.pairing(for: network) { connect(pairing) }
-            return
-        }
         disconnect()
         connectionStartedAt = ProcessInfo.processInfo.systemUptime
         connectionTiming = "正在检查网络…"; firstFrameTimed = false
-        let routes = [RemoteNetwork.tailscale, .lan].compactMap { saved.pairing(for: $0) }.filter {
+        let routes = (preference.network.map { [$0] } ?? [.tailscale, .lan]).flatMap { saved.pairings(for: $0) }.filter {
             $0.isValid && ($0.connectionNetwork == .lan || EmbeddedTailnet.shared.ready || EmbeddedTailnet.shared.shouldResume)
         }
-        guard !routes.isEmpty else { status = "尚无可用地址；请先在 Chordesk 登录已配对的 Tailscale 网络"; return }
+        let candidates = Array(routes.flatMap { pairing -> [LANPairing] in
+            guard pairing.connectionNetwork == .lan else { return [pairing] }
+            return LANAddress.connectionHosts(pairing.host).map { host in
+                LANPairing(host: host, port: pairing.port, secret: pairing.secret)
+            }
+        }.prefix(12))
+        guard !candidates.isEmpty else { status = "尚无可用地址；请先在 Chordesk 登录已配对的 Tailscale 网络"; return }
         guard saved.supportsPresenceProbe == true, let identity = saved.hostID, UUID(uuidString: identity) != nil else {
             // Old hosts claim a session on TLS ready. Never race them.
-            connect(routes.first!, automaticHostID: saved.id, retry: retry); return
+            connect(candidates.first!, automaticHostID: saved.id, retry: retry); return
         }
         connecting = true; autoTargetID = saved.id; autoRetryCount = retry
         status = "正在自动连接：优先 Tailscale，局域网快速回退…"
         let token = routeGeneration
-        routeRace = AutomaticRouteRace(routes.map(\.connectionNetwork))
-        for pairing in routes {
+        routeRace = AutomaticRouteRace(candidates.map(\.connectionNetwork))
+        routePending = Dictionary(grouping: candidates, by: \.connectionNetwork).mapValues(\.count)
+        for pairing in candidates {
+            let candidateID = UUID()
             let probe = LANPresenceProbe(hostID: identity, wantsSession: true) { [weak self] reply in
                 guard let self, self.routeGeneration == token else { return }
-                if self.routeRace.complete(pairing.connectionNetwork, reachable: reply != nil && reply?.busy != true) {
+                let network = pairing.connectionNetwork
+                self.routePending[network, default: 1] -= 1
+                let reachable = reply != nil && reply?.busy != true
+                guard self.winningPairings[network] == nil else { return }
+                if reachable {
+                    self.winningPairings[network] = pairing
+                    self.routeProbes[network] = self.routeCandidates[candidateID]
+                } else if self.routePending[network, default: 0] > 0 { return }
+                if self.routeRace.complete(network, reachable: reachable) {
                     self.useWinningRoute(saved: saved, routes: routes, retry: retry)
                 } else if self.routeRace.exhausted {
                     self.connectionLost("自动连接未成功：检查 Mac 服务、是否被其他设备占用及 Tailscale 状态；已保留配对")
@@ -76,12 +93,12 @@ final class LANClient: ObservableObject {
                     }
                 }
             }
-            routeProbes[pairing.connectionNetwork] = probe; probe.start()
+            routeCandidates[candidateID] = probe; probe.start()
             Task { await self.attachProbe(probe, pairing: pairing) }
         }
     }
     private func useWinningRoute(saved: RememberedMac, routes: [LANPairing], retry: Int) {
-        guard let network = routeRace.winner, let pairing = routes.first(where: { $0.connectionNetwork == network }) else { return }
+        guard let network = routeRace.winner, let pairing = winningPairings[network] else { return }
         let transport = routeProbes[network]?.takeTransport()
         let started = connectionStartedAt
         let verified = ProcessInfo.processInfo.systemUptime - started
@@ -107,7 +124,8 @@ final class LANClient: ObservableObject {
                 probe.attach(NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: route.port)!, using: LANTransport.parameters(secret: pairing.secret)))
             } catch { probe.fail() }
         } else {
-            probe.attach(NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!, using: LANTransport.parameters(secret: pairing.secret)))
+            guard let host = LANAddress.connectionHosts(pairing.host).first else { probe.fail(); return }
+            probe.attach(NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: pairing.port)!, using: LANTransport.parameters(secret: pairing.secret)))
         }
     }
     private func connectionLost(_ reason: String) {
@@ -418,7 +436,7 @@ final class LANClient: ObservableObject {
         autoTargetID = automaticHostID; autoRetryCount = retry; connectedAt = Date()
         guard pairing.isValid else {
             retainedTransport?.link.close(); retainedTransport?.cleanup?()
-            status = "请检查所选连接模式、IPv4 地址、端口及 32 位配对密钥"; return
+            status = "请检查所选连接模式、IPv4／IPv6 地址、端口及 32 位配对密钥"; return
         }
         connectionNetwork = pairing.connectionNetwork
         let token = UUID(); generation = token
@@ -444,7 +462,10 @@ final class LANClient: ObservableObject {
                 }
             }
         } else {
-            let connection = NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!,
+            guard let host = LANAddress.connectionHosts(pairing.host).first else {
+                connecting = false; status = "此 IPv6 地址不在当前局域网，请使用 Tailscale 或重新扫码"; return
+            }
+            let connection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: pairing.port)!,
                                           using: LANTransport.parameters(secret: pairing.secret))
             startWire(pairing, token: token, connection: connection)
         }
@@ -904,7 +925,7 @@ struct LANConnectView: View {
                                 }.buttonStyle(.borderless)
                                     .disabled(preference.network.map { saved.pairing(for: $0) == nil } ?? false || (preference == .tailscale && !tailnet.ready))
                                     .accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
-                                Text(preference == .automatic ? "自动 · " + RemoteNetwork.allCases.filter { saved.pairing(for: $0) != nil }.map(\.title).joined(separator: " / ") : saved.pairing(for: network).map { "\($0.connectionNetwork.title)配对 · \($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
+                                Text(preference == .automatic ? "自动 · " + RemoteNetwork.allCases.filter { saved.pairing(for: $0) != nil }.map(\.title).joined(separator: " / ") : saved.pairing(for: network).map { "\($0.connectionNetwork.title)配对 · \(LANAddress.label(host: $0.host, port: $0.port))" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
                                     .font(.caption).foregroundStyle(.secondary)
                                 Text(client.presenceMessage(saved, network: preference.network))
                                     .font(.caption).foregroundStyle(.secondary)
@@ -932,7 +953,7 @@ struct LANConnectView: View {
                     Button { showScanner = true } label: { Label(preference == .automatic ? "扫描 Mac 配对二维码" : "扫描 Mac \(network.title)配对二维码", systemImage: "qrcode.viewfinder") }
                 }
                 Section("手动输入") {
-                    TextField(network == .lan ? "Mac 局域网 IP，例如 192.168.1.10" : "Mac Tailscale IP，例如 100.100.1.10", text: $host).keyboardType(.decimalPad)
+                    TextField(network == .lan ? "Mac 局域网 IPv4 或 IPv6" : "Mac Tailscale IPv4 或 IPv6", text: $host).keyboardType(.asciiCapable).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("lan-host-address")
                     TextField("端口", text: $port).keyboardType(.numberPad)
                         .accessibilityIdentifier("lan-host-port")
@@ -941,14 +962,14 @@ struct LANConnectView: View {
                     Button("配对并连接") {
                         let value = LANPairing(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: UInt16(port) ?? 0,
                                                secret: secret.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), network: network)
-                        guard value.isValid else { error = network == .lan ? "检查局域网 IP、端口和 32 位密钥" : "请使用 Mac 的 Tailscale IPv4 地址（100.64–100.127），并检查端口和密钥"; return }
+                        guard value.isValid else { error = network == .lan ? "检查局域网 IP、端口和 32 位密钥" : "请使用 Mac 的 Tailscale 地址（100.64/10 或 fd7a:115c:a1e0::/48），并检查端口和密钥"; return }
                         client.connect(value); dismiss()
                     }
                     .disabled(network == .tailscale && !tailnet.ready)
                     .accessibilityIdentifier("lan-connect")
                 }
                 Section {
-                    Text("首次扫码绑定后可以直接重连。Tailscale 登录不代替 Chordesk 配对：两种模式都验证同一台 Mac 的加密凭据。公网地址仅支持 Tailscale IPv4，不接受任意公网 IP 或域名。")
+                    Text("首次扫码绑定后可以直接重连。Tailscale 登录不代替 Chordesk 配对：两种模式都验证同一台 Mac 的加密凭据。公网接受 Tailscale IPv4／IPv6；局域网 IPv6 仅连接当前本地子网，不接受任意公网 IP 或域名。")
                         .font(.footnote).foregroundStyle(.secondary)
                     if client.rememberedPairingSaveFailed {
                         Text("连接成功，但 iPhone 钥匙串没有保存配对信息；请再次扫码后重试。")

@@ -173,6 +173,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var controlRevision = 0
     private var displaySwitchOperation: UUID?
     private var listener: NWListener?
+    private var additionalLANListeners: [NWListener] = []
+    @Published private var activeLANPairings: [LANPairing] = []
     private var link: LANLink?
     private var candidates: [UUID: LANLink] = [:]
     private var stream: SCStream?
@@ -185,7 +187,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     var automaticPairing: LANPairing? {
         guard var invitation = pairing ?? tailscalePairings.first else { return nil }
         invitation.invitationHostID = hostIdentity
-        invitation.invitationEndpoints = ([pairing].compactMap { $0 } + tailscalePairings).map {
+        invitation.invitationEndpoints = (activeLANPairings + tailscalePairings).map {
             LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork)
         }
         return invitation
@@ -390,8 +392,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
 
     func refreshAddresses() {
-        let found = RemoteInterfaceAddress.current().filter { $0.isUp && LANPairing.isLocalHost($0.address) && !$0.address.hasPrefix("127.") }.map { ($0.name, $0.address) }
-        addresses = found.sorted { ($0.0.hasPrefix("en") ? 0 : 1, $0.0) < ($1.0.hasPrefix("en") ? 0 : 1, $1.0) }
+        let found = RemoteInterfaceAddress.current().filter { $0.isUp && LANPairing.isLocalHost($0.address) && !$0.address.hasPrefix("127.") && $0.address != "::1" }.map { ($0.name, $0.address) }
+        addresses = found.sorted { ($0.0.hasPrefix("en") ? 0 : 1, $0.0, $0.1.contains(":") ? 1 : 0, $0.1) < ($1.0.hasPrefix("en") ? 0 : 1, $1.0, $1.1.contains(":") ? 1 : 0, $1.1) }
             .map(\.1).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
         if !addresses.contains(selectedAddress) { selectedAddress = addresses.first ?? "" }
         refreshTailscale()
@@ -761,7 +763,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             let newListener = try LANTransport.listener(secret: pairingSecret, localAddress: localBind)
             newListener.newConnectionHandler = { [weak self] connection in
                 Task { @MainActor in
-                    guard let self, self.generation == token else { connection.cancel(); return }
+                    guard let self, self.generation == token,
+                          let peer = LANAddress.host(of: connection.endpoint), LANAddress.permitsPeer(peer, boundAddress: localBind) else { connection.cancel(); return }
                     self.accept(connection, token: token)
                 }
             }
@@ -769,18 +772,55 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 Task { @MainActor in
                     guard let self, self.generation == token else { return }
                     if case .ready = state, let port = newListener?.port {
-                        if localBind != "127.0.0.1" { self.pairing = LANPairing(host: localBind, port: port.rawValue, secret: self.pairingSecret) }
+                        if localBind != "127.0.0.1" {
+                            let value = LANPairing(host: LANAddress.unscoped(localBind), port: port.rawValue, secret: self.pairingSecret)
+                            self.pairing = value; self.activeLANPairings.insert(value, at: 0)
+                        }
                         self.status = "等待已配对 Duo 或首次扫码 · TLS 加密 · 一次只连接一台手机"
                     } else if case .failed(let error) = state { self.stop(); self.status = error.localizedDescription }
                 }
             }
             listener = newListener
+            activeLANPairings.removeAll()
+            // Keep the legacy selected endpoint and add IPv6 on that interface.
+            // Bind exact addresses, never :: / 0.0.0.0; enforce on-link IPv6 peers.
+            let interfaces = RemoteInterfaceAddress.current()
+            let interfaceName = interfaces.first { $0.address == localBind }?.name
+            let additional = interfaces.filter { $0.isUp && $0.name == interfaceName && $0.address != localBind
+                && LANAddress.ipv6($0.address) != nil && LANPairing.isLocalHost($0.address) }.prefix(3)
+            for item in additional {
+                let server = try LANTransport.listener(secret: pairingSecret, localAddress: item.address, port: .any)
+                server.newConnectionHandler = { [weak self] connection in
+                    Task { @MainActor in
+                        guard let self, self.generation == token, let peer = LANAddress.host(of: connection.endpoint),
+                              LANAddress.permitsPeer(peer, boundAddress: item.address) else { connection.cancel(); return }
+                        self.accept(connection, token: token)
+                    }
+                }
+                server.stateUpdateHandler = { [weak self, weak server] state in
+                    Task { @MainActor in
+                        guard let self, self.generation == token else { return }
+                        let host = LANAddress.unscoped(item.address)
+                        if case .ready = state, let port = server?.port {
+                            let value = LANPairing(host: host, port: port.rawValue, secret: self.pairingSecret)
+                            if !self.activeLANPairings.contains(value) { self.activeLANPairings.append(value) }
+                            self.sendStatus()
+                        } else if case .failed = state {
+                            self.activeLANPairings.removeAll { $0.host == host }
+                            self.sendStatus()
+                        }
+                    }
+                }
+                additionalLANListeners.append(server)
+            }
             try await installCapture(filter, display: display, sessionToken: token)
             guard generation == token else { return }
             sharing = true
             refreshTailscale()
             Task { await self.refreshScaleOptions() }
-            newListener.start(queue: DispatchQueue(label: "dev.iphoneduo.listener"))
+            let listenerQueue = DispatchQueue(label: "dev.iphoneduo.listener")
+            newListener.start(queue: listenerQueue)
+            additionalLANListeners.forEach { $0.start(queue: listenerQueue) }
             let heartbeat = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.tick() }
             }
@@ -1192,7 +1232,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
             supportsMicrophone: ChordeskFeatures.remoteMicrophone, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
             supportsScrollDynamics: true, supportsPresenceProbe: true, supportsH264: true, videoCodec: activeVideoCodec, supportedVideoCodecs: LANVideoCodec.allCases.map(\.rawValue),
-            endpoints: ([pairing].compactMap { $0 } + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) }))
+            endpoints: (activeLANPairings + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) }))
     }
 
     func stop() {
@@ -1212,6 +1252,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         candidateNetworks.removeAll(); peerNetwork = .lan
         tailnetListener?.cancel(); tailnetListener = nil; tailnet.stopForwarding(); tailscalePairings.removeAll()
         listener?.cancel(); listener = nil
+        additionalLANListeners.forEach { $0.cancel() }; additionalLANListeners.removeAll(); activeLANPairings.removeAll()
         let old = stream; stream = nil; frames = nil
         if let old { Task { try? await old.stopCapture() } }
         if pickerRegistered {

@@ -30,12 +30,14 @@ struct ChordAboutView: View {
                     Text("前后协作，像按和弦一样控制。").font(.title3)
                     Text("为 Duo 设计。背面按住或切换，正面拇指完成触控、拖选和输入。两片交叠的玻璃曲面，表达正面与背面的协同操作。").foregroundStyle(.secondary)
                     Text("局域网免登录；公网可选内嵌 Tailscale。背面交互依赖相机辅助接口；相机帧不显示、不保存、不传输。").font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("隐私政策") { LegalDocumentView(resource: "PrivacyPolicy", title: "隐私政策") }
+                    Link("支持与反馈", destination: URL(string: "https://stland-admin.github.io/Chordesk-site/support.html")!)
                     NavigationLink("第三方组件许可") { ThirdPartyNoticesView() }
                     Divider()
                     STLANDWordmark().fill(.primary).aspectRatio(1380.0 / 860, contentMode: .fit)
                         .frame(maxHeight: 110).accessibilityLabel("STLAND 透明底黑白文字标志")
                     Text("STLAND 出品").font(.headline)
-                    Text("最终解释权归开发者本人所有。").font(.footnote).foregroundStyle(.secondary)
+                    Text("© 2026 STLAND / Yinji Shentu。源码许可与第三方条款见相关说明。你依法享有的权利不受影响。").font(.footnote).foregroundStyle(.secondary)
                     Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版") · \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding()
@@ -50,17 +52,23 @@ struct ChordAboutView: View {
 }
 
 private struct ThirdPartyNoticesView: View {
+    var body: some View { LegalDocumentView(resource: "ThirdPartyNotices", title: "第三方组件许可") }
+}
+
+struct LegalDocumentView: View {
+    var resource: String
+    var title: String
     @State private var notice = "正在读取许可…"
     var body: some View {
         ScrollView { Text(notice).font(.caption).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding() }
-            .navigationTitle("第三方组件许可")
+            .navigationTitle(title)
             .task {
 #if SWIFT_PACKAGE
                 let bundle = Bundle.module
 #else
                 let bundle = Bundle.main
 #endif
-                if let url = bundle.url(forResource: "ThirdPartyNotices", withExtension: "txt", subdirectory: "Legal") {
+                if let url = bundle.url(forResource: resource, withExtension: "txt", subdirectory: "Legal") {
                     notice = (try? String(contentsOf: url, encoding: .utf8)) ?? "无法读取许可文件。"
                 } else { notice = "许可文件缺失，请使用完整构建。" }
             }

@@ -18,19 +18,23 @@ final class LANTransportTests: XCTestCase {
 
     private func keep(_ link: LANLink) { lock.lock(); links.append(link); lock.unlock() }
 
-    private func listen(port: NWEndpoint.Port = .any, accepted: @escaping (LANLink) -> Void, ready: @escaping (NWEndpoint.Port) -> Void) throws {
+    private func listen(port: NWEndpoint.Port = .any, accepted: @escaping (LANLink) -> Void, ready: @escaping (NWEndpoint.Port) -> Void, failed: @escaping (NWError) -> Void = { _ in }) throws {
         let server = try LANTransport.listener(secret: secret, localAddress: "127.0.0.1", port: port)
         listener = server
         server.newConnectionHandler = { [weak self] connection in
             let link = LANLink(connection); self?.keep(link); accepted(link); link.start()
         }
-        server.stateUpdateHandler = { state in if case .ready = state, let port = server.port { ready(port) } }
+        server.stateUpdateHandler = { state in
+            if case .ready = state, let port = server.port { ready(port) }
+            if case .failed(let error) = state { failed(error) }
+        }
         server.start(queue: DispatchQueue(label: "duo-test-listener"))
     }
 
     func testProductionFixedPortStartsAndAuthenticates() throws {
         let echoed = expectation(description: "fixed-port TLS service accepts a paired phone")
         let fixed = NWEndpoint.Port(rawValue: LANPairing.defaultPort)!
+        var listenerError: NWError?
         try listen(port: fixed, accepted: { server in
             server.onPacket = { kind, data in server.send(kind, data: data) }
         }, ready: { port in
@@ -40,8 +44,13 @@ final class LANTransportTests: XCTestCase {
             client.onReady = { client.send(.ping) }
             client.onPacket = { kind, _ in if kind == .ping { echoed.fulfill() } }
             client.start()
-        })
+        }, failed: { error in listenerError = error; echoed.fulfill() })
         wait(for: [echoed], timeout: 10)
+        if let error = listenerError {
+            // Do not stop a user's running remote host just to claim its port.
+            if case .posix(.EADDRINUSE) = error { throw XCTSkip("Production port is already in use; rerun this integration test with the live host stopped.") }
+            XCTFail("Production listener failed: \(error)")
+        }
     }
 
     func testAuthenticatedRoundTripPreservesLargeAndEmptyPacketBoundaries() throws {

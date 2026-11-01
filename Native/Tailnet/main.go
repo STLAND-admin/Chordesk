@@ -139,7 +139,7 @@ func snapshot() *C.char {
 	}
 	addresses := []string{}
 	for _, ip := range status.TailscaleIPs {
-		if tailnetIPv4(ip.String()) {
+		if tailnetAddress(ip.String()) {
 			addresses = append(addresses, ip.String())
 		}
 	}
@@ -324,9 +324,15 @@ func serveBridge(ln net.Listener, once bool, dial func(context.Context) (net.Con
 	}()
 	return b
 }
-func tailnetIPv4(value string) bool {
+func tailnetAddress(value string) bool {
 	ip, err := netip.ParseAddr(value)
-	return err == nil && ip.Is4() && ip.String() == value && netip.MustParsePrefix("100.64.0.0/10").Contains(ip)
+	if err != nil || ip.Zone() != "" || ip.Is4In6() {
+		return false
+	}
+	if ip.Is4() {
+		return ip.String() == value && netip.MustParsePrefix("100.64.0.0/10").Contains(ip)
+	}
+	return netip.MustParsePrefix("fd7a:115c:a1e0::/48").Contains(ip)
 }
 
 //export CRForward
@@ -378,7 +384,7 @@ func CRDial(host *C.char, port C.int) *C.char {
 	}
 	address := C.GoString(host)
 	p := int(port)
-	if !tailnetIPv4(address) || p < 1 || p > 65535 {
+	if !tailnetAddress(address) || p < 1 || p > 65535 {
 		return failure(errors.New("invalid tailnet endpoint"))
 	}
 	if len(active.dials) >= 2 {

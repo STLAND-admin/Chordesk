@@ -20,14 +20,14 @@ func TestHealthDiagnosticsNeverExposeLoginURLTokens(t *testing.T) {
 	}
 }
 
-func TestTailnetEndpointIsStrictIPv4(t *testing.T) {
-	for _, v := range []string{"100.64.0.1", "100.127.255.254"} {
-		if !tailnetIPv4(v) {
+func TestTailnetEndpointIsRestrictedToOverlayRanges(t *testing.T) {
+	for _, v := range []string{"100.64.0.1", "100.127.255.254", "fd7a:115c:a1e0::1234", "FD7A:115C:A1E0::1234"} {
+		if !tailnetAddress(v) {
 			t.Fatal(v)
 		}
 	}
-	for _, v := range []string{"8.8.8.8", "192.168.1.1", "100.128.0.1", "100.063.1.1", "::ffff:100.64.1.1", "host.ts.net", "100.64.0.1:80"} {
-		if tailnetIPv4(v) {
+	for _, v := range []string{"8.8.8.8", "192.168.1.1", "100.128.0.1", "100.063.1.1", "::ffff:100.64.1.1", "host.ts.net", "100.64.0.1:80", "fd00::1", "fd7a:115c:a1e1::1", "2001:4860:4860::8888", "fd7a:115c:a1e0::1%en0", "[fd7a:115c:a1e0::1]"} {
+		if tailnetAddress(v) {
 			t.Fatal(v)
 		}
 	}

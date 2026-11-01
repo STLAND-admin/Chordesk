@@ -300,7 +300,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         shortPress(app.buttons["remote-options"]); shortPressMenuItem("连接 Mac", in: app)
         let picker = app.segmentedControls["connection-network-mode"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        shortPress(picker.buttons["Tailscale 公网"])
+        shortPress(picker.buttons["仅 Tailscale"])
         let trace = app.staticTexts["tailscale-fixture-actions"]
         var expected: [String] = []
         for (identifier, action) in [
@@ -318,6 +318,12 @@ final class TouchpadInteractionUITests: XCTestCase {
             expected.append(action)
             XCTAssertEqual(trace.label, expected.joined(separator: ","), identifier)
         }
+        let policy = app.buttons["tailscale-own-privacy"]
+        reveal(policy, in: app.collectionViews.firstMatch)
+        shortPress(policy)
+        XCTAssertTrue(app.navigationBars["隐私政策"].waitForExistence(timeout: 5))
+        shortPress(app.navigationBars["隐私政策"].buttons["完成"])
+        XCTAssertEqual(trace.label, expected.joined(separator: ","), "Reading privacy must not log in, disconnect, log out or open a website.")
         let plan = app.links["tailscale-plan-link"]
         XCTAssertTrue(plan.exists)
         plan.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.05)

@@ -13,7 +13,7 @@ if [[ $# -gt 0 || "$(uname -m)" != arm64 ]]; then
     printf '%s\n' 'This peer-test package is currently prepared only on Apple Silicon, with no arguments.' >&2
     exit 1
 fi
-test_output="${CHORDESK_TEST_OUTPUT:-$PWD/release-artifacts/mac-test-0.24.0-build37-arm64}"
+test_output="${CHORDESK_TEST_OUTPUT:-$PWD/release-artifacts/mac-test-0.25.0-build38-arm64}"
 if [[ "$test_output" != /* || -e "$test_output" ]]; then
     printf '%s\n' 'Choose a new absolute CHORDESK_TEST_OUTPUT directory; existing artifacts are not overwritten.' >&2
     exit 1
@@ -42,6 +42,9 @@ mkdir -p "$test_output"
 mv "$test_stage/$test_name" "$test_output/"
 cp docs/MAC-PEER-TEST.txt "$test_output/INSTALL-zh-CN.txt"
 test_commit=$(git rev-parse HEAD)
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+    test_commit="$test_commit + local tracked changes (not a clean commit build)"
+fi
 {
     printf '%s\n' "Chordesk Mac $test_version / build $test_build" 'Architecture: arm64' \
       'Minimum OS: macOS 15.2 (older supported versions not hardware-tested)' \
