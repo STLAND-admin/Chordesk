@@ -19,6 +19,39 @@ struct CaptureRecovery {
 
 #if os(macOS)
 import IOKit.pwr_mgt
+import IOKit.ps
+
+/// Unlike the idle-only lease, this public assertion can keep CPU/network work
+/// available in Dark Wake on AC. It does not promise a framebuffer or lid wake.
+final class HostNetworkLease {
+    private var assertion: IOPMAssertionID?
+    private var lastAttempt = -Double.infinity
+    private let begin: () -> IOPMAssertionID?
+    private let end: (IOPMAssertionID) -> Void
+    var active: Bool { assertion != nil }
+    init(begin: @escaping () -> IOPMAssertionID? = {
+        var id: IOPMAssertionID = 0
+        return IOPMAssertionCreateWithName(kIOPMAssertNetworkClientActive as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn), "Chordesk authenticated remote viewer" as CFString, &id) == kIOReturnSuccess ? id : nil
+    }, end: @escaping (IOPMAssertionID) -> Void = { _ = IOPMAssertionRelease($0) }) {
+        self.begin = begin; self.end = end
+    }
+    static var onACPower: Bool {
+        guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let source = IOPSGetProvidingPowerSourceType(snapshot)?.takeUnretainedValue() else { return false }
+        return source as String == kIOPSACPowerValue
+    }
+    func update(viewerActive: Bool, enabled: Bool, onACPower: Bool, now: TimeInterval) {
+        guard viewerActive, enabled, onACPower else {
+            if let id = assertion { assertion = nil; end(id) }
+            lastAttempt = -Double.infinity
+            return
+        }
+        guard assertion == nil, now.isFinite, now - lastAttempt >= 15 else { return }
+        lastAttempt = now; assertion = begin()
+    }
+    deinit { if let id = assertion { end(id) } }
+}
 
 /// Only a running shared host keeps the system awake. Displays may still sleep.
 final class HostAwakeLease {

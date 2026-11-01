@@ -2,6 +2,34 @@ import XCTest
 @testable import DuoWorkbench
 
 final class HostAvailabilityTests: XCTestCase {
+    func testNetworkLeaseRequiresAuthenticatedViewerACAndOptIn() {
+        var starts = 0, ends = 0
+        let lease = HostNetworkLease(begin: { starts += 1; return 42 }, end: { _ in ends += 1 })
+        lease.update(viewerActive: false, enabled: true, onACPower: true, now: 0)
+        lease.update(viewerActive: true, enabled: false, onACPower: true, now: 0)
+        lease.update(viewerActive: true, enabled: true, onACPower: false, now: 0)
+        XCTAssertEqual(starts, 0)
+        lease.update(viewerActive: true, enabled: true, onACPower: true, now: 1)
+        lease.update(viewerActive: true, enabled: true, onACPower: true, now: 2)
+        XCTAssertEqual(starts, 1); XCTAssertTrue(lease.active)
+        lease.update(viewerActive: true, enabled: true, onACPower: false, now: 3)
+        XCTAssertEqual(ends, 1); XCTAssertFalse(lease.active)
+        lease.update(viewerActive: true, enabled: true, onACPower: true, now: 4)
+        lease.update(viewerActive: false, enabled: true, onACPower: true, now: 5)
+        lease.update(viewerActive: false, enabled: true, onACPower: true, now: 6)
+        XCTAssertEqual(starts, 2); XCTAssertEqual(ends, 2)
+    }
+    func testFailedNetworkLeaseIsRateLimitedAndTeardownReleasesIt() {
+        var starts = 0, ends = 0
+        var lease: HostNetworkLease? = HostNetworkLease(begin: { starts += 1; return starts == 1 ? nil : 7 }, end: { _ in ends += 1 })
+        lease?.update(viewerActive: true, enabled: true, onACPower: true, now: 0)
+        lease?.update(viewerActive: true, enabled: true, onACPower: true, now: 1)
+        XCTAssertEqual(starts, 1)
+        lease?.update(viewerActive: true, enabled: true, onACPower: true, now: 15)
+        XCTAssertEqual(starts, 2); XCTAssertTrue(lease?.active == true)
+        lease = nil
+        XCTAssertEqual(ends, 1)
+    }
     func testAbsentDisplayWaitsAndReturningSourceTriggersOneRecovery() {
         var presence = HostDisplayPresence()
         XCTAssertEqual(presence.update(online: true), .none)

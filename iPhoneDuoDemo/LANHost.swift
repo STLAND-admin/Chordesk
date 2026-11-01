@@ -95,7 +95,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var candidateNetworks: [UUID: RemoteNetwork] = [:]
     private var peerNetwork: RemoteNetwork = .lan
     private var lastTailscaleRefresh = Date.distantPast
-    @Published private(set) var connected = false
+    @Published private(set) var connected = false { didSet { updateAwakeLease() } }
     @Published private(set) var sharing = false { didSet { updateAwakeLease() } }
     @Published private(set) var controlAllowed = false
     @Published private(set) var inputCount = 0
@@ -216,6 +216,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var pendingAutomaticPeer: (LANLink, UUID, Int)?
     private let displayWake = AuthenticatedDisplayWake()
     private var runtimeActivity: NSObjectProtocol?
+    private let networkLease = HostNetworkLease()
     private var captureInterrupted = false
     private var displayPresence = HostDisplayPresence()
     private var captureRepair: Task<Void, Never>?
@@ -228,6 +229,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
     private func updateAwakeLease() {
         awakeLease.update(sharing: sharing, enabled: keepAwakeWhileSharing)
+        networkLease.update(viewerActive: sharing && connected, enabled: keepAwakeWhileSharing,
+            onACPower: HostNetworkLease.onACPower, now: ProcessInfo.processInfo.systemUptime)
         // Keep network/capture work schedulable when the window is closed, without holding the display on.
         if sharing && runtimeActivity == nil {
             runtimeActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep], reason: "Chordesk remote service")
@@ -1035,6 +1038,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
 
     private func tick() {
+        // Also releases the transient network lease when power is unplugged.
+        updateAwakeLease()
         if allowsTailscale && Date().timeIntervalSince(lastTailscaleRefresh) >= 5 { refreshTailscale() }
         if microphoneActive {
             if Date().timeIntervalSince(lastMicrophonePacket) > 2 { stopMicrophone("麦克风数据中断，请在 Duo 重新开启") }
