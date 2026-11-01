@@ -84,7 +84,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     @Published private(set) var tailscalePairings: [LANPairing] = []
     @Published private(set) var tailscaleAddresses: [String] = []
     @Published private(set) var tailscaleMessage = "在 Mac 和 iPhone 的 Tailscale 中登录同一私人网络，然后开启公网连接。"
-    @Published var allowsTailscale = UserDefaults.standard.bool(forKey: "ChordeskAllowsTailscaleV1") {
+    @Published var allowsTailscale = UserDefaults.standard.object(forKey: "ChordeskAllowsTailscaleV1") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(allowsTailscale, forKey: "ChordeskAllowsTailscaleV1")
             refreshTailscale()
@@ -181,6 +181,17 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var pickerRegistered = false
     private var displayID: CGDirectDisplayID?
     private var lastPing = Date()
+    var automaticPairing: LANPairing? {
+        guard var invitation = pairing ?? tailscalePairings.first else { return nil }
+        invitation.invitationHostID = hostIdentity
+        invitation.invitationEndpoints = ([pairing].compactMap { $0 } + tailscalePairings).map {
+            LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork)
+        }
+        return invitation
+    }
+    private var peerSupportsH264 = false
+    private var requestedVideoCodec = "jpeg"
+    private var activeVideoCodec = "jpeg"
     private var latestFrame: Data?
     @Published private(set) var videoQuality = LANVideoQuality(rawValue: UserDefaults.standard.string(forKey: "DuoVideoQuality") ?? "") ?? .efficient
     @Published private(set) var videoMbps = 0.0
@@ -621,7 +632,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         do {
             try await updateCaptureSize(stream, displayID: id)
             guard generation == token else { return }
-            frames?.setQuality(quality.jpegQuality)
+            frames?.setQuality(quality)
             UserDefaults.standard.set(quality.rawValue, forKey: "DuoVideoQuality")
             controlAllowed = resume && controlToken == controlRevision && connected
             status = "画质：" + quality.title
@@ -640,6 +651,9 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         if adjustingScale { await withCheckedContinuation { scaleIdleWaiters.append($0) } }
         guard generation == token, link === peer, connected, sharing, autoConfigurePairing,
               controlRevision == controlToken, !restoreFailed, !switchingDisplay else { return }
+        // hello may have arrived while the previous session was still restoring
+        // its display mode. Retry once that restore has finished, not every tick.
+        if captureInterrupted { retryInterruptedCapture() }
         refreshInputPermissions()
         guard accessibilityAllowed && eventPostingAllowed else {
             status = "已配对；系统控制权限未允许，请在 Mac 授权后开启控制"; sendStatus(); return
@@ -675,7 +689,18 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             self.restoreFailed = !errors.isEmpty
             if let stream = self.stream, let id = self.displayID {
                 do { try await self.updateCaptureSize(stream, displayID: id) }
-                catch { self.stop(); self.status = "显示恢复后需要重新共享：\(error.localizedDescription)" }
+                catch {
+                    let value = error as NSError
+                    let online = CGDisplayIsOnline(id) != 0
+                    let canRetry = CaptureRestartDecision.permits(isCaptureError: value.domain == SCStreamErrorDomain,
+                        code: value.code, screenPermission: CGPreflightScreenCaptureAccess(), displayOnline: online)
+                        || CaptureRestartDecision.waitsForDisplay(isCaptureError: value.domain == SCStreamErrorDomain,
+                            code: value.code, screenPermission: CGPreflightScreenCaptureAccess(), displayOnline: online)
+                    if canRetry {
+                        self.capturePaused(); self.captureInterrupted = true
+                        self.status = "分辨率恢复后捕获暂不可用；监听保留，重连后请求新画面"
+                    } else { self.stop(); self.status = "显示恢复后需要重新共享：\(error.localizedDescription)" }
+                }
             }
             self.restoringScale = false
             let message = errors.isEmpty ? "连接前分辨率已恢复" : "自动恢复未完成：" + errors.joined(separator: "；")
@@ -775,7 +800,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         captureRevision = UUID().uuidString
         sendStatus()
         let config = captureConfiguration(displayID: display.displayID)
-        let sink = LANFrameSource(quality: videoQuality.jpegQuality, frame: { [weak self] data in
+        let sink = LANFrameSource(quality: videoQuality, frame: { [weak self] data, codec, keyframe in
             Task { @MainActor in
                 guard let self, self.generation == sessionToken, self.captureGeneration == token, !self.scaleBusy else { return }
                 // A queued frame from before sleep/disconnection must not restore
@@ -783,8 +808,11 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 guard !self.systemSleeping,
                       self.displayID.map({ CGDisplayIsOnline($0) != 0 }) == true else { return }
                 self.captureResumed()
-                self.latestFrame = data; self.frameCount += 1
-                self.link?.send(.frame, data: data, droppable: true)
+                self.latestFrame = codec == "jpeg" ? data : nil; self.frameCount += 1
+                if self.activeVideoCodec != codec { self.activeVideoCodec = codec; self.sendStatus() }
+                if codec == "h264", self.peerSupportsH264 {
+                    self.link?.send(.videoFrame, data: data, droppable: true, keyframe: keyframe)
+                } else if codec == "jpeg" { self.link?.send(.frame, data: data, droppable: true) }
             }
         }, pause: { [weak self] in
             Task { @MainActor in
@@ -816,6 +844,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 self.retryInterruptedCapture()
             }
         })
+        sink.setCodec(requestedVideoCodec)
         let capture = SCStream(filter: filter, configuration: config, delegate: sink)
         try capture.addStreamOutput(sink, type: .screen, sampleHandlerQueue: sink.queue)
         frames = sink; stream = capture
@@ -831,6 +860,12 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         let candidate = LANLink(connection)
         candidates[id] = candidate
         candidateNetworks[id] = network
+        candidate.onVideoDropped = { [weak self, weak candidate] in
+            Task { @MainActor in
+                guard let self, let candidate, self.generation == token, self.link === candidate else { return }
+                self.frames?.requestKeyframe()
+            }
+        }
         candidate.onFrameSent = { [weak self, weak candidate] bytes in
             Task { @MainActor in
                 guard let self, let candidate, self.generation == token, self.link === candidate else { return }
@@ -870,15 +905,25 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     if let hello = try? JSONDecoder().decode(LANHello.self, from: data) {
                         self.clientName = String(hello.name.prefix(80)); self.peerSupportsDisplays = hello.displaySelection
                         self.peerSupportsMicrophone = hello.microphone == true
+                        self.peerSupportsH264 = hello.videoCodecs?.contains("h264") == true
+                        self.requestedVideoCodec = self.peerSupportsH264 && hello.preferredVideoCodec != "jpeg" ? "h264" : "jpeg"
                     } else {
                         self.clientName = (String(data: data, encoding: .utf8) ?? "iPhone").prefix(80).description
-                        self.peerSupportsDisplays = false; self.peerSupportsMicrophone = false
+                        self.peerSupportsDisplays = false; self.peerSupportsMicrophone = false; self.peerSupportsH264 = false; self.requestedVideoCodec = "jpeg"
                     }
+                    self.frames?.setCodec(self.requestedVideoCodec)
+                    self.frames?.requestKeyframe()
                     self.sendStatus(); self.sendCatalog()
                     if self.configuredPeer != id {
                         self.configuredPeer = id
                         _ = self.displayWake.request(authenticated: true, enabled: self.wakeDisplayOnConnect)
                         self.displaySleeping = false
+                        // A static lock screen may only emit idle frames after
+                        // disconnect/restore cleared the cached image. A fresh,
+                        // authenticated session requests a new original stream.
+                        if self.captureRecovery.paused || self.latestFrame == nil {
+                            self.capturePaused(); self.captureInterrupted = true
+                        }
                         self.retryInterruptedCapture()
                         if self.autoConfigurePairing && self.peerSupportsDisplays {
                             let revision = self.controlRevision
@@ -886,6 +931,12 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                         }
                     }
                     self.sendMicrophoneState()
+                case .videoRequest:
+                    guard data.count < 256, self.peerSupportsH264,
+                          let request = try? JSONDecoder().decode(LANVideoRequest.self, from: data),
+                          ["jpeg", "h264"].contains(request.codec) else { return }
+                    self.requestedVideoCodec = request.codec; self.frames?.setCodec(request.codec)
+                    if request.keyframe { self.frames?.requestKeyframe() }
                 case .microphoneRequest:
                     guard data.count < 512, let request = try? JSONDecoder().decode(LANMicrophoneRequest.self, from: data) else { return }
                     self.requestMicrophone(request)
@@ -925,7 +976,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 case .release:
                     self.inputQueueEpoch += 1; self.pendingInputs.removeAll()
                     self.input.release(); self.sendStatus()
-                case .ping: candidate.send(.ping)
+                case .ping: if data.count <= 64 { candidate.send(.ping, data: data) }
                 default: break
                 }
             }
@@ -938,6 +989,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 if let candidate, self.link === candidate {
                     self.inputQueueEpoch += 1; self.pendingInputs.removeAll(); self.textFocus = nil; self.focusRequest = 0; self.latestFocusClick = 0
                     self.stopMicrophone("手机已断开，麦克风已停止"); self.peerSupportsMicrophone = false
+                    self.peerSupportsH264 = false; self.requestedVideoCodec = "jpeg"; self.frames?.setCodec("jpeg")
                     self.input.release(); self.link = nil
                     self.peerNetwork = .lan
                     self.controlRevision += 1
@@ -1130,12 +1182,14 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             videoQuality: videoQuality.rawValue, supportsWindowOverview: true, supportsDesktopSwitch: true,
             supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
             supportsMicrophone: true, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
-            supportsScrollDynamics: true, supportsPresenceProbe: true))
+            supportsScrollDynamics: true, supportsPresenceProbe: true, supportsH264: true, videoCodec: activeVideoCodec,
+            endpoints: ([pairing].compactMap { $0 } + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) }))
     }
 
     func stop() {
         captureRepair?.cancel(); captureRepair = nil; captureInterrupted = false; pendingAutomaticPeer = nil
         displayPresence = HostDisplayPresence()
+        peerSupportsH264 = false; requestedVideoCodec = "jpeg"; activeVideoCodec = "jpeg"
         stopMicrophone("共享已停止，麦克风已停止"); peerSupportsMicrophone = false
         inputQueueEpoch += 1; pendingInputs.removeAll(); textFocus = nil; focusRequest = 0; latestFocusClick = 0
         generation = UUID(); captureGeneration = UUID()
@@ -1166,12 +1220,21 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
     let queue = DispatchQueue(label: "dev.iphoneduo.jpeg", qos: .userInitiated)
     private let context = CIContext(options: [.cacheIntermediates: false])
-    private var quality: Double
-    func setQuality(_ value: Double) { queue.async { self.quality = value } }
-    private let frame: (Data) -> Void
+    private var quality: LANVideoQuality
+    private var codec = "jpeg"
+    private var encoder = H264Encoder()
+    func setQuality(_ value: LANVideoQuality) { queue.async { self.quality = value } }
+    func setCodec(_ value: String) {
+        queue.async {
+            guard self.codec != value else { return }
+            self.codec = value; self.encoder = H264Encoder()
+        }
+    }
+    func requestKeyframe() { queue.async { self.encoder.forceKeyframe = true } }
+    private let frame: (Data, String, Bool) -> Void
     private let pause: () -> Void
     private let stopped: (Error) -> Void
-    init(quality: Double, frame: @escaping (Data) -> Void, pause: @escaping () -> Void, stopped: @escaping (Error) -> Void) {
+    init(quality: LANVideoQuality, frame: @escaping (Data, String, Bool) -> Void, pause: @escaping () -> Void, stopped: @escaping (Error) -> Void) {
         self.quality = quality; self.frame = frame; self.pause = pause; self.stopped = stopped
     }
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -1181,9 +1244,16 @@ private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
         if [.blank, .suspended, .stopped].contains(status) { pause(); return }
         guard status == .complete, let pixels = buffer.imageBuffer else { return }
         autoreleasepool {
+            if codec == "h264" {
+                if let packet = encoder.encode(pixels, time: buffer.presentationTimeStamp, quality: quality), let data = packet.data {
+                    frame(data, "h264", packet.header.keyframe); return
+                }
+                if !encoder.failed { return }
+                codec = "jpeg" // Hardware unavailable/error: retain the existing stream and report actual JPEG.
+            }
             let source = CIImage(cvPixelBuffer: pixels)
             if let image = context.createCGImage(source, from: source.extent),
-               let jpeg = NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: quality]), jpeg.count <= LANLink.maximumPacketSize { frame(jpeg) }
+               let jpeg = NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: quality.jpegQuality]), jpeg.count <= LANLink.maximumPacketSize { frame(jpeg, "jpeg", true) }
         }
     }
     func stream(_ stream: SCStream, didStopWithError error: Error) { stopped(error) }

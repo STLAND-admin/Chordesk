@@ -22,6 +22,12 @@ struct ContentView: View {
     @State private var showingAbout = false
     @AppStorage("phoneKeyboardStyle") private var keyboardStyle = PhoneKeyboardStyle.system.rawValue
     @AppStorage("keyboardInvocationV1") private var keyboardInvocation = KeyboardInvocation.automatic.rawValue
+    @AppStorage("showStreamMetadataV1") private var showStreamMetadata = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var keyboardResizeDuration = 0.25
+    @State private var keyboardResizeCurve = 0
+    @State private var viewportAnimating = false
+    @State private var viewportAnimationID = UUID()
     @AppStorage("fitDesktopAboveKeyboardV1") private var fitDesktopAboveKeyboard = true
     @AppStorage("rearControlAutoStartV1") private var rearAutoStart = true
     @AppStorage("rearWindowGesturesV1") private var rearWindowGestures = true
@@ -32,6 +38,7 @@ struct ContentView: View {
     @State private var edgeBarBottom: CGFloat = 0
     @State private var edgeBarWidth: CGFloat = 0
     @State private var edgeAnchorX: CGFloat?
+    @State private var workspaceFrame = CGRect.zero
     @State private var workspaceHeight: CGFloat = 0
     @State private var nativeKeyboardTop: CGFloat?
     @State private var customKeyboardFrame = CGRect.zero
@@ -129,6 +136,11 @@ struct ContentView: View {
         // Attach outside NavigationStack's inset content proposal. Ignoring the
         // safe area on the old child alone did not recover the window's width.
         .overlay { controlRail }
+        .overlay(alignment: .topLeading) {
+            if showStreamMetadata && client.connected && !modalVisible {
+                streamMetadata.padding(.horizontal, 8).padding(.top, 4).allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .topLeading) {
             // A dedicated top strip prevents any contact light covering the
             // desktop. Its position never inherits Dock or keyboard offsets.
@@ -284,6 +296,8 @@ struct ContentView: View {
     }
     private var controlRail: some View {
         GeometryReader { geometry in
+            let keyboardBottomInset = nativeKeyboardVisible && nativeKeyboardTop != nil
+                ? max(0, geometry.frame(in: .global).maxY - (workspaceFrame.minY + (nativeKeyboardTop ?? 0))) : edgeBarBottom
             if !modalVisible {
                 VStack(alignment: .trailing) {
                     ScrollView(.vertical) {
@@ -306,12 +320,13 @@ struct ContentView: View {
                         .padding(.top, geometry.size.height * ControlRailPosition.fraction(controlRailTop, maximum: 0.25))
                     Spacer(minLength: 0)
                     if !customKeyboardShown { keyboardDock
-                        .padding(.bottom, geometry.size.height * ControlRailPosition.fraction(controlRailBottom, maximum: 0.30))
+                        .padding(.bottom, nativeKeyboardVisible ? 0 : geometry.size.height * ControlRailPosition.fraction(controlRailBottom, maximum: 0.30))
                     }
                 }
-                .padding(.vertical)
+                .padding(.top, 8).padding(.bottom, nativeKeyboardVisible ? 4 : 8)
                 .padding(.top, statusAreaBottom)
-                .padding(.bottom, edgeBarBottom)
+                .padding(.bottom, keyboardBottomInset)
+                .animation(keyboardResizeAnimation, value: keyboardBottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 .padding(.trailing, ControlRailPosition.trailingInset(containerWidth: geometry.size.width,
                     anchorX: edgeAnchorX, buttonWidth: edgeBarWidth))
@@ -320,7 +335,7 @@ struct ContentView: View {
         .background { SystemStatusBoundaryReader(extent: edgeBarWidth) { top, bottom, anchor in
             statusAreaBottom = top; edgeBarBottom = bottom; edgeAnchorX = anchor
         }.allowsHitTesting(false) }
-        .ignoresSafeArea(.container)
+        .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
     }
 
     private var rearStatusBadge: some View {
@@ -479,6 +494,11 @@ struct ContentView: View {
 
     private var videoSettings: some View {
         Section("远程画质") {
+            Toggle("显示左上角连接信息", isOn: $showStreamMetadata).accessibilityIdentifier("show-stream-metadata")
+            Toggle("优先使用 H.264 硬件编码", isOn: $client.prefersH264)
+            Text(client.streamMetadata).font(.caption.monospaced())
+            Text("延迟为应用层往返 RTT，包含处理和排队时间，不是触控到显示的端到端延迟；fps 为接收画面帧率。")
+                .font(.caption).foregroundStyle(.secondary)
             if let quality = client.videoQuality {
                 Picker("画质", selection: Binding(get: { quality }, set: { client.setVideoQuality($0) })) {
                     ForEach(client.availableVideoQualities) { Text($0.title).tag($0) }
@@ -489,7 +509,7 @@ struct ContentView: View {
             if let rate = client.sourceRefreshRate {
                 Text("Mac 显示模式标称刷新率 \(rate, specifier: "%.0f") Hz").font(.caption)
             }
-            Text("清晰为默认。60 fps 降低传输分辨率；120／144 fps 为实验上限，实际受源屏刷新率、编码、网络和手机显示能力限制，静止画面会减少帧数。这里统计收到的视频帧，不等于屏幕实际刷新率。低分辨率不改变文字大小；文字过小请使用显示器菜单。")
+            Text("省流 15 fps 为默认。60 fps 降低传输分辨率；120／144 fps 为实验上限，实际受源屏刷新率、编码、网络和手机显示能力限制，静止画面会减少帧数。这里统计收到的视频帧，不等于屏幕实际刷新率。低分辨率不改变文字大小；文字过小请使用显示器菜单。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -529,20 +549,40 @@ struct ContentView: View {
                     Text("长按系统键盘空格后滑动可调整 Mac 文字光标。第三方键盘需支持系统浮动光标回调；无效果时用快捷菜单方向键。可选“手机布局 · 可调”提供 ABC／123／#+=，但不提供中文候选。")
                 }
                 Section("显示、画质与界面") {
-                    Text("键盘出现时，远程桌面默认保持原宽高比，完整放入键盘上方，底边贴住键盘；收起后恢复。可在设置关闭“键盘弹出时适配远程画面”。")
+                    Text("键盘出现时，远程桌面默认保持原宽高比，随键盘动画完整放入键盘上方；右下键盘按钮紧贴键盘上沿。收起后恢复，可在设置关闭“键盘弹出时适配远程画面”。动画完成后可继续直接触控或使用触控板。")
                     Text("单指直接触屏与双指触控板共用滚动惯性：快速滑动后抬手继续减速，慢滑或停住再抬手不会明显续滚。设置 → 统一滚动惯性可调 0–2，0 关闭、默认 1。重新落指、切换模式、打开菜单或断连会停止惯性；需两端均更新到支持版本。")
                     Text("目标太小：显示器按钮 → 适合触屏／更大文字／最大文字。文字模糊：设置选择清晰或超清。逻辑分辨率改变会同时影响实体 Mac，断连后尝试恢复连接前的显示模式与排列。")
-                    Text("画质可选清晰、超清及高帧率。120／144 fps 是实验请求上限，实际取决于源屏、编码、网络和手机。右侧按钮位置、点击触感、放大镜和触控板灵敏度都可在设置调整。")
+                    Text("默认省流 15 fps，优先 H.264 硬件编解码，不支持或失败时回退 JPEG，可在设置关闭 H.264。左上角统计可关闭：显示实际视频像素、接收 fps、视频载荷 Mbps 和应用往返 RTT；RTT 不等于触控到画面的完整延迟。120／144 fps 仍是实验上限。")
                 }
                 Section("麦克风、结束与排查") {
                     Text("Duo → Mac 麦克风默认关闭。需要 Mac 配置双向虚拟音频设备并允许接收，再从手机菜单开启；不保存录音。当前没有内置虚拟音频驱动。")
                     Text("退出前从菜单断开。断连、后台或控制撤销会释放按键／拖选并停止相机和麦克风。Mac 关闭窗口仍在菜单栏运行；停止服务或退出主机会断开。息屏不等于睡眠，真正睡眠／合盖不保证能连接。")
                     Text("背面没有反应：检查暂停标志、有效区域和 App 是否全屏，抬起手指再试。菜单可用而手势不行：确认直接触控、背面一指和窗口手势设置。两者都不行：检查 Mac 控制／System Events 权限，查看“诊断信息”。")
-                    Text("跨网络可在两端 Chordesk 选择“Tailscale 公网”，登录同一个个人账号；Mac 开启“允许通过我的 Tailscale 连接”后扫描公网二维码。无需另装 Tailscale；默认关闭。两种模式各绑定一次，均保留 Chordesk 加密配对。公网连通与速度受网络限制，Mac 需要运行且联网。普通 iPhone 可用右侧按钮和菜单操作；兼容性仍在测试。")
+                    Text("连接默认自动：对已保存的局域网与 Tailscale 地址做认证检查，先可达的路径连接，不按电脑名称合并。Mac 两个入口同时服务，无需跟随手机切模式。公网首次仍需两端在 Chordesk 登录同一私人网络并允许 Mac 公网入口；不另装 Tailscale。旧记录先连接新版一次即可同步可用地址。手机退后台仍断开；Mac 真正睡眠时不保证可达。")
                 }
             }.navigationTitle("Duo 操作手册")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingGuide = false } } }
         }
+    }
+
+    private var keyboardResizeAnimation: Animation? {
+        guard !reduceMotion, keyboardResizeDuration > 0 else { return nil }
+        switch keyboardResizeCurve {
+        case 1: return .easeIn(duration: keyboardResizeDuration)
+        case 2: return .easeOut(duration: keyboardResizeDuration)
+        case 3: return .linear(duration: keyboardResizeDuration)
+        default: return .easeInOut(duration: keyboardResizeDuration)
+        }
+    }
+    private var streamMetadata: some View {
+        Text(client.streamMetadata)
+            .font(.system(.caption2, design: .monospaced)).foregroundStyle(.primary)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .accessibilityIdentifier("stream-metadata")
+#if DEBUG && targetEnvironment(simulator)
+            .accessibilityValue(ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" ? "events=\(client.sentEvents)" : "")
+#endif
     }
 
     private var workspace: some View {
@@ -558,18 +598,29 @@ struct ContentView: View {
                         if localDemo { MonitorView(session: session) }
                         else { LANMonitor(client: client) { releaseInteractions(); camera.stop(); showingConnect = true } }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    workspaceInput
+                    workspaceInput.allowsHitTesting(!viewportAnimating)
                 }
                 .frame(width: desktop.width, height: desktop.height)
                 .clipped()
                 .position(x: desktop.midX, y: desktop.midY)
+                .animation(keyboardResizeAnimation, value: desktop)
             }
-            .background(KeyboardOcclusionReader { nativeKeyboardTop = $0 }.allowsHitTesting(false))
+            .background(KeyboardOcclusionReader { top, duration, curve in
+                keyboardResizeDuration = duration; keyboardResizeCurve = curve
+                nativeKeyboardTop = top
+            }.allowsHitTesting(false))
             .onChange(of: desktop) { _, _ in
                 // Old contacts must not continue using coordinates from before
                 // the keyboard resize. Keep the rear chord and IME state intact.
                 inputEpoch += 1; client.release()
+                let token = UUID(); viewportAnimationID = token
+                viewportAnimating = !reduceMotion && keyboardResizeDuration > 0
+                Task {
+                    try? await Task.sleep(for: .seconds(keyboardResizeDuration))
+                    if viewportAnimationID == token { viewportAnimating = false }
+                }
             }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { workspaceFrame = $0 }
             .onAppear { workspaceHeight = geometry.size.height }
             .onChange(of: geometry.size) { _, _ in
                 workspaceHeight = geometry.size.height
@@ -583,10 +634,10 @@ struct ContentView: View {
 
     @ViewBuilder private var workspaceInput: some View {
         let epoch = inputEpoch
-        if (grip.state.overlayVisible || useNativeKeyboard) && directTouchSelected && !localDemo {
+        if directTouchSelected && !localDemo {
             if client.supportsDirectTouch, let image = client.image {
                 DirectTouchSurface(image: image,
-                    enabled: client.acceptsInput && !modalVisible && !menuPresented && (useNativeKeyboard || grip.state.requestedMode == .touchpad),
+                    enabled: client.acceptsInput && !modalVisible && !menuPresented && !viewportAnimating,
                     rearHeld: false, magnifierEnabled: magnifierEnabled,
                     windowGesturesEnabled: rearWindowGestures,
                     readRearContacts: { camera.running && camera.enabled ? grip.state.outerCount : 0 },
@@ -604,7 +655,7 @@ struct ContentView: View {
                 Text("直接触屏需要 Mac 主机 0.7 或更新版本")
                     .padding().background(.bar).allowsHitTesting(false)
             }
-        } else if grip.state.overlayVisible || useNativeKeyboard {
+        } else {
             TouchpadSurface(behavior: .standard, inputEpoch: epoch,
                 inputIsCurrent: { frontInputIsCurrent(.trackpad, epoch: epoch) }, onContactCount: { count in
                 guard frontInputIsCurrent(.trackpad, epoch: epoch) else { return }

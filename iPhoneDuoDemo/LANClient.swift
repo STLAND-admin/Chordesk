@@ -6,6 +6,104 @@ import ImageIO
 
 @MainActor
 final class LANClient: ObservableObject {
+    @Published var connectionPreference = ConnectionPreference(rawValue: UserDefaults.standard.string(forKey: "connectionPreferenceV1") ?? "") ?? .automatic {
+        didSet { UserDefaults.standard.set(connectionPreference.rawValue, forKey: "connectionPreferenceV1") }
+    }
+    private var routeGeneration = UUID()
+    private var routeProbes: [RemoteNetwork: LANPresenceProbe] = [:]
+    private var routeRace = AutomaticRouteRace([])
+    private var autoTargetID: UUID?
+    private var autoRetryCount = 0
+    private var autoRetryTask: Task<Void, Never>?
+    private var connectedAt = Date()
+
+    private func cancelRouteAttempts() {
+        routeGeneration = UUID(); autoRetryTask?.cancel(); autoRetryTask = nil
+        let probes = Array(routeProbes.values); routeProbes.removeAll(); probes.forEach { $0.cancel() }
+        autoTargetID = nil; autoRetryCount = 0
+    }
+    func connectInvitation(_ invitation: LANPairing) {
+        let primary = LANPairing(host: invitation.host, port: invitation.port, secret: invitation.secret, network: invitation.connectionNetwork)
+        guard let identity = invitation.invitationHostID, UUID(uuidString: identity) != nil,
+              let endpoints = invitation.invitationEndpoints, endpoints.count <= 8 else { connect(primary); return }
+        let routes = endpoints.compactMap { $0.pairing(secret: primary.secret) }
+        // QR gives out-of-band identity/PSK; only LANStatus after TLS saves a host.
+        let saved = RememberedMac(pairing: primary, hostName: "Mac", hostID: identity,
+            alternativePairings: routes.filter { $0.connectionNetwork != primary.connectionNetwork }, supportsPresenceProbe: true)
+        connectSaved(saved, preference: connectionPreference)
+    }
+    func connectSaved(_ saved: RememberedMac, preference: ConnectionPreference, retry: Int = 0) {
+        connectionPreference = preference
+        if connected, currentPairing == saved.pairing(for: connectionNetwork),
+           preference.network == nil || preference.network == connectionNetwork { return }
+        if let network = preference.network {
+            if let pairing = saved.pairing(for: network) { connect(pairing) }
+            return
+        }
+        disconnect()
+        let routes = RemoteNetwork.allCases.compactMap { saved.pairing(for: $0) }.filter {
+            $0.isValid && ($0.connectionNetwork == .lan || EmbeddedTailnet.shared.ready || EmbeddedTailnet.shared.shouldResume)
+        }
+        guard !routes.isEmpty else { status = "尚无可用地址；请先在 Chordesk 登录已配对的 Tailscale 网络"; return }
+        guard saved.supportsPresenceProbe == true, let identity = saved.hostID, UUID(uuidString: identity) != nil else {
+            // Old hosts claim a session on TLS ready. Never race them.
+            connect(routes.first!, automaticHostID: saved.id, retry: retry); return
+        }
+        connecting = true; autoTargetID = saved.id; autoRetryCount = retry
+        status = "正在自动检查局域网与 Tailscale…"
+        let token = routeGeneration
+        routeRace = AutomaticRouteRace(routes.map(\.connectionNetwork))
+        for pairing in routes {
+            let probe = LANPresenceProbe(hostID: identity) { [weak self] reply in
+                guard let self, self.routeGeneration == token else { return }
+                if self.routeRace.complete(pairing.connectionNetwork, reachable: reply != nil && reply?.busy != true) {
+                    self.connect(pairing, automaticHostID: saved.id, retry: retry)
+                } else if self.routeRace.exhausted {
+                    self.connectionLost("自动连接未成功：检查 Mac 服务、是否被其他设备占用及 Tailscale 状态；已保留配对")
+                }
+            }
+            routeProbes[pairing.connectionNetwork] = probe; probe.start()
+            Task { await self.attachProbe(probe, pairing: pairing) }
+        }
+    }
+    private func attachProbe(_ probe: LANPresenceProbe, pairing: LANPairing) async {
+        if pairing.connectionNetwork == .tailscale {
+            if !EmbeddedTailnet.shared.ready, EmbeddedTailnet.shared.shouldResume {
+                EmbeddedTailnet.shared.resumeIfNeeded()
+                for _ in 0..<20 {
+                    guard !probe.finished else { return }
+                    if EmbeddedTailnet.shared.ready { break }
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+            }
+            do {
+                guard !probe.finished else { return }
+                let route = try await EmbeddedTailnet.shared.dial(pairing)
+                probe.cleanup = { EmbeddedTailnet.shared.closeDial(route.identifier) }
+                guard !probe.finished else { return }
+                probe.attach(NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: route.port)!, using: LANTransport.parameters(secret: pairing.secret)))
+            } catch { probe.fail() }
+        } else {
+            probe.attach(NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!, using: LANTransport.parameters(secret: pairing.secret)))
+        }
+    }
+    private func connectionLost(_ reason: String) {
+        let saved = rememberedMacs.first { $0.id == autoTargetID }
+        let retry = (Date().timeIntervalSince(connectedAt) > 30 ? 0 : autoRetryCount) + 1
+        let mayRetry = connectionPreference == .automatic && UIApplication.shared.applicationState == .active
+        disconnect()
+        guard mayRetry, retry <= 3, let saved else { status = reason; return }
+        status = "连接中断，已释放操作；正在自动重新选择网络（\(retry)/3）…"
+        connecting = true
+        let token = routeGeneration
+        autoRetryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self, self.routeGeneration == token,
+                  UIApplication.shared.applicationState == .active else { return }
+            self.connectSaved(saved, preference: .automatic, retry: retry)
+        }
+    }
+
     struct PresenceObservation {
         var network: RemoteNetwork
         var message: String
@@ -17,7 +115,8 @@ final class LANClient: ObservableObject {
     private var presenceTask: Task<Void, Never>?
     private var presenceProbes: [UUID: LANPresenceProbe] = [:]
 
-    func presenceMessage(_ saved: RememberedMac, network: RemoteNetwork) -> String {
+    func presenceMessage(_ saved: RememberedMac, network requestedNetwork: RemoteNetwork?) -> String {
+        let network = requestedNetwork ?? (connected && saved.pairing.secret == currentPairing?.secret ? connectionNetwork : presence[saved.id]?.network ?? saved.pairing.connectionNetwork)
         if connected, currentPairing == saved.pairing(for: network), Date().timeIntervalSince(lastPacket) < 6 {
             return "在线 · 当前已连接"
         }
@@ -32,33 +131,37 @@ final class LANClient: ObservableObject {
         probes.forEach { $0.cancel() }
         for (id, value) in presence where value.checkedAt == nil { presence.removeValue(forKey: id) }
     }
-    func refreshPresence(network: RemoteNetwork) {
+    func refreshPresence(network: RemoteNetwork?) {
         cancelPresenceChecks()
 #if DEBUG && targetEnvironment(simulator)
         if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" {
-            for saved in rememberedMacs { presence[saved.id] = .init(network: network, message: "在线 · 服务可连接（模拟）", checkedAt: Date()) }
+            for saved in rememberedMacs { presence[saved.id] = .init(network: network ?? .lan, message: "在线 · 服务可连接（模拟）", checkedAt: Date()) }
             return
         }
 #endif
         guard UIApplication.shared.applicationState == .active,
-              network == .lan || EmbeddedTailnet.shared.ready else { return }
+              network != .tailscale || EmbeddedTailnet.shared.ready else { return }
         let token = presenceGeneration, hosts = rememberedMacs
         checkingPresence = true
         presenceTask = Task { [weak self] in
             guard let self else { return }
             for saved in hosts {
                 guard !Task.isCancelled, self.presenceGeneration == token else { return }
-                guard saved.supportsPresenceProbe == true, saved.hostID.flatMap(UUID.init(uuidString:)) != nil,
-                      let pairing = saved.pairing(for: network), pairing.isValid,
-                      !(self.connected && self.currentPairing == pairing) else { continue }
-                await self.checkPresence(saved, pairing: pairing, token: token)
+                guard saved.supportsPresenceProbe == true, saved.hostID.flatMap(UUID.init(uuidString:)) != nil else { continue }
+                for path in network.map({ [$0] }) ?? RemoteNetwork.allCases {
+                    guard !Task.isCancelled, self.presenceGeneration == token else { return }
+                    guard let pairing = saved.pairing(for: path), pairing.isValid,
+                          path == .lan || EmbeddedTailnet.shared.ready else { continue }
+                    if self.connected && self.currentPairing == pairing { break }
+                    if await self.checkPresence(saved, pairing: pairing, token: token) { break }
+                }
             }
             if self.presenceGeneration == token { self.checkingPresence = false; self.presenceTask = nil }
         }
     }
-    private func checkPresence(_ saved: RememberedMac, pairing: LANPairing, token: UUID) async {
+    private func checkPresence(_ saved: RememberedMac, pairing: LANPairing, token: UUID) async -> Bool {
         presence[saved.id] = .init(network: pairing.connectionNetwork, message: "正在检查…", checkedAt: nil)
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             let probe = LANPresenceProbe(hostID: saved.hostID ?? "") { [weak self] reply in
                 if let self, self.presenceGeneration == token {
                     self.presenceProbes.removeValue(forKey: saved.id)
@@ -71,24 +174,11 @@ final class LANClient: ObservableObject {
                     } else { message = "暂时无法连接 · 检查 Mac 服务、网络或睡眠状态" }
                     self.presence[saved.id] = .init(network: pairing.connectionNetwork, message: message, checkedAt: Date())
                 }
-                continuation.resume()
+                continuation.resume(returning: reply != nil)
             }
             presenceProbes[saved.id] = probe
             probe.start()
-            if pairing.connectionNetwork == .tailscale {
-                Task {
-                    do {
-                        let route = try await EmbeddedTailnet.shared.dial(pairing)
-                        probe.cleanup = { EmbeddedTailnet.shared.closeDial(route.identifier) }
-                        guard !probe.finished else { return }
-                        probe.attach(NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: route.port)!,
-                            using: LANTransport.parameters(secret: pairing.secret)))
-                    } catch { probe.fail() }
-                }
-            } else {
-                probe.attach(NWConnection(host: NWEndpoint.Host(pairing.host), port: NWEndpoint.Port(rawValue: pairing.port)!,
-                    using: LANTransport.parameters(secret: pairing.secret)))
-            }
+            Task { await self.attachProbe(probe, pairing: pairing) }
         }
     }
 
@@ -132,6 +222,22 @@ final class LANClient: ObservableObject {
     @Published private(set) var videoQuality: LANVideoQuality?
     @Published private(set) var availableVideoQualities = LANVideoQuality.legacy
     @Published private(set) var sourceRefreshRate: Double?
+    @Published var prefersH264 = UserDefaults.standard.object(forKey: "preferH264V1") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(prefersH264, forKey: "preferH264V1")
+            if supportsH264 { link?.send(.videoRequest, value: LANVideoRequest(codec: prefersH264 ? "h264" : "jpeg", keyframe: true)) }
+        }
+    }
+    @Published private(set) var videoCodec = "JPEG"
+    @Published private(set) var roundTripMS: Double?
+    private var supportsH264 = false
+    private var pingNonce: Data?
+    private var pingSentAt: TimeInterval = 0
+    var streamMetadata: String {
+        let resolution = image.map { "\($0.width)×\($0.height)" } ?? "—×—"
+        let latency = roundTripMS.map { String(format: "%.0f ms", $0) } ?? "—"
+        return "\(connectionNetwork == .lan ? "LAN" : "Tailscale") · \(videoCodec) · \(resolution) · \(String(format: "%.0f", videoFPS)) fps · \(String(format: "%.2f", videoMbps)) Mbps · RTT \(latency)"
+    }
     @Published private(set) var videoMbps = 0.0
     @Published private(set) var videoFPS = 0.0
     @Published private(set) var supportsMicrophone = false
@@ -268,14 +374,15 @@ final class LANClient: ObservableObject {
         LANCredentialStore.remove(account: "remembered-mac-v1")
         return true
     }
-    private func remember(_ pairing: LANPairing, hostName: String, hostID: String?, supportsPresenceProbe: Bool?) {
+    private func remember(_ pairing: LANPairing, hostName: String, hostID: String?, supportsPresenceProbe: Bool?, endpoints: [LANEndpoint]?) {
         var library = PairedMacLibrary(hosts: rememberedMacs)
-        library.remember(pairing, name: hostName, hostID: hostID, supportsPresenceProbe: supportsPresenceProbe)
+        library.remember(pairing, name: hostName, hostID: hostID, supportsPresenceProbe: supportsPresenceProbe, endpoints: endpoints)
         if library.hosts != rememberedMacs || rememberedPairingSaveFailed { _ = saveLibrary(library) }
     }
 
-    func connect(_ pairing: LANPairing) {
+    func connect(_ pairing: LANPairing, automaticHostID: UUID? = nil, retry: Int = 0) {
         disconnect()
+        autoTargetID = automaticHostID; autoRetryCount = retry; connectedAt = Date()
         guard pairing.isValid else { status = "请检查所选连接模式、IPv4 地址、端口及 32 位配对密钥"; return }
         connectionNetwork = pairing.connectionNetwork
         let token = UUID(); generation = token
@@ -292,7 +399,7 @@ final class LANClient: ObservableObject {
                     startWire(pairing, token: token, connection: connection)
                 } catch {
                     guard generation == token else { return }
-                    disconnect(); status = error.localizedDescription
+                    connectionLost(error.localizedDescription)
                 }
             }
         } else {
@@ -303,6 +410,9 @@ final class LANClient: ObservableObject {
     }
     private func startWire(_ pairing: LANPairing, token: UUID, connection: NWConnection) {
         let wire = LANLink(connection)
+        let decoder = H264Decoder()
+        var requestedDecoderFallback = false
+        var lastKeyframeRequest = -Double.infinity
         link = wire; connecting = true
         status = "正在通过\(pairing.connectionNetwork.title)验证配对并连接 Mac…"
         let name = UIDevice.current.name
@@ -312,12 +422,18 @@ final class LANClient: ObservableObject {
                 self.currentPairing = pairing
                 self.connected = true; self.connecting = false; self.lastPacket = Date()
                 self.status = "已通过\(pairing.connectionNetwork.title)建立加密连接，等待屏幕画面"
-                wire?.send(.hello, value: LANHello(name: name))
+                wire?.send(.hello, value: LANHello(name: name, videoCodecs: ["h264", "jpeg"], preferredVideoCodec: self.prefersH264 ? "h264" : "jpeg"))
                 let heartbeat = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                     Task { @MainActor in
                         guard let self else { return }
-                        if Date().timeIntervalSince(self.lastPacket) > 6 { self.disconnect(); self.status = "连接中断，控制已释放" }
-                        else { self.link?.send(.ping) }
+                        if Date().timeIntervalSince(self.lastPacket) > 6 { self.connectionLost("连接中断，控制已释放") }
+                        else {
+                            if self.pingNonce == nil || ProcessInfo.processInfo.systemUptime - self.pingSentAt > 6 {
+                                let nonce = Data(UUID().uuidString.utf8)
+                                self.pingNonce = nonce; self.pingSentAt = ProcessInfo.processInfo.systemUptime
+                                self.link?.send(.ping, data: nonce)
+                            } else { self.link?.send(.ping) }
+                        }
                         if let sample = self.traffic.sample(now: ProcessInfo.processInfo.systemUptime) {
                             self.videoMbps = sample.mbps; self.videoFPS = sample.fps
                         }
@@ -327,21 +443,41 @@ final class LANClient: ObservableObject {
                 RunLoop.main.add(heartbeat, forMode: .common)
             }
         }
-        wire.onPacket = { [weak self] kind, data in
+        wire.onPacket = { [weak self, weak wire] kind, data in
             // Image decoding happens on the connection queue, outside the UI actor.
             var decoded: CGImage?
+            if kind == .frame { decoder.invalidate(); requestedDecoderFallback = false }
             if kind == .frame, let source = CGImageSourceCreateWithData(data as CFData, nil) {
                 decoded = CGImageSourceCreateThumbnailAtIndex(source, 0,
                     [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 4096,
                      kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
             }
+            if kind == .videoFrame {
+                if let packet = H264Packet(data) { decoded = decoder.decode(packet) }
+                else { requestedDecoderFallback = true; wire?.send(.videoRequest, value: LANVideoRequest(codec: "jpeg")) }
+                if decoder.failed, !requestedDecoderFallback {
+                    requestedDecoderFallback = true; wire?.send(.videoRequest, value: LANVideoRequest(codec: "jpeg"))
+                } else if decoder.needsKeyframe, !requestedDecoderFallback,
+                          ProcessInfo.processInfo.systemUptime - lastKeyframeRequest > 1 {
+                    lastKeyframeRequest = ProcessInfo.processInfo.systemUptime
+                    wire?.send(.videoRequest, value: LANVideoRequest(codec: "h264", keyframe: true))
+                }
+            }
             Task { @MainActor in
                 guard let self, self.generation == token else { return }
                 self.lastPacket = Date()
                 switch kind {
-                case .frame:
+                case .ping:
+                    if data == self.pingNonce, !data.isEmpty {
+                        self.roundTripMS = min(12000, max(0, (ProcessInfo.processInfo.systemUptime - self.pingSentAt) * 1000))
+                        self.pingNonce = nil
+                    }
+                case .frame, .videoFrame:
                     self.traffic.record(bytes: data.count, now: ProcessInfo.processInfo.systemUptime)
-                    if let decoded { self.image = decoded; self.receivedFrames += 1 }
+                    if let decoded {
+                        self.image = decoded; self.receivedFrames += 1
+                        self.videoCodec = kind == .videoFrame ? "H.264" : "JPEG"
+                    }
                 case .status:
                     guard let state = try? JSONDecoder().decode(LANStatus.self, from: data), state.version == 1 else {
                         self.disconnect(); self.status = "主机协议版本不兼容"; return
@@ -352,6 +488,7 @@ final class LANClient: ObservableObject {
                     self.displayName = state.displayName ?? ""
                     self.supportsDisplaySelection = state.supportsDisplaySelection ?? false
                     self.supportsDirectTouch = state.supportsDirectTouch ?? false
+                    self.supportsH264 = state.supportsH264 == true
                     self.supportsScrollDynamics = state.supportsScrollDynamics ?? false
                     self.supportsTextInput = state.supportsTextInput ?? false
                     self.supportsWindowOverview = state.supportsWindowOverview ?? false
@@ -364,7 +501,10 @@ final class LANClient: ObservableObject {
                     self.availableVideoQualities = LANVideoQuality.supported(by: state.supportedVideoQualities)
                     self.sourceRefreshRate = state.sourceRefreshRate.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
                     self.sourceName = state.name
-                    if let pairing = self.currentPairing { self.remember(pairing, hostName: state.name, hostID: state.hostID, supportsPresenceProbe: state.supportsPresenceProbe) }
+                    if let pairing = self.currentPairing { self.remember(pairing, hostName: state.name, hostID: state.hostID, supportsPresenceProbe: state.supportsPresenceProbe, endpoints: state.endpoints) }
+                    if self.connectionPreference == .automatic, let current = self.currentPairing {
+                        self.autoTargetID = self.rememberedMacs.first { $0.pairing.secret == current.secret }?.id
+                    }
                     self.controlAllowed = state.canControl
                     self.status = "\(self.connectionNetwork.title) · \(state.message)"
                 case .microphoneState:
@@ -386,10 +526,8 @@ final class LANClient: ObservableObject {
         wire.onClose = { [weak self] reason in
             Task { @MainActor in
                 guard let self, self.generation == token else { return }
-                self.disconnect()
-                self.status = pairing.connectionNetwork == .tailscale
-                    ? reason + "。请确认两端 Chordesk 内的 Tailscale 已连接同一私人网络、允许互访，且 Mac 已开启公网入口。"
-                    : reason
+                self.connectionLost(pairing.connectionNetwork == .tailscale
+                    ? reason + "。请确认两端 Tailscale 在线且 Mac 入口开启。" : reason)
             }
         }
         wire.start()
@@ -510,6 +648,7 @@ final class LANClient: ObservableObject {
     }
 
     func disconnect() {
+        cancelRouteAttempts()
         cancelPresenceChecks()
         stopMicrophone()
         supportsMicrophone = false; microphoneAvailable = false; microphoneAutoStartAttempted = false
@@ -529,6 +668,7 @@ final class LANClient: ObservableObject {
         supportsTextInput = false; textFocus = nil; mouseButtonDown = false; textInputEpoch += 1
         displayMessage = "连接新版 Mac 主机后显示可用显示器"
         scaleState = nil; videoQuality = nil; videoMbps = 0; videoFPS = 0; traffic = VideoTrafficMeter()
+        roundTripMS = nil; pingNonce = nil; supportsH264 = false; videoCodec = "JPEG"
         availableVideoQualities = LANVideoQuality.legacy; sourceRefreshRate = nil
         status = "已断开连接"
     }
@@ -677,17 +817,22 @@ struct LANConnectView: View {
     @State private var showScanner = false
     @State private var error = ""
     @State private var forgetting: RememberedMac?
-    @State private var network: RemoteNetwork = .lan
+    @State private var preference = ConnectionPreference.automatic
+    private var network: RemoteNetwork { preference.network ?? client.connectionNetwork }
     @State private var initialized = false
     @ObservedObject private var tailnet = EmbeddedTailnet.shared
     var body: some View {
         NavigationStack {
             Form {
                 Section("连接方式") {
-                    Picker("连接方式", selection: $network) {
-                        ForEach(RemoteNetwork.allCases) { Text($0.title).tag($0) }
+                    Picker("连接方式", selection: $preference) {
+                        ForEach(ConnectionPreference.allCases) { Text($0.title).tag($0) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("connection-network-mode")
-                    if network == .lan {
+                    if preference == .automatic {
+                        Text("自动检查已绑定的局域网与 Tailscale，选择先验证通过的可用路径。设备按加密身份识别，不按名称合并；换网后有限次自动重连。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if preference == .lan {
                         Text("同一 Wi-Fi／局域网直接连接，不需要 Tailscale 或账号。")
                             .font(.footnote).foregroundStyle(.secondary)
                     } else {
@@ -698,17 +843,17 @@ struct LANConnectView: View {
                     Section("已配对的 Mac · \(client.rememberedMacs.count) 台") {
                         ForEach(client.rememberedMacs) { saved in
                             VStack(alignment: .leading, spacing: 8) {
-                                Button { if let pairing = saved.pairing(for: network) { client.connect(pairing); dismiss() } } label: {
+                                Button { client.connectSaved(saved, preference: preference); dismiss() } label: {
                                     Label(saved.hostName.isEmpty ? "Mac" : saved.hostName, systemImage: "desktopcomputer")
                                 }.buttonStyle(.borderless)
-                                    .disabled(saved.pairing(for: network) == nil || (network == .tailscale && !tailnet.ready))
+                                    .disabled(preference.network.map { saved.pairing(for: $0) == nil } ?? false || (preference == .tailscale && !tailnet.ready))
                                     .accessibilityIdentifier("lan-reconnect-" + saved.id.uuidString)
-                                Text(saved.pairing(for: network).map { "\($0.connectionNetwork.title)配对 · \($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
+                                Text(preference == .automatic ? "自动 · " + RemoteNetwork.allCases.filter { saved.pairing(for: $0) != nil }.map(\.title).joined(separator: " / ") : saved.pairing(for: network).map { "\($0.connectionNetwork.title)配对 · \($0.host):\($0.port)" } ?? "尚未绑定此模式，请扫描 Mac 对应模式的二维码")
                                     .font(.caption).foregroundStyle(.secondary)
-                                Text(client.presenceMessage(saved, network: network))
+                                Text(client.presenceMessage(saved, network: preference.network))
                                     .font(.caption).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("lan-presence-" + saved.id.uuidString)
-                                if let checked = client.presence[saved.id], checked.network == network, let date = checked.checkedAt {
+                                if let checked = client.presence[saved.id], (preference == .automatic || checked.network == network), let date = checked.checkedAt {
                                     Text("上次检查：\(date.formatted(date: .omitted, time: .standard))")
                                         .font(.caption2).foregroundStyle(.secondary)
                                 }
@@ -717,18 +862,18 @@ struct LANConnectView: View {
                                     .accessibilityIdentifier("lan-forget-" + saved.id.uuidString)
                             }
                         }
-                        Button { client.refreshPresence(network: network) } label: {
+                        Button { client.refreshPresence(network: preference.network) } label: {
                             Label(client.checkingPresence ? "正在检查在线状态…" : "刷新在线状态", systemImage: "arrow.clockwise")
                         }.buttonStyle(.borderless).disabled(client.checkingPresence)
                             .accessibilityIdentifier("lan-refresh-presence")
                         Text("在线表示 Chordesk 服务刚刚通过加密验证，不代表屏幕已唤醒或锁屏可输入。无法连接也可能是地址变化或网络不通，不等于 Mac 已关机。")
                             .font(.footnote).foregroundStyle(.secondary)
-                        Text("每台 Mac 分别记忆局域网和 Tailscale 地址，凭据仅保存在此 iPhone 钥匙串；同名不会合并。首次使用某种模式需扫描对应二维码，之后直接点选。一次连接一台。")
+                        Text("配对凭据仅保存在此 iPhone 钥匙串。新版主机通过已认证连接补齐其他可用地址，通常无需分别扫码；同名电脑不会合并。Tailscale 首次仍需登录自己的私人网络。一次控制一台。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                Section("在 Mac 开启服务，选择对应模式的二维码") {
-                    Button { showScanner = true } label: { Label("扫描 Mac \(network.title)配对二维码", systemImage: "qrcode.viewfinder") }
+                Section("在 Mac 开启服务，扫描配对二维码") {
+                    Button { showScanner = true } label: { Label(preference == .automatic ? "扫描 Mac 配对二维码" : "扫描 Mac \(network.title)配对二维码", systemImage: "qrcode.viewfinder") }
                 }
                 Section("手动输入") {
                     TextField(network == .lan ? "Mac 局域网 IP，例如 192.168.1.10" : "Mac Tailscale IP，例如 100.100.1.10", text: $host).keyboardType(.decimalPad)
@@ -759,15 +904,16 @@ struct LANConnectView: View {
             .navigationTitle("连接 Mac")
             .tint(.gray)
             .onAppear {
-                if !initialized { initialized = true; network = client.connectionNetwork; port = String(LANPairing.defaultPort) }
-                client.refreshPresence(network: network)
+                if !initialized { initialized = true; preference = client.connectionPreference; port = String(LANPairing.defaultPort) }
+                client.refreshPresence(network: preference.network)
             }
-            .onChange(of: network) { _, _ in
-                host = ""; secret = ""; error = ""; client.refreshPresence(network: network)
+            .onChange(of: preference) { _, value in
+                client.connectionPreference = value
+                host = ""; secret = ""; error = ""; client.refreshPresence(network: preference.network)
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { client.cancelPresenceChecks() }
-                else { client.refreshPresence(network: network) }
+                else { client.refreshPresence(network: preference.network) }
             }
             .onDisappear { client.cancelPresenceChecks() }
             .alert("忘记这台 Mac？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), presenting: forgetting) { saved in
@@ -779,9 +925,9 @@ struct LANConnectView: View {
                 QRScannerView { result in
                     showScanner = false
                     if let value = LANPairing.parse(result) {
-                        if value.connectionNetwork == .tailscale && !tailnet.ready {
-                            network = .tailscale; error = "请先登录 Tailscale，再扫描公网配对二维码。"
-                        } else { client.connect(value); dismiss() }
+                        if value.invitationHostID == nil && value.connectionNetwork == .tailscale && !tailnet.ready {
+                            preference = .automatic; error = "请先登录 Tailscale，再扫描公网配对二维码。"
+                        } else { client.connectInvitation(value); dismiss() }
                     }
                     else { error = "不是有效的 Chordesk 配对二维码；请确认两端均使用支持该连接模式的版本" }
                 }

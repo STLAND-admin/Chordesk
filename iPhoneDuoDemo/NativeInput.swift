@@ -141,7 +141,7 @@ import UIKit
 /// Convert public keyboard frames from this window's screen into workspace
 /// coordinates. The workspace is inset below the independent rear-status strip.
 struct KeyboardOcclusionReader: UIViewRepresentable {
-    var onChange: (CGFloat?) -> Void
+    var onChange: (CGFloat?, Double, Int) -> Void
     func makeUIView(context: Context) -> KeyboardOcclusionView { KeyboardOcclusionView() }
     func updateUIView(_ view: KeyboardOcclusionView, context: Context) {
         view.onChange = onChange; view.setNeedsLayout()
@@ -149,11 +149,13 @@ struct KeyboardOcclusionReader: UIViewRepresentable {
 }
 
 final class KeyboardOcclusionView: UIView {
-    var onChange: ((CGFloat?) -> Void)?
+    var onChange: ((CGFloat?, Double, Int) -> Void)?
     private var lastTop: CGFloat?
     private var hasReported = false
     private var reportGeneration = 0
     private var keyboardScreenFrame: CGRect?
+    private var animationDuration = 0.25
+    private var animationCurve = 0
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false; backgroundColor = .clear
@@ -167,11 +169,17 @@ final class KeyboardOcclusionView: UIView {
     @objc private func keyboardChanged(_ note: Notification) {
         guard note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? Bool != false else { return }
         keyboardScreenFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+        animationDuration = max(0, min(1, note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25))
+        animationCurve = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int ?? 0
+        reportFrame() // WillChangeFrame starts the transition; do not wait for DidChangeFrame/layout.
         setNeedsLayout()
     }
     @objc private func keyboardHidden() { keyboardScreenFrame = nil; setNeedsLayout() }
     override func layoutSubviews() {
         super.layoutSubviews()
+        reportFrame()
+    }
+    private func reportFrame() {
         let top: CGFloat?
         if let window, let frame = keyboardScreenFrame {
             let windowFrame = window.convert(frame, from: window.screen.coordinateSpace)
@@ -179,10 +187,10 @@ final class KeyboardOcclusionView: UIView {
         } else { top = nil }
         guard !hasReported || top != lastTop else { return }
         hasReported = true; lastTop = top; reportGeneration += 1
-        let generation = reportGeneration
+        let generation = reportGeneration, duration = animationDuration, curve = animationCurve
         DispatchQueue.main.async { [weak self] in
             guard let self, generation == self.reportGeneration else { return }
-            self.onChange?(top)
+            self.onChange?(top, duration, curve)
         }
     }
 }

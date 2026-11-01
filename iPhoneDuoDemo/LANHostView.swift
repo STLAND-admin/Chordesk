@@ -10,8 +10,7 @@ struct LANHostView: View {
     @State private var showingPermissions = false
     @State private var showingPairingResetConfirmation = false
     @ObservedObject private var tailnet = EmbeddedTailnet.shared
-    @State private var pairingNetwork: RemoteNetwork = .lan
-    private var displayedPairing: LANPairing? { pairingNetwork == .lan ? host.pairing : host.tailscalePairings.first }
+    private var displayedPairing: LANPairing? { host.automaticPairing }
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         ScrollView {
@@ -26,13 +25,14 @@ struct LANHostView: View {
                     Spacer(minLength: 0)
                 }
                 VStack(spacing: 16) {
-                    Picker("连接方式", selection: $pairingNetwork) {
-                        ForEach(RemoteNetwork.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
-                    }.pickerStyle(.segmented).accessibilityIdentifier("host-network-mode")
-                    if pairingNetwork == .tailscale {
+                    Label("自动连接 · 局域网与 Tailscale 可同时使用", systemImage: "network")
+                        .accessibilityIdentifier("host-network-mode")
+                    Text(host.allowsTailscale && tailnet.ready ? "公网入口自动保持可用，无需切换桌面端模式。" : "局域网可直接使用；登录 Tailscale 后可启用跨网连接。")
+                        .font(.callout).foregroundStyle(.secondary)
+                    DisclosureGroup("Tailscale 账号与公网入口") {
                         Toggle("允许通过我的 Tailscale 连接", isOn: $host.allowsTailscale)
                             .accessibilityIdentifier("host-enable-tailscale")
-                        Text(host.tailscaleMessage).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Text(host.tailscaleMessage).font(.callout).foregroundStyle(.secondary)
                         EmbeddedTailnetControls()
                     }
                     Label(host.sharing ? (host.connected ? "已连接 · " + host.clientName : "等待连接") : "服务已停止",
@@ -44,7 +44,7 @@ struct LANHostView: View {
                             CachedPairingCode(code: pairing.code)
                             Text(pairing.connectionNetwork.title + " · " + pairing.host).font(.caption.monospaced()).textSelection(.enabled)
                         }
-                        Text("首次扫码绑定；已配对的 Mac 可在手机列表中直接连接。")
+                        Text("首次扫码绑定；连接后自动记忆主机的两种可用地址。二维码同时包含可用地址，手机自动选择；局域网无需登录 Tailscale。")
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         if host.connected {
                             Toggle("允许这台手机控制 Mac", isOn: Binding(get: { host.controlAllowed }, set: { host.setControl($0) }))
@@ -95,7 +95,6 @@ struct LANHostView: View {
         .sheet(isPresented: $showingAbout) { ChordAboutView() }
         .onReceive(tailnet.$snapshot) { _ in Task { host.refreshTailscale() } }
         .onReceive(tailnet.$enabled) { _ in Task { host.refreshTailscale() } }
-        .onChange(of: pairingNetwork) { _, value in if value == .tailscale { host.refreshTailscale() } }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await permissionSetup.check(host); host.refreshDesktopPermission(); host.refreshTailscale() } }
     }
 
@@ -103,6 +102,9 @@ struct LANHostView: View {
         NavigationStack {
             Form {
                 Section("运行与连接") {
+                    if let pairing = host.pairing {
+                        DisclosureGroup("局域网配对二维码") { CachedPairingCode(code: pairing.code) }
+                    }
                     Toggle("启动 Chordesk 后自动开启内置屏服务", isOn: $host.autoStartHost)
                     Toggle("配对后自动控制、切屏并适配 Duo", isOn: $host.autoConfigurePairing)
                     Toggle("共享期间保持系统运行，允许显示器息屏", isOn: $host.keepAwakeWhileSharing)

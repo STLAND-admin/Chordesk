@@ -45,6 +45,8 @@ struct LANPairing: Codable, Equatable {
     var port: UInt16
     var secret: String
     var network: RemoteNetwork? = nil
+    var invitationHostID: String? = nil
+    var invitationEndpoints: [LANEndpoint]? = nil
     var connectionNetwork: RemoteNetwork { network ?? .lan }
 
     init(host: String, port: UInt16, secret: String, network: RemoteNetwork = .lan) {
@@ -93,6 +95,34 @@ struct LANPairing: Codable, Equatable {
     }
 }
 
+struct LANEndpoint: Codable, Equatable {
+    var host: String
+    var port: UInt16
+    var network: RemoteNetwork
+    func pairing(secret: String) -> LANPairing? {
+        let value = LANPairing(host: host, port: port, secret: secret, network: network)
+        return value.isValid ? value : nil
+    }
+}
+enum ConnectionPreference: String, CaseIterable, Identifiable {
+    case automatic, lan, tailscale
+    var id: String { rawValue }
+    var title: String { switch self { case .automatic: "自动"; case .lan: "仅局域网"; case .tailscale: "仅 Tailscale" } }
+    var network: RemoteNetwork? { switch self { case .automatic: nil; case .lan: .lan; case .tailscale: .tailscale } }
+}
+
+struct AutomaticRouteRace {
+    private(set) var pending: Set<RemoteNetwork>
+    private(set) var winner: RemoteNetwork?
+    init(_ networks: [RemoteNetwork]) { pending = Set(networks) }
+    mutating func complete(_ network: RemoteNetwork, reachable: Bool) -> Bool {
+        guard winner == nil, pending.remove(network) != nil else { return false }
+        if reachable { winner = network; return true }
+        return false
+    }
+    var exhausted: Bool { winner == nil && pending.isEmpty }
+}
+
 /// Identity comes from the authenticated host, never its display name or IP.
 struct RememberedMac: Codable, Equatable, Identifiable {
     var id: UUID = UUID()
@@ -108,7 +138,7 @@ struct RememberedMac: Codable, Equatable, Identifiable {
 }
 struct PairedMacLibrary: Codable, Equatable {
     var hosts: [RememberedMac] = []
-    mutating func remember(_ pairing: LANPairing, name: String, hostID: String?, supportsPresenceProbe: Bool? = nil) {
+    mutating func remember(_ pairing: LANPairing, name: String, hostID: String?, supportsPresenceProbe: Bool? = nil, endpoints: [LANEndpoint]? = nil) {
         guard pairing.isValid else { return }
         let identity = hostID.flatMap(UUID.init(uuidString:))?.uuidString
         let match = hosts.firstIndex { existing in
@@ -117,7 +147,8 @@ struct PairedMacLibrary: Codable, Equatable {
         var item = match.map { hosts[$0] } ?? RememberedMac(pairing: pairing, hostName: "Mac")
         // Preserve one authenticated endpoint per mode, but never retain an old
         // key after a credential rotation. Legacy single-endpoint records decode unchanged.
-        let previous = [item.pairing] + (item.alternativePairings ?? [])
+        let advertised = identity == nil ? [] : (endpoints ?? []).prefix(8).compactMap { $0.pairing(secret: pairing.secret) }
+        let previous = advertised + [item.pairing] + (item.alternativePairings ?? [])
         item.alternativePairings = RemoteNetwork.allCases.filter { $0 != pairing.connectionNetwork }.compactMap { network in
             previous.first { $0.isValid && $0.secret == pairing.secret && $0.connectionNetwork == network }
         }
@@ -172,7 +203,7 @@ enum LANCredentialStore {
 }
 
 enum LANWireError: Error { case random, malformed }
-enum LANPacket: UInt8 { case hello = 1, status = 2, frame = 3, input = 4, ping = 5, release = 6, acknowledgement = 7, displays = 8, selectDisplay = 9, requestDisplays = 10, adjustScale = 11, textInput = 12, videoQuality = 13, microphoneRequest = 14, microphoneState = 15, microphoneAudio = 16, presenceRequest = 17, presenceResponse = 18 }
+enum LANPacket: UInt8 { case hello = 1, status = 2, frame = 3, input = 4, ping = 5, release = 6, acknowledgement = 7, displays = 8, selectDisplay = 9, requestDisplays = 10, adjustScale = 11, textInput = 12, videoQuality = 13, microphoneRequest = 14, microphoneState = 15, microphoneAudio = 16, presenceRequest = 17, presenceResponse = 18, videoFrame = 19, videoRequest = 20 }
 
 enum LANVideoQuality: String, CaseIterable, Identifiable, Codable {
     case efficient, sharp, ultra, responsive60, experimental120, experimental144
@@ -244,7 +275,8 @@ struct VideoTrafficMeter {
     }
 }
 
-struct LANHello: Codable { var name: String; var displaySelection = true; var microphone: Bool? = true }
+struct LANHello: Codable { var name: String; var displaySelection = true; var microphone: Bool? = true; var videoCodecs: [String]? = nil; var preferredVideoCodec: String? = nil }
+struct LANVideoRequest: Codable { var codec: String; var keyframe = false }
 struct LANDisplay: Codable, Identifiable, Equatable {
     var id: UInt32
     var name: String
@@ -299,6 +331,9 @@ struct LANStatus: Codable {
     var hostID: String? = nil
     var supportsScrollDynamics: Bool? = nil
     var supportsPresenceProbe: Bool? = nil
+    var supportsH264: Bool? = nil
+    var videoCodec: String? = nil
+    var endpoints: [LANEndpoint]? = nil
 }
 
 struct LANPresenceRequest: Codable, Equatable { var nonce: UUID }
@@ -496,6 +531,21 @@ enum LANTransport {
 
 /// All framing and writes are serialized on this connection's queue.
 /// Frames have bounded size and are dropped rather than queued behind a slow peer.
+struct VideoSendGate {
+    private(set) var pending = 0
+    private(set) var waitingForKeyframe = false
+    mutating func admit(interFrame: Bool, keyframe: Bool) -> Bool {
+        if pending > 0 || (interFrame && waitingForKeyframe && !keyframe) {
+            if interFrame { waitingForKeyframe = true }
+            return false
+        }
+        waitingForKeyframe = false
+        pending += 1
+        return true
+    }
+    mutating func completed() { pending = max(0, pending - 1) }
+}
+
 final class LANLink {
     static let maximumPacketSize = 4 * 1024 * 1024
     let connection: NWConnection
@@ -504,6 +554,8 @@ final class LANLink {
     var onPacket: ((LANPacket, Data) -> Void)?
     var onClose: ((String) -> Void)?
     var onFrameSent: ((Int) -> Void)?
+    var onVideoDropped: (() -> Void)?
+    private var videoGate = VideoSendGate()
     private var closed = false
     private var pendingBytes = 0
 
@@ -530,12 +582,16 @@ final class LANLink {
         if let data = try? JSONEncoder().encode(value) { send(kind, data: data) }
     }
 
-    func send(_ kind: LANPacket, data: Data = Data(), droppable: Bool = false) {
+    func send(_ kind: LANPacket, data: Data = Data(), droppable: Bool = false, keyframe: Bool = false) {
         queue.async { [weak self] in
             guard let self, !self.closed, data.count <= Self.maximumPacketSize else { return }
             if kind == .microphoneAudio && (data.count != MicrophonePacket.byteCount || self.pendingBytes > MicrophonePacket.byteCount * 6) { return }
-            if droppable && self.pendingBytes > 512 * 1024 { return }
             guard self.pendingBytes < Self.maximumPacketSize * 2 else { self.finish("连接过慢，已停止排队"); return }
+            let isVideo = kind == .frame || kind == .videoFrame
+            if isVideo && !self.videoGate.admit(interFrame: kind == .videoFrame, keyframe: keyframe) {
+                if kind == .videoFrame { self.onVideoDropped?() }
+                return
+            }
             var packet = Data([kind.rawValue])
             var length = UInt32(data.count).bigEndian
             withUnsafeBytes(of: &length) { packet.append(contentsOf: $0) }
@@ -545,8 +601,9 @@ final class LANLink {
             self.connection.send(content: packet, completion: .contentProcessed { [weak self] error in
                 guard let self else { return }
                 self.pendingBytes -= count
+                if isVideo { self.videoGate.completed() }
                 if let error { self.finish(error.localizedDescription) }
-                else if kind == .frame { self.onFrameSent?(data.count) }
+                else if isVideo { self.onFrameSent?(data.count) }
             })
         }
     }

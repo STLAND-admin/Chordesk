@@ -54,6 +54,38 @@ final class TouchpadInteractionUITests: XCTestCase {
     }
 
     @MainActor
+    func testKeyboardKeepsBothPointerModesInteractiveAndDockNextToKeyboard() {
+        for mode in ["direct", "trackpad"] {
+            let app = XCUIApplication()
+            app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+            app.launchEnvironment["DUO_UI_KEYBOARD_LAYOUT"] = "1"
+            app.launchArguments += ["-phoneKeyboardStyle", "system", "-keyboardInvocationV1", "manual", "-primaryPointerMode", mode, "-showStreamMetadataV1", "YES"]
+            app.launch()
+            let surface = app.otherElements[mode == "direct" ? "direct-remote-touch" : "grip-front-touchpad"]
+            XCTAssertTrue(surface.waitForExistence(timeout: 8))
+            let toggle = app.buttons["keyboard-dock-toggle"]
+            shortPress(toggle)
+            let keyboard = app.keyboards.firstMatch
+            XCTAssertTrue(keyboard.waitForExistence(timeout: 8))
+            let fitted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                surface.frame.height > 0 && surface.frame.maxY <= keyboard.frame.minY + 2
+                    && toggle.frame.maxY <= keyboard.frame.minY + 2
+                    && abs(toggle.frame.maxY - app.textViews.firstMatch.frame.minY) < 30
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [fitted], timeout: 8), .completed, "surface=\(surface.frame), dock=\(toggle.frame), keyboard=\(keyboard.frame)")
+            let counter = app.staticTexts["stream-metadata"]
+            let before = counter.value as? String
+            surface.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.4)).press(forDuration: 0.1,
+                thenDragTo: surface.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.7)))
+            let sent = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (counter.value as? String) != before }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [sent], timeout: 3), .completed, "\(mode) must emit input with keyboard visible")
+            XCTAssertTrue(keyboard.exists)
+            shortPress(toggle); XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testSharedScrollInertiaSettingPersistsAndCanBeDisabled() {
         let app = launchFixture()
         func openSettings() {
@@ -149,12 +181,13 @@ final class TouchpadInteractionUITests: XCTestCase {
         let picker = app.segmentedControls["connection-network-mode"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["我的 Mac"].isEnabled)
+        shortPress(picker.buttons["仅局域网"])
         XCTAssertFalse(app.buttons["tailscale-connect"].exists)
-        shortPress(picker.buttons["Tailscale 公网"])
+        shortPress(picker.buttons["仅 Tailscale"])
         XCTAssertTrue(app.buttons["tailscale-connect"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["我的 Mac"].isEnabled)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "无需额外安装 App")).firstMatch.exists)
-        shortPress(picker.buttons["局域网"])
+        shortPress(picker.buttons["仅局域网"])
         XCTAssertTrue(app.buttons["我的 Mac"].isEnabled)
         XCTAssertFalse(app.buttons["tailscale-connect"].exists)
     }
