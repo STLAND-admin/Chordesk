@@ -258,10 +258,6 @@ enum ChordeskEntry {
             HostRelaunchHelper.run(arguments: CommandLine.arguments)
             return
         }
-        if CommandLine.arguments.contains("--chordesk-permission-probe") {
-            HostPermissionProbe.printSnapshot()
-            return
-        }
         DuoWorkbenchApp.main()
     }
 }

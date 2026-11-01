@@ -38,24 +38,19 @@ final class TailnetAndSetupTests: XCTestCase {
         XCTAssertNil(library.hosts[0].pairing(for: .tailscale))
         XCTAssertEqual(library.hosts.count, 1)
     }
-    func testPermissionSequenceWaitsForActualGrantsWithoutRepeatingPrompts() {
-        var sequence = PermissionRequestSequence()
-        var value = HostPermissionSnapshot(screen: false, accessibility: false, input: false)
-        XCTAssertEqual(sequence.next(value), .screen)
-        for _ in 0..<20 { XCTAssertNil(sequence.next(value)) }
-        value.screen = true
-        XCTAssertEqual(sequence.next(value), .accessibility)
-        XCTAssertNil(sequence.next(value))
-        value.accessibility = true
-        XCTAssertEqual(sequence.next(value), .input)
-        XCTAssertNil(sequence.next(value))
-        value.input = true; XCTAssertNil(sequence.next(value))
-        value.screen = false; XCTAssertNil(sequence.next(value), "Revocation must not reopen dialogs during polling")
-    }
-    func testPermissionSequenceSkipsExistingGrants() {
-        var sequence = PermissionRequestSequence()
-        XCTAssertEqual(sequence.next(.init(screen: true, accessibility: false, input: false)), .accessibility)
-        XCTAssertNil(sequence.next(.init(screen: true, accessibility: true, input: true)))
+    func testTwoManualPermissionRoundsSurviveSystemRestartAndRevocation() {
+        var firstLaunch = ManualPermissionPolicy()
+        firstLaunch.didRequestPermission()
+        let screenOnly = HostPermissionSnapshot(screen: true, accessibility: false, input: false)
+        XCTAssertFalse(firstLaunch.canStart(screenOnly, busy: false))
+        var secondLaunch = ManualPermissionPolicy()
+        XCTAssertFalse(secondLaunch.canStart(screenOnly, busy: false))
+        secondLaunch.didRequestPermission()
+        let ready = HostPermissionSnapshot(screen: true, accessibility: true, input: true)
+        XCTAssertFalse(secondLaunch.canStart(ready, busy: false))
+        let thirdLaunch = ManualPermissionPolicy()
+        XCTAssertTrue(thirdLaunch.canStart(ready, busy: false))
+        XCTAssertFalse(thirdLaunch.canStart(screenOnly, busy: false), "Revocation must still block service")
     }
     func testOnlyOfficialHTTPSLoginURLCanBePresented() {
         XCTAssertNotNil(TailnetSnapshot(authURL: "https://login.tailscale.com/a/example").loginURL)

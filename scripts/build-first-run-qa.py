@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import plistlib
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -44,7 +45,7 @@ def main():
     token = uuid.uuid4().hex[:12]
     bundle_id = f'dev.chordesk.firstrun.q{token}'
     ios_bundle_id = bundle_id + '.ios'
-    destination = (args.output or root / 'build' / 'first-run' / token).resolve()
+    destination = (args.output or Path(tempfile.gettempdir()) / 'ChordeskFirstRun' / token).resolve()
     destination.mkdir(parents=True, exist_ok=False)
     stage = destination / 'source'
     stage.mkdir()
@@ -53,6 +54,13 @@ def main():
     shutil.copy2(root / 'Package.swift', stage / 'Package.swift')
     (stage / 'scripts').mkdir()
     shutil.copy2(root / 'scripts/build-workbench.sh', stage / 'scripts/build-workbench.sh')
+    version_match = re.search(r'<key>CFBundleShortVersionString</key><string>([^<]+)</string>',
+                              (stage / 'scripts/build-workbench.sh').read_text())
+    if not version_match:
+        raise RuntimeError('Cannot identify Mac QA version')
+    mac_version = version_match.group(1)
+    mac_name = f'Chordesk First Run {mac_version}'
+    mac_title = f'Chordesk · 首次安装测试 {mac_version}'
     (stage / 'Branding').mkdir()
     shutil.copy2(root / 'Branding/Chordesk.icns', stage / 'Branding/Chordesk.icns')
     if args.platform in ['ios', 'both']:
@@ -87,18 +95,21 @@ def main():
             'LANStatus(name: (Host.current().localizedName ?? "Mac") + " · 首次安装测试",')
     replace(stage / 'iPhoneDuoDemo/LANHostView.swift',
             'Text("Chordesk").font(.largeTitle.weight(.semibold))',
-            'Text("Chordesk · 首次安装测试").font(.largeTitle.weight(.semibold))')
+            f'Text("{mac_title}").font(.largeTitle.weight(.semibold))')
     replace(stage / 'iPhoneDuoDemo/WorkbenchApp.swift',
-            'Window("Chordesk · Mac 主机",', 'Window("Chordesk · 首次安装测试",')
+            'Window("Chordesk · Mac 主机",', f'Window("{mac_title}",')
     replace(stage / 'iPhoneDuoDemo/WorkbenchApp.swift',
-            'MenuBarExtra("Chordesk",', 'MenuBarExtra("Chordesk 首次安装测试",')
+            'MenuBarExtra("Chordesk",', f'MenuBarExtra("{mac_name}",')
     build_script = stage / 'scripts/build-workbench.sh'
     replace(build_script, 'dev.iphoneduo.workbench', bundle_id, count=2)
     replace(build_script, '<key>CFBundleName</key><string>Chordesk</string>',
-            '<key>CFBundleName</key><string>Chordesk First Run</string>')
+            f'<key>CFBundleName</key><string>{mac_name}</string>')
     replace(build_script, '<key>CFBundleDisplayName</key><string>Chordesk</string>',
-            '<key>CFBundleDisplayName</key><string>Chordesk First Run</string>')
-    app = destination / 'Chordesk First Run.app'
+            f'<key>CFBundleDisplayName</key><string>{mac_name}</string>')
+    # Never run the QA app from Documents/Desktop/Downloads, even if the
+    # caller stores staged sources there. Those locations have folder TCC.
+    runtime = Path(tempfile.gettempdir()) / f'ChordeskFirstRunRuntime-{token}'
+    app = runtime / f'{mac_name}.app'
     # File providers can attach FinderInfo to app bundles in Documents during
     # a build. Keep device products outside synced source folders for signing.
     ios_build = Path(tempfile.gettempdir()) / f'ChordeskFirstRunIOS-{token}'
@@ -137,7 +148,7 @@ def main():
     run('xcodebuild', '-create-xcframework', *framework_args,
         '-output', str(stage / 'build/tailnet/ChordeskTailnet.xcframework'))
     if 'macos' in targets:
-        env = dict(os.environ, DUO_BUILD_PATH=str(destination / 'swift-build'), DUO_APP_BUNDLE=str(app))
+        env = dict(os.environ, DUO_BUILD_PATH=str(runtime / 'swift-build'), DUO_APP_BUNDLE=str(app))
         run('/bin/zsh', str(build_script), cwd=stage, env=env)
         run('codesign', '--verify', '--deep', '--strict', str(app))
         actual = plistlib.loads((app / 'Contents/Info.plist').read_bytes())['CFBundleIdentifier']

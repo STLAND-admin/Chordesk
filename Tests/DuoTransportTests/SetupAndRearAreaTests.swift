@@ -2,13 +2,16 @@ import XCTest
 @testable import DuoWorkbench
 
 final class SetupAndRearAreaTests: XCTestCase {
-    func testManualRestartAlsoRequiresBothPermissionGroups() {
+    func testManualRestartAllowsPartialGrantsButNeverAnActiveSession() {
+        XCTAssertTrue(ManualPermissionPolicy.canRestart(busy: false))
+        XCTAssertFalse(ManualPermissionPolicy.canRestart(busy: true))
+        let policy = ManualPermissionPolicy()
         for screen in [false, true] {
             for accessibility in [false, true] {
                 for input in [false, true] {
                     let value = HostPermissionSnapshot(screen: screen, accessibility: accessibility, input: input)
-                    XCTAssertEqual(PermissionRestartPolicy.canRestart(value, busy: false), screen && accessibility && input)
-                    XCTAssertFalse(PermissionRestartPolicy.canRestart(value, busy: true))
+                    XCTAssertEqual(policy.canStart(value, busy: false), screen && accessibility && input)
+                    XCTAssertFalse(policy.canStart(value, busy: true))
                 }
             }
         }
@@ -36,19 +39,17 @@ final class SetupAndRearAreaTests: XCTestCase {
         XCTAssertEqual(terminationCount, 1)
         XCTAssertTrue(shutdown.request(cleanup: { XCTFail("No cleanup after prepared") }, terminate: { XCTFail("No new exit request") }))
     }
-    func testPermissionRestartRequiresAllGrantsAndIdleSessionAndOnlyOnce() {
-        var policy = PermissionRestartPolicy(needsRestart: true, attempted: false)
+    func testGrantingEitherPermissionCannotStartServiceBeforeUserRelaunch() {
         let ready = HostPermissionSnapshot(screen: true, accessibility: true, input: true)
-        for missing in [HostPermissionSnapshot(screen: false, accessibility: true, input: true),
-                        .init(screen: true, accessibility: false, input: true), .init(screen: true, accessibility: true, input: false)] {
-            XCTAssertFalse(policy.eligible(missing, automatic: true, sharing: false))
-        }
-        XCTAssertFalse(policy.eligible(ready, automatic: false, sharing: false))
-        XCTAssertFalse(policy.eligible(ready, automatic: true, sharing: true))
-        XCTAssertTrue(policy.eligible(ready, automatic: true, sharing: false))
-        policy.claim()
-        XCTAssertFalse(policy.eligible(ready, automatic: true, sharing: false))
-        XCTAssertFalse(PermissionRestartPolicy(needsRestart: false, attempted: false).eligible(ready, automatic: true, sharing: false))
+        var launch = ManualPermissionPolicy()
+        launch.didRequestPermission()
+        XCTAssertTrue(launch.needsRestart)
+        XCTAssertFalse(launch.canStart(ready, busy: false), "A changed live snapshot must not skip the requested restart")
+        XCTAssertTrue(ManualPermissionPolicy.canRestart(busy: false), "The first grant can be restarted without waiting for both")
+        let afterSystemRelaunch = ManualPermissionPolicy()
+        XCTAssertFalse(afterSystemRelaunch.needsRestart, "OS relaunch need not carry custom command-line flags")
+        XCTAssertFalse(afterSystemRelaunch.canStart(.init(screen: true, accessibility: false, input: false), busy: false))
+        XCTAssertTrue(afterSystemRelaunch.canStart(ready, busy: false))
     }
     func testRearRegionCanReachAnEdgeAndRemainsWithinSafeBounds() {
         let centered = RearActiveRegion.centered(inset: 0.125)
