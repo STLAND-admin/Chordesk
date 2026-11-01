@@ -14,10 +14,10 @@
 
 ### Mac
 
-下载 [Mac 0.18.1 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test)，打开 DMG，把 Chordesk 拖入“应用程序”。
+下载 [Mac 0.25.0 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)，打开 DMG，把 Chordesk 拖入“应用程序”。
 
 - Apple Silicon，macOS 15.2 或更新。测试包未公证，首次打开需由接收者按系统提示允许；[安装说明](docs/MAC-PEER-TEST.txt)。
-- 首次点“开始服务”，按引导完成屏幕录制和控制两项权限；检查完整后自动重启 App 一次，默认开启内置屏服务。关闭窗口后保留菜单栏后台运行。
+- 首次分别允许屏幕录制和控制权限，每项按 macOS 提示退出重开；两项生效后开启服务，默认共享内置屏。关闭窗口后保留菜单栏后台运行。
 - 本仓库与试用 Release 公开，可把下载链接直接发给测试者。历史私有仓库独立保留，公开提交不包含原作者的私人邮箱。
 
 ### iPhone／iPhone Duo
@@ -30,7 +30,7 @@
 2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
 3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
 
-源码安装更新时保持原 Bundle Identifier 和 Team。iOS **1.22.1 / build 28** 已通过外部 TestFlight Beta 审核；这不是正式 App Store 上架。[发行记录](docs/IOS-RELEASE-1.22.md)。
+1.30/build 39 正等待 Beta 审核，新版开放前现有邀请仍安装旧版。源码安装更新时保持原 Bundle Identifier 和 Team。iOS **1.22.1 / build 28** 已通过外部 TestFlight Beta 审核；这不是正式 App Store 上架。[发行记录](docs/IOS-RELEASE-1.22.md)。
 
 ## 怎么用
 
@@ -50,20 +50,22 @@
 
 ## 后续开发
 
-- [x] **跨网络远控 · 已解决，待发布**：两端内嵌 Tailscale，通过用户自己的私人网络连接，无需额外 App 或自建服务器。当前设备组合的蜂窝画面与触控已获用户确认；新版 Mac Release 与 iOS TestFlight 尚未发布。
+- [x] **跨网络远控 · Mac 试用版已发布，iOS 更新审核中**：两端内嵌 Tailscale，通过用户自己的私人网络连接，无需额外 App 或自建服务器。当前设备组合的蜂窝画面与触控已获用户确认；Mac 0.25.0 已公开，iOS 1.30 正等待 Beta 审核。
 - [ ] **P1 后台能耗**：测量无人连接时的采屏、JPEG 编码和保活，按需采集并保持低开销后台可达。
 - [ ] **键盘可视性**：探索 Liquid Glass 输入预览，减少远端输入框被键盘遮挡。
 - [ ] **RDP／客户端渲染**：验证 Mac 当前会话可行性，对比清晰度、带宽和延迟。
 - [ ] **普通 iPhone 真机测试**：验证屏幕按钮、输入法、布局和重连。
 
-已完成内容、剩余测试与发行准备见[公开开发计划](ROADMAP.md)。iOS 下一步优先准备正式 App Store 送审，另一轮 TestFlight 并非必经步骤。
+已完成内容、剩余测试与发行准备见[公开开发计划](ROADMAP.md)。新版 TestFlight 已提交 Beta 审核，正式 App Store 与大陆备案准备并行进行。
 
 ## 当前范围
+
+- **iOS 1.30 /39 正等待 Beta 审核；Mac 0.25.0 /38 未公证试用版已公开。** 新增 IPv6 配对与新版隐私说明。[发行与验证记录](docs/VALIDATION-1.30.md)。
 
 - 开发版 **1.29** 支持键盘上方黑边作为触控板、三个可编辑的右侧快捷键、四类设置和精简手册。[操作速查](OPERATION-GUIDE.md) · [验证与真机反馈](docs/VALIDATION-1.29.md)。
 
 - iOS **1.22.1 / build 28** 隔离忘记／连接按钮、把背面灯置于桌面上方，并加入有次数限制的相机恢复；闲置后背面失效仍待真机复测。完整手册与默认 iPhone 输入法保留。Mac 保持 **0.18.1 / build 26**。[验证记录](docs/VALIDATION-1.22.1.md)；[真实操作视频录制稿](docs/GUIDE-RECORDING.md)。
-- **公开安装包仍为局域网版。**开发中 iOS **1.29 / build 38**、Mac **0.24.0 / build 37** 已加入内嵌 Tailscale：局域网免登录，公网使用各自的个人账号，不另装 Tailscale 或系统 VPN。用户已确认 1.23.2／0.19.0 的蜂窝跨网画面与触控正常；其他网络与长期测试仍待完成，新版 Mac Release 与 iOS TestFlight 均未发布。[设置与边界](docs/TAILSCALE.md)
+- **公开 iOS 仍为 1.22.1 局域网版；1.30/build 39 已上传并提交 Beta 审核。Mac 0.25.0 未公证试用版已公开。**开发中 iOS **1.29 / build 38**、Mac **0.24.0 / build 37** 已加入内嵌 Tailscale：局域网免登录，公网使用各自的个人账号，不另装 Tailscale 或系统 VPN。用户已确认 1.23.2／0.19.0 的蜂窝跨网画面与触控正常；其他网络与长期测试仍待完成，Mac 0.25.0 已公开，iOS 1.30 待 Beta 审核。[设置与边界](docs/TAILSCALE.md)
 - 开发版直接触屏与触控板共用惯性：**设置 → 统一滚动惯性**，范围 **0（关闭）至 2**，默认 **1**；重新落指即可停止。需要两端更新。[实现与验证](docs/VALIDATION-1.24.md)
 - 开发版 iOS 1.25 新增可关闭的等比键盘避让、修正触控板抬手取消；Mac 0.20.1 在原共享屏暂时离线时保留监听。1.26 新增配对列表中的加密只读在线检查。用户已确认 1.27 键盘动画、按钮位置、可见键盘下两种触控、H.264 及蜂窝自动重连正常；用户澄清开盖锁屏正常，故障仅在合盖。Mac 0.22.1 新增接电且已认证会话的临时网络保活，用户复测合盖仍失败，不输入密码也会断开。[1.26 验证](docs/VALIDATION-1.26.md)。[验证记录](docs/VALIDATION-1.25.md) · [合盖与延迟审计](docs/HOST-WAKE-LATENCY.md)
 - 开发版 1.27 新增局域网／Tailscale 自动认证选路、键盘避让动画及贴键盘上沿的按钮、可关闭的左上统计。优先 H.264 硬件编解码，保留 JPEG 回退。默认 **省流 · 15 fps**：最长边 1280、H.264 目标 **1.5 Mbps**（JPEG 回退质量 65%），保留已存画质。实际 fps／码率随内容变化；RTT 是应用往返，非触控到画面的完整延迟。[1.27 验证](docs/VALIDATION-1.27.md)。

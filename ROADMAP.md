@@ -1,14 +1,16 @@
 # Chordesk 后续开发计划
 
+**2026-11-02 发行状态：**Mac [0.25.0 试用版](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)已公开（未公证）；iOS 1.30/build 39 已上传、完成新版标准加密申报并提交 Beta Review。现有 TestFlight 邀请在新版批准/开放前仍为 1.22.1。下文旧版本状态为历史记录；不代表正式 App Store 上架。
+
 更新：2026-11-01。基线 iOS 1.22.1 / build 28、Mac 0.18.1 / build 26。公开 TestFlight Beta 已获批准，公开安装包仍为局域网版。开发版 iOS 1.23.2／Mac 0.19.0 已实现内嵌 Tailscale，用户已确认本次蜂窝跨网画面和触控正常，以下将通过的路径与剩余验收分开记录。未购买服务器；开发版已推进至 iOS 1.28／Mac 0.23.0，加入键盘动画、Tailscale 优先和连接复用、可选 H.264／HEVC、纯黑背屏及可达检查；按需采集的耗能优化仍待实施。
 
-## 1 跨网络远控 · 已解决，待发布
+## 1 跨网络远控 · 已解决，Mac 已试用发布 / iOS 更新审核中
 
 - [x] **手机通过外网控制另一网络中的 Mac**：iOS 1.23.2 / build 31＋Mac 0.19.0 / build 27 已跑通；用户关闭 Duo Wi-Fi、使用蜂窝重连后确认“画面、触控都正常”。[验证记录](docs/VALIDATION-1.23.md)
 
 **解决方案：**两端 Chordesk 内嵌 Tailscale 的 tsnet 引擎，登录各自用户的同一个私人网络；Tailscale 负责设备发现、穿透及必要的中继，Chordesk 保留自身配对与 TLS 认证。不需要固定公网 IP、自租服务器或额外安装 Tailscale App；局域网模式仍免登录。方案依赖 Tailscale 托管基础设施，Mac 需在线，不能保证所有受限网络均可连接。[设置与边界](docs/TAILSCALE.md)
 
-**发布状态：**上述功能已在开发版验证，**新版 Mac Release 与 iOS TestFlight 尚未发布**，当前公开下载仍为局域网版。下一步优先准备正式 App Store 送审，不要求先发布另一轮 TestFlight；正式审核与上架尚未进行。
+**发布状态：**上述功能已在开发版验证，Mac 0.25.0 已发布；iOS 1.30 已提交 Beta Review。公开 iOS 仍为旧局域网版，直到新版批准并开放。正式 App Store 与大陆备案准备继续，尚未上架。
 
 后续收尾（与已完成的跨网功能分开）：
 
