@@ -2,6 +2,58 @@ import XCTest
 
 final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
+    func testDesktopFitsAboveNativeKeyboardInBothOrientations() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_KEYBOARD_LAYOUT"] = "1"
+        app.launchArguments += ["-phoneKeyboardStyle", "system", "-keyboardInvocationV1", "manual", "-primaryPointerMode", "direct"]
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.launch()
+        let desktop = app.otherElements["direct-remote-touch"]
+        XCTAssertTrue(desktop.waitForExistence(timeout: 8))
+        let original = desktop.frame
+        shortPress(app.buttons["keyboard-dock-toggle"])
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8))
+        for orientation: UIDeviceOrientation in [.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            let fitted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard desktop.exists, keyboard.exists, desktop.frame.height > 0 else { return false }
+                // Keyboard AX frame excludes the Chinese candidate bar. The
+                // zero-height IME bridge follows SwiftUI's full keyboard inset.
+                let keyboardTop = app.textViews.firstMatch.frame.minY
+                return abs(desktop.frame.maxY - keyboardTop) < 3
+                    && abs(desktop.frame.width / desktop.frame.height - 1.6) < 0.02
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [fitted], timeout: 8), .completed,
+                           "desktop=\(desktop.frame), keyboard=\(keyboard.frame), bridge=\(app.textViews.firstMatch.frame)")
+            XCTAssertLessThanOrEqual(desktop.frame.maxY, keyboard.frame.minY + 3)
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "Desktop above native keyboard \(orientation.rawValue)"; shot.lifetime = .keepAlways; add(shot)
+        }
+        shortPress(app.buttons["keyboard-dock-toggle"])
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 8))
+        XCUIDevice.shared.orientation = .portrait
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            desktop.exists && abs(desktop.frame.height - original.height) < 3
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 8), .completed)
+        shortPress(app.buttons["remote-options"])
+        shortPressMenuItem("键盘、画质与触控设置", in: app)
+        let fit = app.switches["fit-desktop-above-keyboard"]
+        reveal(fit, in: app.collectionViews.firstMatch)
+        fit.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let off = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "0"), object: fit)
+        XCTAssertEqual(XCTWaiter.wait(for: [off], timeout: 3), .completed, fit.debugDescription)
+        shortPress(app.buttons["完成"])
+        shortPress(app.buttons["keyboard-dock-toggle"])
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8))
+        XCTAssertGreaterThan(desktop.frame.maxY, app.textViews.firstMatch.frame.minY + desktop.frame.height * 0.2)
+        shortPress(app.buttons["keyboard-dock-toggle"])
+    }
+
+    @MainActor
     func testSharedScrollInertiaSettingPersistsAndCanBeDisabled() {
         let app = launchFixture()
         func openSettings() {

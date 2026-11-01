@@ -206,6 +206,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private let displayWake = AuthenticatedDisplayWake()
     private var runtimeActivity: NSObjectProtocol?
     private var captureInterrupted = false
+    private var displayPresence = HostDisplayPresence()
     private var captureRepair: Task<Void, Never>?
     private var displaySleeping = false
     private var systemSleeping = false
@@ -754,7 +755,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 
     private func installCapture(_ filter: SCContentFilter, display: SCDisplay, sessionToken: UUID, preserveRecovery: Bool = false) async throws {
         let token = UUID(); captureGeneration = token
-        if !preserveRecovery { captureRecovery = CaptureRecovery() }
+        if !preserveRecovery { captureRecovery = CaptureRecovery(); displayPresence = HostDisplayPresence() }
         let previous = stream; stream = nil; frames = nil
         if let previous { try await previous.stopCapture() }
         guard generation == sessionToken else { throw CancellationError() }
@@ -768,6 +769,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         let sink = LANFrameSource(quality: videoQuality.jpegQuality, frame: { [weak self] data in
             Task { @MainActor in
                 guard let self, self.generation == sessionToken, self.captureGeneration == token, !self.scaleBusy else { return }
+                // A queued frame from before sleep/disconnection must not restore
+                // input or show stale pixels as a successfully resumed capture.
+                guard !self.systemSleeping,
+                      self.displayID.map({ CGDisplayIsOnline($0) != 0 }) == true else { return }
                 self.captureResumed()
                 self.latestFrame = data; self.frameCount += 1
                 self.link?.send(.frame, data: data, droppable: true)
@@ -782,10 +787,19 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             Task { @MainActor in
                 guard let self, self.generation == sessionToken, self.captureGeneration == token else { return }
                 let value = error as NSError
+                let online = self.displayID.map { CGDisplayIsOnline($0) != 0 } ?? false
+                let screenPermission = CGPreflightScreenCaptureAccess()
+                if CaptureRestartDecision.waitsForDisplay(isCaptureError: value.domain == SCStreamErrorDomain,
+                    code: value.code, screenPermission: screenPermission, displayOnline: online) {
+                    _ = self.displayPresence.update(online: false)
+                    self.capturePaused(); self.captureInterrupted = true
+                    self.stream = nil; self.frames = nil
+                    self.availabilityMessage = "原共享显示器暂时离线；服务保留，等待它恢复或在 Mac 选择其他显示器"
+                    self.status = self.availabilityMessage; self.sendStatus(); return
+                }
                 // A user/system stop is an intentional boundary. Only interrupted capture-service connections retry.
                 let transient = CaptureRestartDecision.permits(isCaptureError: value.domain == SCStreamErrorDomain,
-                    code: value.code, screenPermission: CGPreflightScreenCaptureAccess(),
-                    displayOnline: self.displayID.map { CGDisplayIsOnline($0) != 0 } ?? false)
+                    code: value.code, screenPermission: screenPermission, displayOnline: online)
                 guard transient else { self.stop(); self.status = value.localizedDescription; return }
                 self.capturePaused(); self.captureInterrupted = true
                 self.stream = nil; self.frames = nil
@@ -955,7 +969,17 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         refreshInputPermissions()
         if connected && Date().timeIntervalSince(lastPing) > 4 { input.release(); link?.close() }
         if let displayID, !scaleBusy {
-            guard CGDisplayIsOnline(displayID) != 0 else { stop(); status = "共享显示器已断开"; return }
+            let online = CGDisplayIsOnline(displayID) != 0
+            let change = displayPresence.update(online: online)
+            if !online {
+                capturePaused()
+                availabilityMessage = "原共享显示器暂时离线；服务保留，等待它恢复或在 Mac 选择其他显示器"
+                status = availabilityMessage; sendStatus(); return
+            }
+            if change == .returned {
+                captureInterrupted = true
+                retryInterruptedCapture()
+            }
             input.bounds = CGDisplayBounds(displayID)
         }
         sendStatus()
@@ -1086,6 +1110,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 
     func stop() {
         captureRepair?.cancel(); captureRepair = nil; captureInterrupted = false; pendingAutomaticPeer = nil
+        displayPresence = HostDisplayPresence()
         stopMicrophone("共享已停止，麦克风已停止"); peerSupportsMicrophone = false
         inputQueueEpoch += 1; pendingInputs.removeAll(); textFocus = nil; focusRequest = 0; latestFocusClick = 0
         generation = UUID(); captureGeneration = UUID()

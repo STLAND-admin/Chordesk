@@ -87,6 +87,12 @@ struct TouchContactGate<ID: Hashable> {
         if contacts[id] == true, !rect.contains(point) { contacts[id] = false }
     }
     func accepts(_ id: ID) -> Bool { contacts[id] == true }
+    func shouldCancelMovement(previouslyAccepted count: Int, live: Set<ID>) -> Bool {
+        // Ended fingers may already be absent from UIEvent.allTouches' live set
+        // while UIKit is still delivering another finger's moved callback.
+        // Only losing acceptance of a still-live contact is an abnormal loss.
+        live.filter(accepts).count < min(count, live.count)
+    }
     mutating func end(_ id: ID) { contacts.removeValue(forKey: id); cancelled.remove(id) }
     mutating func cancel() {
         cancelled.formUnion(contacts.keys)

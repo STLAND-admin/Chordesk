@@ -2,6 +2,24 @@ import XCTest
 @testable import DuoWorkbench
 
 final class HostAvailabilityTests: XCTestCase {
+    func testAbsentDisplayWaitsAndReturningSourceTriggersOneRecovery() {
+        var presence = HostDisplayPresence()
+        XCTAssertEqual(presence.update(online: true), .none)
+        XCTAssertEqual(presence.update(online: false), .disappeared)
+        XCTAssertEqual(presence.update(online: false), .none)
+        XCTAssertEqual(presence.update(online: true), .returned)
+        XCTAssertEqual(presence.update(online: true), .none)
+        for code in [-3813, -3814, -3815] {
+            XCTAssertTrue(CaptureRestartDecision.waitsForDisplay(isCaptureError: true, code: code, screenPermission: true, displayOnline: false))
+            XCTAssertFalse(CaptureRestartDecision.waitsForDisplay(isCaptureError: true, code: code, screenPermission: false, displayOnline: false))
+            XCTAssertFalse(CaptureRestartDecision.waitsForDisplay(isCaptureError: true, code: code, screenPermission: true, displayOnline: true))
+        }
+        // User stop, system stop and denied permission retain their stop boundary.
+        for code in [-3801, -3817, -3821] {
+            XCTAssertFalse(CaptureRestartDecision.waitsForDisplay(isCaptureError: true, code: code, screenPermission: true, displayOnline: false))
+        }
+        XCTAssertFalse(CaptureRestartDecision.waitsForDisplay(isCaptureError: false, code: -3814, screenPermission: true, displayOnline: false))
+    }
     func testFreshFrameResumesOnlyTheOriginalAuthorizationOnce() {
         var recovery = CaptureRecovery()
         recovery.pause(allowed: true, revision: 4)

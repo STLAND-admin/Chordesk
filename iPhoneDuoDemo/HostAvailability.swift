@@ -53,9 +53,25 @@ struct DisplayWakeGate {
     }
 }
 enum CaptureRestartDecision {
+    static func waitsForDisplay(isCaptureError: Bool, code: Int, screenPermission: Bool, displayOnline: Bool) -> Bool {
+        screenPermission && isCaptureError && !displayOnline && [-3813, -3814, -3815].contains(code)
+    }
     static func permits(isCaptureError: Bool, code: Int, screenPermission: Bool, displayOnline: Bool = true) -> Bool {
         screenPermission && isCaptureError && ([-3804, -3805, -3811].contains(code)
             || (displayOnline && [-3813, -3814, -3815].contains(code)))
+    }
+}
+
+/// A temporarily absent source keeps its listener. Retry only on the transition
+/// back to that same display, not every heartbeat or against another display.
+struct HostDisplayPresence {
+    enum Change { case none, disappeared, returned }
+    private(set) var missing = false
+    mutating func update(online: Bool) -> Change {
+        let wasMissing = missing; missing = !online
+        if !online && !wasMissing { return .disappeared }
+        if online && wasMissing { return .returned }
+        return .none
     }
 }
 #if os(macOS)

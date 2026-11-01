@@ -22,6 +22,29 @@ struct NativeKeyboardPresentation {
     }
 }
 
+/// The same frame is used by the picture and its input surface. Without a
+/// keyboard the existing full workspace and centered/pinchable viewport remain.
+enum RemoteKeyboardLayout {
+    static func frame(container: CGSize, content: CGSize, keyboardTop: CGFloat?) -> CGRect {
+        guard container.width.isFinite, container.height.isFinite,
+              container.width > 0, container.height > 0 else { return .zero }
+        let full = CGRect(origin: .zero, size: container)
+        guard let top = keyboardTop, top.isFinite, top < container.height,
+              content.width.isFinite, content.height.isFinite,
+              content.width > 0, content.height > 0 else { return full }
+        let availableHeight = min(container.height, max(0, top))
+        let scale = min(container.width / content.width, availableHeight / content.height)
+        let size = CGSize(width: content.width * scale, height: content.height * scale)
+        return CGRect(x: (container.width - size.width) / 2, y: availableHeight - size.height,
+                      width: size.width, height: size.height)
+    }
+    static func top(of keyboard: CGRect, in workspace: CGRect) -> CGFloat? {
+        let overlap = keyboard.intersection(workspace)
+        guard !overlap.isNull, overlap.width > 0, overlap.height > 0 else { return nil }
+        return max(0, overlap.minY - workspace.minY)
+    }
+}
+
 /// A keyboard suggestion belongs to one explicit remote click. Rear switching or
 /// a manual mode choice consumes older suggestions, including delayed AX replies.
 struct AutomaticKeyboardPolicy {
@@ -114,6 +137,55 @@ struct ShortcutModifiers {
 #if os(iOS)
 import SwiftUI
 import UIKit
+
+/// Convert public keyboard frames from this window's screen into workspace
+/// coordinates. The workspace is inset below the independent rear-status strip.
+struct KeyboardOcclusionReader: UIViewRepresentable {
+    var onChange: (CGFloat?) -> Void
+    func makeUIView(context: Context) -> KeyboardOcclusionView { KeyboardOcclusionView() }
+    func updateUIView(_ view: KeyboardOcclusionView, context: Context) {
+        view.onChange = onChange; view.setNeedsLayout()
+    }
+}
+
+final class KeyboardOcclusionView: UIView {
+    var onChange: ((CGFloat?) -> Void)?
+    private var lastTop: CGFloat?
+    private var hasReported = false
+    private var reportGeneration = 0
+    private var keyboardScreenFrame: CGRect?
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false; backgroundColor = .clear
+        for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardDidChangeFrameNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged(_:)), name: name, object: nil)
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardHidden), name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    @objc private func keyboardChanged(_ note: Notification) {
+        guard note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? Bool != false else { return }
+        keyboardScreenFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+        setNeedsLayout()
+    }
+    @objc private func keyboardHidden() { keyboardScreenFrame = nil; setNeedsLayout() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let top: CGFloat?
+        if let window, let frame = keyboardScreenFrame {
+            let windowFrame = window.convert(frame, from: window.screen.coordinateSpace)
+            top = RemoteKeyboardLayout.top(of: convert(windowFrame, from: window), in: bounds)
+        } else { top = nil }
+        guard !hasReported || top != lastTop else { return }
+        hasReported = true; lastTop = top; reportGeneration += 1
+        let generation = reportGeneration
+        DispatchQueue.main.async { [weak self] in
+            guard let self, generation == self.reportGeneration else { return }
+            self.onChange?(top)
+        }
+    }
+}
 
 @MainActor
 final class NativeKeyboardController: ObservableObject {

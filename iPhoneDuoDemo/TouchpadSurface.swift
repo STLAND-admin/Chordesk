@@ -266,7 +266,10 @@ final class TouchSurfaceView: UIView {
             if active.isEmpty { reset() }
             reportContacts(active.count); return
         }
-        if active.count < reportedContacts { cancelTouches(); return }
+        if contactGate.shouldCancelMovement(previouslyAccepted: reportedContacts,
+                                            live: Set(ownedTouches(event).map(ObjectIdentifier.init))) {
+            cancelTouches(); return
+        }
         guard startedAt != nil, !active.isEmpty else { return }
         if observedFingerCount > 1 {
             let current = centroid(active)

@@ -2,6 +2,42 @@ import XCTest
 @testable import DuoWorkbench
 
 final class ScrollDynamicsTests: XCTestCase {
+    @MainActor
+    func testStaggeredTrackpadLiftPreservesMomentumButLeavingRegionCancels() throws {
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+        for leavesRegion in [false, true] {
+            var gate = TouchContactGate<Int>(), tracker = ScrollGestureTracker()
+            var outputs: [ScrollWheelOutput] = []
+            let driver = HostScrollDriver(automaticTimer: false, clock: { 0 }, allowed: { true }, emit: { outputs.append($0); return true })
+            gate.begin(1, at: CGPoint(x: 150, y: 400), in: bounds)
+            gate.begin(2, at: CGPoint(x: 250, y: 400), in: bounds)
+            func send(_ value: ScrollGestureEvent?) {
+                if let value { XCTAssertTrue(driver.receive(value, bounds: bounds, pointer: CGPoint(x: 200, y: 400))) }
+            }
+            send(tracker.begin(mode: .trackpad, at: 1))
+            for i in 1...10 { send(tracker.move(delta: CGPoint(x: 0, y: 0.01), at: 1 + Double(i) * 0.01)) }
+            // UIKit may deliver the remaining finger's move before the other
+            // finger's ended callback from the same event. Both leave one accepted
+            // finger, but only an ongoing contact outside the region is a cancel.
+            let live: Set<Int> = leavesRegion ? [1, 2] : [1]
+            gate.synchronize(live: live)
+            if leavesRegion { gate.move(2, to: CGPoint(x: 450, y: 400), in: bounds) }
+            let cancel = gate.shouldCancelMovement(previouslyAccepted: 2, live: live)
+            XCTAssertEqual(cancel, leavesRegion)
+            if cancel { send(tracker.cancel()) }
+            send(tracker.end(at: 1.11))
+            driver.tick(at: 0.016)
+            XCTAssertEqual(outputs.contains { $0.momentum == .began && $0.y > 0 }, !leavesRegion)
+            gate.end(1); gate.end(2); gate.synchronize(live: [])
+            XCTAssertFalse(gate.shouldCancelMovement(previouslyAccepted: 1, live: []))
+            XCTAssertNil(tracker.end(at: 1.12), "The last lift must neither cancel nor restart momentum")
+            if !leavesRegion {
+                send(tracker.begin(mode: .trackpad, at: 2))
+                XCTAssertEqual(outputs.last?.momentum, .ended, "A genuinely new touch still stops momentum")
+            }
+        }
+    }
+
     func testBothModesUseSameVelocityAndPauseBeforeLiftStopsFlick() throws {
         var endings: [ScrollGestureEvent] = []
         for mode: ScrollGestureEvent.Mode in [.direct, .trackpad] {

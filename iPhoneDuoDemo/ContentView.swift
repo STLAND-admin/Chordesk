@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var showingAbout = false
     @AppStorage("phoneKeyboardStyle") private var keyboardStyle = PhoneKeyboardStyle.system.rawValue
     @AppStorage("keyboardInvocationV1") private var keyboardInvocation = KeyboardInvocation.automatic.rawValue
+    @AppStorage("fitDesktopAboveKeyboardV1") private var fitDesktopAboveKeyboard = true
     @AppStorage("rearControlAutoStartV1") private var rearAutoStart = true
     @AppStorage("rearWindowGesturesV1") private var rearWindowGestures = true
     @AppStorage("controlRailTopV1") private var controlRailTop = 0.0
@@ -32,6 +33,8 @@ struct ContentView: View {
     @State private var edgeBarWidth: CGFloat = 0
     @State private var edgeAnchorX: CGFloat?
     @State private var workspaceHeight: CGFloat = 0
+    @State private var nativeKeyboardTop: CGFloat?
+    @State private var customKeyboardFrame = CGRect.zero
     @State private var rearBadgeSize = CGSize.zero
     @State private var rearBadgeFrame = CGRect.zero
     @State private var previousIdleTimer: Bool?
@@ -187,6 +190,7 @@ struct ContentView: View {
                         Text(client.status)
                         Text("收到画面 \(client.receivedFrames) 帧 · \(client.videoMbps, specifier: "%.1f") Mbps · \(client.videoFPS, specifier: "%.0f") fps")
                         Text("发送操作 \(client.sentEvents) · Mac 确认 \(client.acknowledged)")
+                        Text(client.lastScrollEnd)
                         Text(overviewMessage)
                         if overviewSequence > 0 {
                             Text("总览请求 #\(overviewSequence) · 最近 Mac 确认 #\(client.acknowledged)；确认仅代表事件投递，效果以桌面为准")
@@ -282,7 +286,8 @@ struct ContentView: View {
         GeometryReader { geometry in
             if !modalVisible {
                 VStack(alignment: .trailing) {
-                    VStack(spacing: 8) {
+                    ScrollView(.vertical) {
+                      VStack(spacing: 8) {
                         controlMenu
                             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { edgeBarWidth = $0 }
                         if showPointerModeButton {
@@ -295,7 +300,9 @@ struct ContentView: View {
                         StableMenuButton(symbol: "display", title: "显示器与文字大小", identifier: "display-dock-button", sections: [],
                             primaryAction: { releaseInteractions(); showingDisplays = true; client.requestDisplays() },
                             onPresentation: { _ in }, onSelect: { _ in }).modifier(EdgeDockGlass())
-                    }
+                      }
+                    }.scrollIndicators(.hidden)
+                        .frame(maxWidth: edgeBarWidth > 0 ? edgeBarWidth : nil, alignment: .trailing)
                         .padding(.top, geometry.size.height * ControlRailPosition.fraction(controlRailTop, maximum: 0.25))
                     Spacer(minLength: 0)
                     if !customKeyboardShown { keyboardDock
@@ -517,11 +524,12 @@ struct ContentView: View {
                 }
                 Section("iPhone 键盘与快捷键") {
                     Text("默认使用 iPhone 输入法并自动唤起：点击 Mac 可编辑输入位置，正反面手指抬起后弹出。识别依赖 Mac 应用；不能识别时，轻点右下键盘按钮显示／收起。已有用户保存的偏好继续保留，可在设置或键盘长按菜单选择“自动唤起”。")
-                    Text("通过系统切换键选择已启用的第三方键盘。中文候选由输入法处理，只转发已确认文字。App 没有本地输入栏，输入结果看远程桌面；遮挡输入框的优化仍在开发计划中。")
+                    Text("通过系统切换键选择已启用的第三方键盘。中文候选由输入法处理，只转发已确认文字。输入结果直接看远程桌面；默认将完整画面等比例放到键盘上方，也可在设置关闭。")
                     Text("键盘上方靠右提供 Ctrl、Cmd、Option 和键盘按钮。修饰键可组合，下一次快捷键后释放；再次轻点可取消。长按键盘按钮打开 Esc、Tab、全选／复制／粘贴、方向键和 F1–F12。")
                     Text("长按系统键盘空格后滑动可调整 Mac 文字光标。第三方键盘需支持系统浮动光标回调；无效果时用快捷菜单方向键。可选“手机布局 · 可调”提供 ABC／123／#+=，但不提供中文候选。")
                 }
                 Section("显示、画质与界面") {
+                    Text("键盘出现时，远程桌面默认保持原宽高比，完整放入键盘上方，底边贴住键盘；收起后恢复。可在设置关闭“键盘弹出时适配远程画面”。")
                     Text("单指直接触屏与双指触控板共用滚动惯性：快速滑动后抬手继续减速，慢滑或停住再抬手不会明显续滚。设置 → 统一滚动惯性可调 0–2，0 关闭、默认 1。重新落指、切换模式、打开菜单或断连会停止惯性；需两端均更新到支持版本。")
                     Text("目标太小：显示器按钮 → 适合触屏／更大文字／最大文字。文字模糊：设置选择清晰或超清。逻辑分辨率改变会同时影响实体 Mac，断连后尝试恢复连接前的显示模式与排列。")
                     Text("画质可选清晰、超清及高帧率。120／144 fps 是实验请求上限，实际取决于源屏、编码、网络和手机。右侧按钮位置、点击触感、放大镜和触控板灵敏度都可在设置调整。")
@@ -539,12 +547,28 @@ struct ContentView: View {
 
     private var workspace: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                Group {
-                    if localDemo { MonitorView(session: session) }
-                    else { LANMonitor(client: client) { releaseInteractions(); camera.stop(); showingConnect = true } }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                workspaceInput
+            let customTop = customKeyboardShown ? RemoteKeyboardLayout.top(of: customKeyboardFrame, in: geometry.frame(in: .global)) : nil
+            let top = fitDesktopAboveKeyboard ? (nativeKeyboardVisible && !menuPresented ? nativeKeyboardTop : customTop) : nil
+            let contentSize = client.image.map { CGSize(width: $0.width, height: $0.height) } ?? geometry.size
+            let desktop = RemoteKeyboardLayout.frame(container: geometry.size, content: contentSize, keyboardTop: top)
+            ZStack(alignment: .topLeading) {
+                Color.black
+                ZStack {
+                    Group {
+                        if localDemo { MonitorView(session: session) }
+                        else { LANMonitor(client: client) { releaseInteractions(); camera.stop(); showingConnect = true } }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    workspaceInput
+                }
+                .frame(width: desktop.width, height: desktop.height)
+                .clipped()
+                .position(x: desktop.midX, y: desktop.midY)
+            }
+            .background(KeyboardOcclusionReader { nativeKeyboardTop = $0 }.allowsHitTesting(false))
+            .onChange(of: desktop) { _, _ in
+                // Old contacts must not continue using coordinates from before
+                // the keyboard resize. Keep the rear chord and IME state intact.
+                inputEpoch += 1; client.release()
             }
             .onAppear { workspaceHeight = geometry.size.height }
             .onChange(of: geometry.size) { _, _ in
@@ -610,6 +634,7 @@ struct ContentView: View {
                 keyboardDock.frame(height: height)
             }
             .background(InputGlass(transparency: keyboardTransparency))
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { customKeyboardFrame = $0 }
             .disabled(menuPresented)
         }
     }
@@ -722,6 +747,10 @@ struct ContentView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("文字输入") {
+                    Toggle("键盘弹出时适配远程画面", isOn: $fitDesktopAboveKeyboard)
+                        .accessibilityIdentifier("fit-desktop-above-keyboard")
+                    Text("默认开启：画面保持宽高比，完整显示在键盘上方，底边贴住键盘；横屏可左右留边。关闭则保持原来的键盘覆盖方式，不改变 Mac 分辨率。")
+                        .font(.footnote).foregroundStyle(.secondary)
                     Picker("键盘", selection: $keyboardStyle) {
                         ForEach(PhoneKeyboardStyle.allCases) { Text($0.title).tag($0.rawValue) }
                     }.accessibilityIdentifier("phone-keyboard-style")

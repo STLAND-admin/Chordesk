@@ -33,6 +33,7 @@ final class LANClient: ObservableObject {
     @Published private(set) var captureRevision: String?
     @Published private(set) var supportsDirectTouch = false
     @Published private(set) var supportsScrollDynamics = false
+    @Published private(set) var lastScrollEnd = "尚无滚动抬手记录"
     @Published var scrollInertia = ScrollTuning.coefficient(UserDefaults.standard.object(forKey: ScrollTuning.key) as? Double ?? ScrollTuning.defaultCoefficient) {
         didSet { UserDefaults.standard.set(ScrollTuning.coefficient(scrollInertia), forKey: ScrollTuning.key); release() }
     }
@@ -314,6 +315,9 @@ final class LANClient: ObservableObject {
 
     func scroll(_ sample: ScrollGestureEvent) {
         guard acceptsInput, sample.isValid else { return }
+        if sample.phase == .ended {
+            lastScrollEnd = "\(sample.mode == .trackpad ? "触控板" : "直接触屏")抬手 · 速度 \(String(format: "%.2f", abs(sample.velocity.y))) 区域／秒 · 系数 \(String(format: "%.1f", scrollInertia)) · \(supportsScrollDynamics ? "惯性协议" : "旧主机普通滚动")"
+        }
         if supportsScrollDynamics {
             var value = sample; value.coefficient = ScrollTuning.coefficient(scrollInertia)
             send(LANInput(scroll: value))
