@@ -46,6 +46,7 @@ mkdir -p "$app_dir/MacOS" "$app_dir/Resources"
 # Bundle.module resolves from the application Resources directory.
 ditto "$duo_binary_path/DuoWorkbench_DuoWorkbench.bundle" "$app_dir/Resources/DuoWorkbench_DuoWorkbench.bundle"
 cp -X Branding/Chordesk.icns "$app_dir/Resources/Chordesk.icns"
+cp -X scripts/Chordesk-Maintenance.command "$app_dir/Resources/Chordesk-Maintenance.command"
 cp -X "$duo_binary_path/DuoWorkbench" "$app_dir/MacOS/DuoWorkbench"
 cat > "$app_dir/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -57,8 +58,8 @@ cat > "$app_dir/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>Chordesk</string>
 <key>CFBundleIconFile</key><string>Chordesk</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.26.0</string>
-<key>CFBundleVersion</key><string>39</string>
+<key>CFBundleShortVersionString</key><string>0.26.1</string>
+<key>CFBundleVersion</key><string>40</string>
 <key>LSMinimumSystemVersion</key><string>15.2</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>NSAppleEventsUsageDescription</key><string>通过系统自带的 System Events 执行左右切换 Mac 桌面的快捷键。仅从本机设置请求授权。</string>

@@ -4,6 +4,7 @@
 | --- | --- |
 | [操作指南](../OPERATION-GUIDE.md) | 当前手势、键盘和画质设置 |
 | [首次安装检查](FIRST-RUN-CHECKLIST.md) | 两端首次使用、权限及回归清单 |
+| [Mac 维护与卸载](MAC-MAINTENANCE.md) | 升级钥匙串故障、权限修复、卸载工具与稳定签名 |
 | [开发构建](DEVELOPMENT.md) | Xcode、Go、Mac 打包和源码导航 |
 | [测试与反馈](BETA-TESTING.md) | 当前测试入口及反馈模板 |
 | [分发准备](DISTRIBUTION.md) | TestFlight、App Store 与 Mac 分发边界 |

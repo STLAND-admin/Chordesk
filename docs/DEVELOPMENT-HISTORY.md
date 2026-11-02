@@ -2,6 +2,15 @@
 
 这里集中保存历史验证、发行和早期原型记录。各节仅代表其当时状态；当前安装、操作与限制以 README、操作指南及本文件最上方最新记录为准。已删除的旧源文件可从 Git 历史恢复。
 
+## 2026-11-02 · Mac 0.26.1 升级恢复候选
+
+- 用户确认同学是从旧版升级／重装，Tailscale 报 `Keychain read failed (-25293)`，没有系统认证弹窗。源码确认主机全局禁用可选钥匙串交互，0.26 公开包的指定要求为 cdhash-only ad hoc；这些是已确认因素，仍不能只凭截图排除对方钥匙串锁定、密码或旧 ACL 问题。
+- 0.26.1 /40 保留后台静默读取，增加本地按钮启动的同 App 只读授权子进程；只查询固定的 Tailscale 服务／条目，返回 OSStatus，不输出秘密、不启动网络，90 秒有界。用户明确确认才删除本机公网身份，失败保留错误与人工路径，不自动换存储命名或扩大 ACL。iOS 1.31 版本／已上传 IPA 不变。
+- 设置增加仅 `dev.iphoneduo.workbench` 的 `tccutil reset All <bundle-id>` 和重启入口，先停止远控、恢复显示模式；不编辑 TCC 数据库、不自动批准权限。可导出项目维护工具：检查、权限修复、公网重新绑定、保留数据卸载、彻底卸载逐项确认。只移动匹配身份的标准 Applications 包，App／本地数据进废纸篓，偏好先备份；凭据删除需重新绑定。保留 First Run、其他产品、全局钥匙串与系统安全设置。
+- 187 项 SwiftPM 测试：**186 通过、1 跳过、0 失败**，跳过原固定生产端口测试，未强停日常主机。新增 4 项测试覆盖错误分类、固定作用域、辅助进程参数和非交互拒绝；另 7 项 Python/PTY 测试仅在隔离文件夹和假 App 上运行，TCC／Keychain／defaults 命令全替换为测试桩，验证完整卸载、保留数据、运行中拒绝、符号链接拒绝、钥匙串失败、取消及首次创建废纸篓，不碰真实权限或数据。两端兼容编译、Mac 候选打包与脚本语法通过。
+- 候选：`release-artifacts/mac-test-0.26.1-build40-arm64/`，尚未发布或覆盖安装。首次真实钥匙串认证／旧身份迁移与同学机复测仍待进行。当前无 Developer ID Application 证书，先前证书／公证暂停仍有效，已询问用户是否恢复；未创建证书、上传公证或改当前发行状态。
+- 日志：`/private/tmp/chordesk-0.26.1-tests.log`、`chordesk-0.26.1-maintenance-fixtures.log`、`chordesk-0.26.1-package-final.log`、`chordesk-0.26.1-ios-compat.log`。当前使用与恢复说明见 [Mac 维护与卸载](MAC-MAINTENANCE.md)。
+
 ## 2026-11-02 · Mac 0.26 发布、iOS 1.31 外部送审
 
 - 用户明确要求发布新版 Mac GitHub Release，并提交 TestFlight 审核。没有提交正式 App Store，也没有恢复暂停的 Developer ID／公证工作。

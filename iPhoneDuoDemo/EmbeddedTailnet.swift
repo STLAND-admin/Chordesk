@@ -6,6 +6,7 @@ import AuthenticationServices
 import UIKit
 #else
 import AppKit
+import Security
 #endif
 
 struct TailnetSnapshot: Decodable, Equatable {
@@ -75,7 +76,15 @@ final class EmbeddedTailnet: ObservableObject {
         }
     }
     private func update(_ value: TailnetSnapshot) {
-        if let error = value.error { snapshot = value; message = error; return }
+        if let error = value.error {
+            snapshot = value
+#if os(macOS)
+            message = MacKeychainFailure.parse(error)?.message ?? error
+#else
+            message = error
+#endif
+            return
+        }
         if snapshot != value { snapshot = value }
         if value.canAuthorize, value.loginURL != nil, requestLoginPresentation {
             requestLoginPresentation = false; showLogin = true
@@ -138,6 +147,53 @@ final class EmbeddedTailnet: ObservableObject {
             if value.error != nil { requestLoginPresentation = false }
         }
     }
+#if os(macOS)
+    /// Only the local recovery button permits a fresh, same-signed process to
+    /// request Keychain authentication. Automatic resume stays noninteractive.
+    func authorizeKeychainAndRetry() {
+        guard !busy, MacKeychainFailure.parse(snapshot.error)?.canAuthorize == true else { return }
+        generation = UUID(); let token = generation
+        polling?.cancel(); polling = nil
+        enabled = false; busy = true; showLogin = false; requestLoginPresentation = false
+        message = "请在 macOS 提示中允许 Chordesk 访问其公网登录记录…"
+        Task {
+            _ = await call { CRStop() }
+            guard generation == token else { return }
+            let reply = await MacKeychainAuthorizationHelper.authorize()
+            guard generation == token else { return }
+            busy = false
+            guard reply.canRetry else {
+                message = reply.status == errSecUserCanceled
+                    ? "钥匙串授权已取消或超时，原登录记录保留。"
+                    : "钥匙串授权未完成（\(reply.status)）。可检查登录钥匙串，或选择重新绑定公网身份。"
+                return
+            }
+            enabled = false
+            connect()
+        }
+    }
+    /// Explicit local confirmation is required by the UI. Failure preserves the
+    /// old item; never change its ACL or silently create a replacement namespace.
+    func resetLocalTailnetIdentity() {
+        guard !busy, MacKeychainFailure.parse(snapshot.error) != nil else { return }
+        let token = prepareDisconnect(preservePreference: false)
+        Task {
+            await finishDisconnect(token)
+            guard generation == token else { return }
+            busy = true
+            let status = await MacKeychainAuthorizationHelper.removeLocalTailnetIdentity()
+            guard generation == token else { return }
+            busy = false
+            if status == errSecSuccess || status == errSecItemNotFound {
+                snapshot = .init(state: "Stopped")
+                message = "本机公网身份已清除。点登录重新绑定；旧节点可在 Tailscale 管理页移除，新地址可能需重新扫码。"
+            } else {
+                snapshot = .init(error: "Keychain delete failed (\(status))")
+                message = "旧登录记录未能清除（\(status)）。请在“钥匙串访问”搜索 dev.chordesk.embedded-tailnet，仅删除 node-state-v1 后重试；或使用维护工具。"
+            }
+        }
+    }
+#endif
     func authenticationEnded(couldNotStart: Bool = false) {
         showLogin = false; requestLoginPresentation = false
         authenticationNotice = couldNotStart
@@ -282,6 +338,9 @@ final class EmbeddedTailnet: ObservableObject {
 struct EmbeddedTailnetControls: View {
     @ObservedObject var tailnet = EmbeddedTailnet.shared
     @State private var confirmLogout = false
+#if os(macOS)
+    @State private var confirmIdentityReset = false
+#endif
     @State private var showPrivacy = false
     @State private var fixtureActions: [String] = []
     @State private var fixtureEnabled = false
@@ -306,6 +365,20 @@ struct EmbeddedTailnetControls: View {
         VStack(alignment: .leading, spacing: 10) {
             Label(tailnet.message, systemImage: tailnet.ready ? "checkmark.shield" : "network")
                 .font(.callout).accessibilityIdentifier("tailscale-state")
+#if os(macOS)
+            if let failure = MacKeychainFailure.parse(tailnet.snapshot.error) {
+                Text(failure.explanation).font(.caption).foregroundStyle(.secondary)
+                if failure.canAuthorize {
+                    Button("授权钥匙串并重试") { tailnet.authorizeKeychainAndRetry() }
+                        .buttonStyle(.borderedProminent).tint(.gray)
+                        .disabled(tailnet.busy || !ChordeskMaintenanceScope.supported)
+                        .accessibilityIdentifier("tailscale-authorize-keychain")
+                }
+                Button("重新绑定本机公网身份…", role: .destructive) { confirmIdentityReset = true }
+                    .buttonStyle(.bordered).disabled(tailnet.busy || !ChordeskMaintenanceScope.supported)
+                    .accessibilityIdentifier("tailscale-reset-local-identity")
+            }
+#endif
             if tailnet.ready {
                 Text(tailnet.addresses.joined(separator: " · ")).font(.caption.monospaced()).textSelection(.enabled)
             }
@@ -384,6 +457,11 @@ struct EmbeddedTailnetControls: View {
             if tailnet.showLogin { tailnet.authenticationEnded() }
         }
 #else
+        .confirmationDialog("重新绑定本机公网身份？", isPresented: $confirmIdentityReset, titleVisibility: .visible) {
+            Button("清除本机公网登录", role: .destructive) { tailnet.resetLocalTailnetIdentity() }
+        } message: {
+            Text("此 Mac 的 Chordesk 公网登录将移除，需重新登录；新地址可能需要重新扫码。原局域网配对保留。旧节点仍可在 Tailscale 管理页移除。")
+        }
         .onChange(of: tailnet.showLogin, initial: true) { _, value in
             if value, let url = tailnet.snapshot.loginURL { NSWorkspace.shared.open(url); tailnet.showLogin = false }
         }

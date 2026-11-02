@@ -73,6 +73,10 @@ private struct HostScene: View {
 @main
 enum ChordeskEntry {
     static func main() {
+        if CommandLine.arguments.dropFirst().first == MacKeychainAuthorizationHelper.argument {
+            MacKeychainAuthorizationHelper.run(arguments: CommandLine.arguments)
+            return
+        }
         if CommandLine.arguments.dropFirst().first == HostRelaunchHelper.argument {
             HostRelaunchHelper.run(arguments: CommandLine.arguments)
             return

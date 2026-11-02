@@ -172,6 +172,7 @@ struct LANHostView: View {
                     Text(host.lastInput)
                     Text(Bundle.main.bundlePath).textSelection(.enabled)
                 }
+                HostMaintenancePanel(host: host)
             }.formStyle(.grouped).navigationTitle("Chordesk 设置").tint(.gray)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingSettings = false } } }
                 .task { host.refreshDesktopPermission(); showingPermissions = permissionSetup.visible; host.refreshMicrophoneDevices(); await host.refreshDisplays(); await host.refreshScaleOptions() }
