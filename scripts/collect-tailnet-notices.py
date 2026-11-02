@@ -12,7 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 GO = os.environ.get("CHORDESK_GO", "go")
-MODULE = ROOT / "Native/Tailnet"
+MODULE = ROOT / "ProjectFiles/Native/Tailnet"
 modules = {}
 
 for target, sdk, triple in [("darwin", "macosx", "arm64-apple-macos15.2"), ("ios", "iphoneos", "arm64-apple-ios17.0")]:
@@ -50,7 +50,7 @@ for name, version, base, files in components:
     parts.append(f"\n{'=' * 72}\n{name} {version}\n")
     for path in files:
         parts.append(f"\n--- {path.relative_to(base)} ---\n{path.read_text()}\n")
-out = ROOT / "iPhoneDuoDemo/Resources/Legal/ThirdPartyNotices.txt"
+out = ROOT / "ProjectFiles/Chordesk/Resources/Legal/ThirdPartyNotices.txt"
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("".join(parts).rstrip() + "\n")
 print(f"Collected {len(components)} components in {out.relative_to(ROOT)}")

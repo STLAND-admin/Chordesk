@@ -1,4 +1,4 @@
-<p align="center"><img src="Branding/Chordesk-transparent.svg" width="150" alt="Chordesk"></p>
+<p align="center"><img src="ProjectFiles/Branding/Chordesk-transparent.svg" width="150" alt="Chordesk"></p>
 
 # Chordesk
 
@@ -41,8 +41,10 @@ Audio is disabled. Closed-lid/system-sleep wake is not guaranteed. IPv4/IPv6 pai
 
 ## Develop and contribute
 
+[Project layout](ProjectFiles/README.md)
+
 [Xcode / Go / Mac build](docs/DEVELOPMENT.md) · [First-run checks](docs/FIRST-RUN-CHECKLIST.md) · [Distribution](docs/DISTRIBUTION.md) · [Documentation index](docs/README.md) · [Development & validation history](docs/DEVELOPMENT-HISTORY.md)
 
-Build the iOS client from `iPhoneDuoDemo.xcodeproj` using your own Team. Keep the original app identity when updating an existing installation. The concept website is maintained separately in [Chordesk-site](https://github.com/STLAND-admin/Chordesk-site).
+Build the iOS client from `ProjectFiles/Chordesk.xcodeproj` using your own Team. Keep the original app identity when updating an existing installation. The concept website is maintained separately in [Chordesk-site](https://github.com/STLAND-admin/Chordesk-site).
 
 Project-owned code, documentation and artwork: **[CC BY-NC-SA 4.0](LICENSE)**. Commercial use is not granted. Third-party licenses remain applicable; see [NOTICE](NOTICE.md). Privacy: [English](https://stland-admin.github.io/Chordesk-site/privacy.html?lang=en) · [中文](https://stland-admin.github.io/Chordesk-site/privacy.html?lang=zh). Feedback: styj@zju.edu.cn.

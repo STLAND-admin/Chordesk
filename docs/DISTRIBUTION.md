@@ -40,7 +40,7 @@ iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本�
 
 ## macOS → 安装包
 
-开发期沿用稳定 Apple Development 身份，实际安装包为 `~/Applications/Chordesk.app`，旧 DuoWorkbench 路径只保留兼容链接。正式面向其他用户的包另用 Developer ID Application 签名、Hardened Runtime 与公证，公证完成后装订票据，再打包 DMG；需要真正安装器时使用 Developer ID Installer 签名 PKG。
+本机仅保留 `/Applications/Chordesk.app`；当前使用稳定 Developer ID 身份。项目和可执行模块已更名为 Chordesk／ChordeskHost，旧 bundle ID 和钥匙串命名空间保留以兼容升级。正式面向其他用户的包另用 Developer ID Application 签名、Hardened Runtime 与公证，公证完成后装订票据，再打包 DMG；需要真正安装器时使用 Developer ID Installer 签名 PKG。
 
 在干净 Mac 测试首次启动、屏幕录制／辅助功能申请、配对、断线释放和卸载流程。不要把本机开发证书、钥匙串、配对密钥或已有系统授权打进安装包。正式签名／ID 迁移需计划重新授权，不许悄悄退回 ad hoc。
 

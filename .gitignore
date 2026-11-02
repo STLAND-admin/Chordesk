@@ -24,3 +24,6 @@ release-artifacts/
 *.xcarchive/
 *.ipa
 *.dmg
+
+# Private review/filing/correspondence notes; never publish.
+.local/

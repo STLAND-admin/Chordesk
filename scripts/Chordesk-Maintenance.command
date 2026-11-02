@@ -39,7 +39,7 @@ plan() {
     say '不读取密码、私钥、桌面内容；不更改其他 App、系统安全设置或整个登录钥匙串。'
 }
 stopped() {
-    if /usr/bin/pgrep -f '/(Chordesk|DuoWorkbench)\.app/Contents/MacOS/DuoWorkbench([[:space:]]|$)' >/dev/null; then
+    if /usr/bin/pgrep -f '/(Chordesk|DuoWorkbench)\.app/Contents/MacOS/(ChordeskHost|DuoWorkbench)([[:space:]]|$)' >/dev/null; then
         fail '请先从 Chordesk 菜单正常退出，恢复原显示模式后再运行工具。不会强制结束应用。'; return 1
     fi
 }

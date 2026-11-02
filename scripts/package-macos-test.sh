@@ -21,11 +21,11 @@ fi
 test_stage=$(mktemp -d /private/tmp/ChordeskPeerTest.XXXXXX)
 test_app="$test_stage/image/Chordesk.app"
 # '-' is intentional for this separately exported test artifact only.
-DUO_BUILD_CONFIGURATION=release DUO_BUILD_PATH="$test_stage/build" \
-  DUO_APP_BUNDLE="$test_app" DUO_SIGNING_IDENTITY=- ./scripts/build-workbench.sh
+CHORDESK_BUILD_CONFIGURATION=release CHORDESK_BUILD_PATH="$test_stage/build" \
+  CHORDESK_APP_BUNDLE="$test_app" CHORDESK_SIGNING_IDENTITY=- ./scripts/build-workbench.sh
 test_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$test_app/Contents/Info.plist")
 test_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$test_app/Contents/Info.plist")
-test_binary="$test_app/Contents/MacOS/DuoWorkbench"
+test_binary="$test_app/Contents/MacOS/ChordeskHost"
 if [[ "$(lipo -archs "$test_binary")" != arm64 ]]; then
     printf '%s\n' 'Unexpected architecture; artifact was not packaged.' >&2; exit 1
 fi

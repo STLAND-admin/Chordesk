@@ -1,4 +1,4 @@
-# iPhone Duo Demo 编码规范
+# Chordesk 编码规范
 
 本项目面向 iPhone Duo 的可变窗口与多显示区域体验。新增界面和修改布局时，必须遵守以下规范：
 
@@ -15,6 +15,10 @@
 9. 省略号 symbol 只用于溢出菜单；App 自定义溢出入口应并入系统溢出菜单。
 
 ## 当前工程与边界
+
+- **2026-11-03 / 整理与维护更新**：Mac 0.27.0 /41 增加三态权限（未授权／已授权需重启／已授权可用），仅启动、回前台、主动检查时用同一签名程序的新进程执行公开只读 preflight；不读 TCC、不自动授予。Help 菜单内嵌卸载，默认保留数据，可明确选择完整卸载，先停止／恢复再正常退出，由固定临时辅助副本调用随包后端；QA 与其他产品不可删除。192 项完整 Swift 回归与 7 项隔离卸载测试通过，iOS Release 兼容编译通过。已在本机真实看到 Help 对话框、取消返回与两项“已授权·可用”，未再次清理真实凭据来伪造三态全覆盖。完整0.26.1工具卸载／重装已实际验证回到待授权与未登录。仅保留一份日常 `/Applications/Chordesk.app`；245 项旧构建／历史副本移入废纸篓，可恢复，不永久清空。27 份历史说明已合并；`.local/notes/` 的隐私／安全审查和法律草稿不公开、未采纳，当前 LICENSE／政策不改。新0.27包未公证或发布，iOS 本轮未安装／上传；详见开发历史。
+- **工程更名补充**：所有代码、测试、原生桥接和素材集中到 `ProjectFiles/`；Xcode 工程／scheme 为 `Chordesk`，SwiftPM target/executable 为 `ChordeskHost`。本条覆盖下文历史保留 DuoWorkbench target 的记录。旧 bundle ID、配对服务及线协议名称刻意保留，不可一并替换。
+- **公证状态补充**：0.26.1 App 与最终 DMG 已获 Apple Accepted，票据装订、严格签名与 Gatekeeper 校验通过，仍未公开发布。0.27.0 /41 已 Developer ID 签名并安装；新公证请求尚未上传，原 notarytool profile 当前不可读，已告知用户稍后可恢复。本条覆盖下文0.26.1仍处理中记录。
 
 - 产品名统一为 Chordesk；黑底 App 图标不变，README 使用透明 SVG。保留稳定 bundle ID（iOS `dev.iphoneduo.remotedemo`、Mac `dev.iphoneduo.workbench`）、签名身份与原配对数据。SwiftPM 内部 target/executable `DuoWorkbench` 暂保留兼容。
 - 当前公开：iOS TestFlight 1.30 /39 已于 2026-11-02 用户批准后启用，原三个测试组和公开链接不变；Mac 0.26.0 /39 已于 2026-11-02 18:38（北京时间）发布为未公证 ad hoc 试用 Release，公开下载摘要复核通过。iOS 1.31 /40 已正式上传并提交外部 Beta 审核，后台“正在等待审核”，原三个组关联，自动通知关闭；公开邀请暂仍提供 1.30，不误称新版已获批或启用。本机 Duo 已开发签名覆盖安装并启动 1.31 /40。正式 App Store 尚未提交。

@@ -1,6 +1,6 @@
 # Mac updates, Keychain recovery and removal
 
-Mac 0.26.1 introduces the recovery controls and maintenance tool below. This is a local candidate until the release record says otherwise. iOS 1.31 is unchanged.
+Mac 0.27.0 adds a native Help-menu uninstaller and three-state permission checks. This is a local development update until the release record says otherwise. iOS 1.31 is unchanged.
 
 ## Upgrade failures / 升级后无法登录公网
 
@@ -14,23 +14,32 @@ The 0.26 test package uses an ad hoc identity tied to its code hash. Rebuilding 
 
 Automatic resume remains noninteractive. The app does not widen item ACLs, switch to plaintext files, or silently create another storage namespace on authentication failure.
 
-## Maintenance tool / 维护与卸载工具
+## Permissions / 三态权限检查
 
-In 0.26.1: **设置 → 维护与卸载 → 保存卸载与维护工具…**. Source: [Chordesk-Maintenance.command](../scripts/Chordesk-Maintenance.command). It uses the standard macOS shell/tools, with no Xcode or Python requirement. Review and run it only if you trust its source.
+Use **设置 → 权限 → 重新检查授权状态**. The same signed executable starts a short-lived, read-only process using public preflight APIs; no TCC database is read and no access is granted by checking.
 
-First stop service and **quit Chordesk normally** so its display settings can restore. The tool refuses modifications while a host is running. It shows its scope and requires an exact confirmation word for each modifying action.
-
-| Option | Effect |
+| State / 状态 | Action / 操作 |
 | --- | --- |
-| 1 / `--plan` | Read-only installation/scope check |
-| 2 | Reset only `dev.iphoneduo.workbench` privacy decisions; allow the app's permissions again |
-| 3 | Remove only this Mac's Chordesk Tailscale login; sign in and pair the new address as needed |
-| 4 | Move matching Chordesk apps from standard Applications locations to Trash, retaining data and permissions |
-| 5 | Reset this app's permissions; delete its listed pairing/login records; back up preferences and move its apps, support data, cache and saved-window state to Trash |
+| 未授权 / Not granted | Use that permission's request button and approve in macOS Settings. |
+| 已授权 · 需重启 App / Granted, restart needed | Restart Chordesk; do not repeatedly toggle the system switch. |
+| 已授权 · 可用 / Granted and available | Start service once both permissions are ready. |
 
-Credential deletion and permission reset require re-enrollment/re-consent. App/data files in Trash are recoverable. A failed step reports incomplete cleanup; it does not claim all records were removed. Custom installation paths and redirected data directories require manual inspection. The app's entry may still appear in system UI after a permission reset; reset decisions and UI row removal are not the same guarantee.
+A new-process check can distinguish a cached denial from a grant that is visible to a fresh process. If it cannot complete, the app explains the uncertainty and offers a manual restart; it does not claim to read the private Settings checkbox. Each newly requested grant keeps a restart barrier for that launch. Restarting the App does not restart the Mac.
 
-The tool does not use `sudo`, edit TCC databases, change Gatekeeper/SIP, reset other apps, or recreate the login keychain. Isolated First Run identities are excluded.
+## Uninstall / 内嵌卸载
+
+In **Mac 0.27.0**, use the top menu **Help（帮助）→ 卸载 Chordesk…**. No Terminal or exported tool is needed. Choose a scope and confirm **卸载并退出**:
+
+| Choice | Effect |
+| --- | --- |
+| App only / 仅卸载 App | Move matching Chordesk apps from standard Applications locations to Trash; retain preferences, pairing, login and permissions. |
+| Full / 完整卸载 | Reset only Chordesk's system permissions; delete its listed pairing and Tailscale login records; back up preferences and move App, support data, cache and saved-window state to Trash. |
+
+The app first stops remote control, restores display settings and disconnects its embedded node. A temporary, identically signed helper waits for normal app exit before running the bundled maintenance backend. Failed restoration or a host that remains running prevents removal. No elevated privileges, TCC database edits or global resets are used. Other products and isolated First Run identities are excluded.
+
+Files in Trash can be restored. Deleted credentials and reset permission decisions require signing in, pairing and granting access again. Removal does not delete nodes from your Tailscale account; manage those in your own admin console. A failed step reports partial cleanup. A privacy-settings row may remain after its permission decision is reset. Custom installation paths or redirected data paths require manual inspection.
+
+**0.26.1** bundled an exportable command tool; **0.26.0's public test installer did not**. The shell backend remains in [scripts/Chordesk-Maintenance.command](../scripts/Chordesk-Maintenance.command) for recovery and regression testing. Its interactive fallback supports read-only `--plan`, scoped permission reset, Tailscale rebind and the two uninstall scopes; quit Chordesk first and confirm the exact action.
 
 ## Stable releases / 稳定升级与“仍要打开”
 
@@ -40,6 +49,6 @@ The production route is **Developer ID Application signing → Hardened Runtime 
 
 Migrating from ad hoc to Developer ID can require one owner-confirmed permission/Keychain migration. Stable identity helps later versions retain trust; macOS upgrades, revoked permission or organizational policy can still require consent. Signing does not auto-grant Screen Recording or Accessibility. A notarized release should pass normal Gatekeeper assessment without relying on “Open Anyway”; a first-launch confirmation or system permission request can still occur.
 
-The owner resumed Developer ID creation/notarization on November 3, 2026. The 0.26.1 app and final DMG have Developer ID signatures and secure timestamps and have been uploaded to Apple; notarization is still processing. The owner configured the local notarytool Keychain profile directly. A local finalization process waits for the existing DMG request and requires an Accepted audit, matching submitted-file/app hashes, stapled tickets and Gatekeeper acceptance before preparing distribution files. It does not publish a GitHub release. The public 0.26.0 test package remains ad hoc and unnotarized. See the development history for subsequent status. Signing or uploading alone is not evidence of accepted notarization.
+The owner resumed Developer ID/notarization on November 3, 2026. The **0.26.1 app and final DMG were accepted by Apple**, with stapled tickets, strict signature verification and Gatekeeper acceptance. The local 0.27.0 update is Developer ID signed; its new notarization is pending credential availability. No new GitHub release has been published in this maintenance task. The public 0.26.0 test package remains ad hoc and unnotarized. See the development history for later status; signing alone is not notarization.
 
 Sources: [Apple error definition](https://developer.apple.com/documentation/security/errsecauthfailed), [code requirements and ad hoc identities](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements), [Keychain identity tracking](https://developer.apple.com/library/archive/technotes/tn2206/_index.html), [Developer ID](https://developer.apple.com/developer-id/), [notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution). Permission reset scope follows the installed macOS `tccutil(1)` manual.

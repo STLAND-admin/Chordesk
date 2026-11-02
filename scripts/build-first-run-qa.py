@@ -49,11 +49,12 @@ def main():
     destination.mkdir(parents=True, exist_ok=False)
     stage = destination / 'source'
     stage.mkdir()
-    for name in ['iPhoneDuoDemo', 'Tests', 'Native/Tailnet']:
+    for name in ['ProjectFiles/Chordesk', 'ProjectFiles/Tests', 'ProjectFiles/Native/Tailnet']:
         shutil.copytree(root / name, stage / name)
     shutil.copy2(root / 'Package.swift', stage / 'Package.swift')
     (stage / 'scripts').mkdir()
     shutil.copy2(root / 'scripts/build-workbench.sh', stage / 'scripts/build-workbench.sh')
+    shutil.copy2(root / 'scripts/Chordesk-Maintenance.command', stage / 'scripts/Chordesk-Maintenance.command')
     version_match = re.search(r'<key>CFBundleShortVersionString</key><string>([^<]+)</string>',
                               (stage / 'scripts/build-workbench.sh').read_text())
     if not version_match:
@@ -61,44 +62,44 @@ def main():
     mac_version = version_match.group(1)
     mac_name = f'Chordesk First Run {mac_version}'
     mac_title = f'Chordesk · 首次安装测试 {mac_version}'
-    (stage / 'Branding').mkdir()
-    shutil.copy2(root / 'Branding/Chordesk.icns', stage / 'Branding/Chordesk.icns')
+    (stage / 'ProjectFiles/Branding').mkdir(parents=True)
+    shutil.copy2(root / 'ProjectFiles/Branding/Chordesk.icns', stage / 'ProjectFiles/Branding/Chordesk.icns')
     if args.platform in ['ios', 'both']:
-        shutil.copytree(root / 'iPhoneDuoDemo.xcodeproj', stage / 'iPhoneDuoDemo.xcodeproj',
+        shutil.copytree(root / 'ProjectFiles/Chordesk.xcodeproj', stage / 'ProjectFiles/Chordesk.xcodeproj',
                         ignore=shutil.ignore_patterns('xcuserdata', '*.xcuserstate'))
-        project = stage / 'iPhoneDuoDemo.xcodeproj/project.pbxproj'
+        project = stage / 'ProjectFiles/Chordesk.xcodeproj/project.pbxproj'
         replace(project, 'PRODUCT_BUNDLE_IDENTIFIER = dev.iphoneduo.remotedemo;',
                 f'PRODUCT_BUNDLE_IDENTIFIER = {ios_bundle_id};', count=4)
         replace(project, 'PRODUCT_BUNDLE_IDENTIFIER = dev.iphoneduo.remotedemo.uitests;',
                 f'PRODUCT_BUNDLE_IDENTIFIER = {ios_bundle_id}.uitests;', count=2)
-        replace(stage / 'iPhoneDuoDemo/Info.plist', '<string>Chordesk</string>',
+        replace(stage / 'ProjectFiles/Chordesk/Info.plist', '<string>Chordesk</string>',
                 '<string>Chordesk First Run</string>')
 
     # A different bundle ID isolates UserDefaults and real macOS permissions.
     # Explicit namespaces also isolate stores that do not follow the bundle ID.
-    replace(stage / 'iPhoneDuoDemo/LANWire.swift',
+    replace(stage / 'ProjectFiles/Chordesk/LANWire.swift',
             '"dev.iphoneduo.remote-pairing"', f'"{bundle_id}.pairing"')
-    replace(stage / 'Native/Tailnet/keychain.c',
+    replace(stage / 'ProjectFiles/Native/Tailnet/keychain.c',
             'CFSTR("dev.chordesk.embedded-tailnet")', f'CFSTR("{bundle_id}.tailnet")')
-    replace(stage / 'iPhoneDuoDemo/EmbeddedTailnet.swift',
+    replace(stage / 'ProjectFiles/Chordesk/EmbeddedTailnet.swift',
             '"Chordesk/Tailnet"', f'"Chordesk/FirstRunQA/{token}/Tailnet"')
-    replace(stage / 'iPhoneDuoDemo/EmbeddedTailnet.swift',
+    replace(stage / 'ProjectFiles/Chordesk/EmbeddedTailnet.swift',
             'let name = "chordesk-mac"', f'let name = "chordesk-qa-{token}"')
-    replace(stage / 'iPhoneDuoDemo/EmbeddedTailnet.swift',
+    replace(stage / 'ProjectFiles/Chordesk/EmbeddedTailnet.swift',
             'let name = "chordesk-iphone"', f'let name = "chordesk-qa-iphone-{token}"')
     # The real host may keep its LAN service online on 49173.
-    replace(stage / 'iPhoneDuoDemo/LANHost.swift',
+    replace(stage / 'ProjectFiles/Chordesk/LANHost.swift',
             'LANTransport.listener(secret: pairingSecret, localAddress: localBind)',
             'LANTransport.listener(secret: pairingSecret, localAddress: localBind, port: .any)')
-    replace(stage / 'iPhoneDuoDemo/LANHost.swift',
+    replace(stage / 'ProjectFiles/Chordesk/LANHost.swift',
             'LANStatus(name: Host.current().localizedName ?? "Mac",',
             'LANStatus(name: (Host.current().localizedName ?? "Mac") + " · 首次安装测试",')
-    replace(stage / 'iPhoneDuoDemo/LANHostView.swift',
+    replace(stage / 'ProjectFiles/Chordesk/LANHostView.swift',
             'Text("Chordesk").font(.largeTitle.weight(.semibold))',
             f'Text("{mac_title}").font(.largeTitle.weight(.semibold))')
-    replace(stage / 'iPhoneDuoDemo/WorkbenchApp.swift',
+    replace(stage / 'ProjectFiles/Chordesk/ChordeskMacApp.swift',
             'Window("Chordesk · Mac 主机",', f'Window("{mac_title}",')
-    replace(stage / 'iPhoneDuoDemo/WorkbenchApp.swift',
+    replace(stage / 'ProjectFiles/Chordesk/ChordeskMacApp.swift',
             'MenuBarExtra("Chordesk",', f'MenuBarExtra("{mac_name}",')
     build_script = stage / 'scripts/build-workbench.sh'
     replace(build_script, 'dev.iphoneduo.workbench', bundle_id, count=2)
@@ -113,7 +114,7 @@ def main():
     # File providers can attach FinderInfo to app bundles in Documents during
     # a build. Keep device products outside synced source folders for signing.
     ios_build = Path(tempfile.gettempdir()) / f'ChordeskFirstRunIOS-{token}'
-    ios_app = ios_build / 'Build/Products/Debug-iphoneos/iPhoneDuoDemo.app'
+    ios_app = ios_build / 'Build/Products/Debug-iphoneos/Chordesk.app'
     manifest = dict(bundleID=bundle_id, app=str(app), pairingService=f'{bundle_id}.pairing',
                     tailnetService=f'{bundle_id}.tailnet',
                     tailnetDirectory=f'Chordesk/FirstRunQA/{token}/Tailnet',
@@ -143,12 +144,12 @@ def main():
                    CGO_CFLAGS=f'-target {triple} -isysroot {sdk}',
                    CGO_LDFLAGS=f'-target {triple} -isysroot {sdk}')
         run(go, 'build', '-mod=readonly', '-trimpath', '-ldflags=-w -s', '-buildmode=c-archive',
-            '-o', str(library), cwd=stage / 'Native/Tailnet', env=env)
-        framework_args += ['-library', str(library), '-headers', str(stage / 'Native/Tailnet/include')]
+            '-o', str(library), cwd=stage / 'ProjectFiles/Native/Tailnet', env=env)
+        framework_args += ['-library', str(library), '-headers', str(stage / 'ProjectFiles/Native/Tailnet/include')]
     run('xcodebuild', '-create-xcframework', *framework_args,
         '-output', str(stage / 'build/tailnet/ChordeskTailnet.xcframework'))
     if 'macos' in targets:
-        env = dict(os.environ, DUO_BUILD_PATH=str(runtime / 'swift-build'), DUO_APP_BUNDLE=str(app))
+        env = dict(os.environ, CHORDESK_BUILD_PATH=str(runtime / 'swift-build'), CHORDESK_APP_BUNDLE=str(app))
         run('/bin/zsh', str(build_script), cwd=stage, env=env)
         run('codesign', '--verify', '--deep', '--strict', str(app))
         actual = plistlib.loads((app / 'Contents/Info.plist').read_bytes())['CFBundleIdentifier']
@@ -156,7 +157,7 @@ def main():
             raise RuntimeError('Refusing to use a QA app with an unexpected identity.')
         print(f'Mac QA app ready (not launched): {app}')
     if 'ios' in targets:
-        run('xcodebuild', '-project', str(stage / 'iPhoneDuoDemo.xcodeproj'), '-scheme', 'iPhoneDuoDemo',
+        run('xcodebuild', '-project', str(stage / 'ProjectFiles/Chordesk.xcodeproj'), '-scheme', 'Chordesk',
             '-configuration', 'Debug', '-destination', 'generic/platform=iOS',
             '-derivedDataPath', str(ios_build), f'DEVELOPMENT_TEAM={args.team}',
             '-allowProvisioningUpdates', 'build', cwd=stage)

@@ -55,7 +55,7 @@ Mac 0.23.1 提供“1 · 允许屏幕录制”和“2 · 允许控制 Mac”两�
 后台只更新检查状态，不启动权限弹窗、子进程预检或重启倒计时。部分权限允许时也可手动重启，但只有两项均生效、且本进程没有刚请求过权限时才能开启服务。授权后的新进程按原自动启动偏好共享内置屏；不重启 Mac、不清除 TCC、不更改锁屏。基础远控不要求访问 Documents，运行数据使用 Application Support 和 Keychain。
 ## 构建与后续发布
 
-见 [开发说明](DEVELOPMENT.md)。两端共用 `Native/Tailnet` Go/C 源码、版本锁与 Keychain 存储；XCFramework 从源码生成，未把依赖二进制提交到 Git。第三方许可随两端 App 提供于“关于 → 第三方组件许可”。
+见 [开发说明](DEVELOPMENT.md)。两端共用 `ProjectFiles/Native/Tailnet` Go/C 源码、版本锁与 Keychain 存储；XCFramework 从源码生成，未把依赖二进制提交到 Git。第三方许可随两端 App 提供于“关于 → 第三方组件许可”。
 
 **本版引入了 WireGuard／Go 加密代码。**下次发行必须重新核对 Apple 出口合规问卷和隐私申报，不能沿用 1.22.1 的“只调用 Apple 系统加密”分类；不把本地开发签名安装等同于 TestFlight 已更新。参见 [Apple 加密出口说明](https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations)。
 

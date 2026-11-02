@@ -18,7 +18,7 @@ for target in macos ios simulator simulator-intel; do
     sdk_path="$(xcrun --sdk "$sdk" --show-sdk-path)"
     clang="$(xcrun --sdk "$sdk" --find clang)"
     print "Building embedded tailnet: $target"
-    (cd Native/Tailnet
+    (cd ProjectFiles/Native/Tailnet
      CGO_ENABLED=1 GOOS="$goos" GOARCH="$goarch" CC="$clang" \
      CGO_CFLAGS="-target $triple -isysroot $sdk_path" \
      CGO_LDFLAGS="-target $triple -isysroot $sdk_path" \
@@ -33,7 +33,7 @@ if [[ -d "$tailnet_output/ChordeskTailnet.xcframework" ]]; then
     mv "$tailnet_output/ChordeskTailnet.xcframework" "$tailnet_output/previous-$(date +%s).xcframework"
 fi
 xcodebuild -create-xcframework \
-    -library "$tailnet_output/macos/libChordeskTailnet.a" -headers "$root/Native/Tailnet/include" \
-    -library "$tailnet_output/ios/libChordeskTailnet.a" -headers "$root/Native/Tailnet/include" \
-    -library "$tailnet_output/simulator-universal/libChordeskTailnet.a" -headers "$root/Native/Tailnet/include" \
+    -library "$tailnet_output/macos/libChordeskTailnet.a" -headers "$root/ProjectFiles/Native/Tailnet/include" \
+    -library "$tailnet_output/ios/libChordeskTailnet.a" -headers "$root/ProjectFiles/Native/Tailnet/include" \
+    -library "$tailnet_output/simulator-universal/libChordeskTailnet.a" -headers "$root/ProjectFiles/Native/Tailnet/include" \
     -output "$tailnet_output/ChordeskTailnet.xcframework"
