@@ -17,7 +17,7 @@
 
 SVG 按 B 方案重绘，由路径、渐变、遮罩和 SVG 滤镜构成，没有嵌入 PNG、外部资源、脚本或字体依赖；`rear-surface`、`front-surface`、`connecting-bridge` 是分别可编辑的图层。它保留选定方案的结构与柔和材质，不是对生成位图逐像素的无损转换。玻璃质感为静态矢量效果，不等同于系统动态 Liquid Glass。
 
-1.16 / build 20 和 Mac 0.13.0 / build 20 已接入新名称和图标资源；构建／安装状态见 [验证记录](../docs/VALIDATION-1.16.md)。继续保留原 bundle ID、签名、配对与安装路径。
+1.16 / build 20 和 Mac 0.13.0 / build 20 已接入新名称和图标资源；构建／安装状态见 [验证记录](../docs/DEVELOPMENT-HISTORY.md#archive-validation-1-16)。继续保留原 bundle ID、签名、配对与安装路径。
 
 `scripts/export-branding.cjs` 从矢量主稿生成深色／透明 SVG、PNG、iOS 1024 图标及 Mac ICNS。需要 Node.js、Sharp 和 macOS iconutil。透明 SVG 不包含背景矩形；PNG 预览保留 alpha。玻璃折射为静态效果，不能动态折射任意背后的网页内容。
 

@@ -2,9 +2,21 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](docs/FIRST-RUN-CHECKLIST.md)
 
-Baseline: **iOS 1.22.1 / build 28**, with **Mac 0.18.1 / build 26**. Current development versions: **iOS 1.29 / build 38 and Mac 0.24.0 / build 37**, as of November 1, 2026.
+Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Public downloads now provide **iOS 1.30 /39 and Mac 0.25.0 /38**. Current development: **iOS 1.31 /40 and Mac 0.26.0 /39**, unreleased, November 2, 2026. No formal App Store submission has been made.
 
-The public TestFlight and Mac downloads still use the baseline above. These updates are source/local development builds, not a new public Mac Release, TestFlight release, or App Store submission.
+## 1.31 / Mac 0.26.0 · Unreleased
+
+- Keep the service reachable without capturing. Screen capture and encoding start for an authenticated connected viewer and stop on disconnect; presence checks do not start capture. Active remote sessions retain the system privacy indicator.
+- Independent resolution (480p, 720p, 1080p, 1440p, 2160p), FPS ceiling (15–120) and target bitrate. New preferences default to 720p /15 fps /1.5 Mbps and HEVC; saved selections and H.264/JPEG fallback remain.
+- Bounded Mac-to-phone route sample (up to 512 KiB test payload) recommends bitrate/FPS for manual application. It is not an external ISP speed test or automatic quality controller.
+- Two rear contacts immediately activate temporary trackpad mode; lift restores the prior mode. Long press remains selectable and saved preferences are retained.
+- Clear Tailscale action buttons, restart guidance beside each permission, and bilingual drag-to-Applications DMG layout without a visible readme file.
+- Remove legacy Mac dual-screen and single-window experiments. Keep the concept website and shared components used on iPhone; consolidate old validation/distribution notes into [development history](docs/DEVELOPMENT-HISTORY.md).
+
+## 1.30 / Mac 0.25.0 · Public beta
+
+- Embedded Tailscale, IPv4/IPv6 local addressing, keyboard/touch improvements, disabled audio, and updated privacy materials reached public testing.
+- iOS 1.30 /39 was approved and enabled for the three existing external groups. Mac 0.25.0 /38 offers an unnotarized test DMG. This is separate from formal App Store release.
 
 ## Development 1.29 / Mac 0.24.0 interface update
 
@@ -12,7 +24,7 @@ The public TestFlight and Mac downloads still use the baseline above. These upda
 - Display switching, pointer-mode switching and Mission Control can each be shown or hidden. Four setting categories replace the long action menu.
 - The guide uses 0/1/2-rear-finger action tables. Diagnostics controls HUD visibility and corner placement.
 - Audio forwarding is temporarily disabled on both ends, including saved auto-start preferences. About uses a transparent monochrome STLAND wordmark.
-- The user confirmed black-margin control, shortcuts and menu short taps on Duo. Frosted icon concept B was selected; production app icons remain unchanged. [Validation](docs/VALIDATION-1.29.md).
+- The user confirmed black-margin control, shortcuts and menu short taps on Duo. The existing black-background app icons are retained. [Validation](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-29).
 
 ## Connectivity
 
@@ -80,4 +92,4 @@ Version 1.28 passed 165 full logic/TLS tests, 23 final focused checks, and two s
 
 Before release: complete first-run and actual-download checks, trackpad momentum confirmation, 1.28 device checks, cold-start/long-session network tests, performance/energy comparison, and regular-iPhone hardware tests. Closed-lid access and capture-on-demand energy work remain unresolved. Bundled cryptography and optional third-party identity services require updated export-compliance and privacy review; do not reuse the first beta's system-only encryption declaration.
 
-[1.23 validation](docs/VALIDATION-1.23.md) · [1.24](docs/VALIDATION-1.24.md) · [1.25](docs/VALIDATION-1.25.md) · [1.26](docs/VALIDATION-1.26.md) · [1.27](docs/VALIDATION-1.27.md) · [1.28](docs/VALIDATION-1.28.md) · [Roadmap](ROADMAP.md)
+[1.23 validation](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-23) · [1.24](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-24) · [1.25](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-25) · [1.26](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-26) · [1.27](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-27) · [1.28](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-28) · [Roadmap](ROADMAP.md)

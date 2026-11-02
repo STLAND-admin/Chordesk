@@ -178,6 +178,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var link: LANLink?
     private var candidates: [UUID: LANLink] = [:]
     private var stream: SCStream?
+    @Published private(set) var captureRunning = false
+    private var viewerCapture = ViewerCaptureLifetime()
+    private var viewerCaptureTask: Task<Void, Never>?
+    private var idleCaptureStop: Task<Void, Never>?
     private var frames: LANFrameSource?
     private var timer: Timer?
     private var generation = UUID()
@@ -197,6 +201,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var activeVideoCodec = "jpeg"
     private var latestFrame: Data?
     @Published private(set) var videoQuality = LANVideoQuality(rawValue: UserDefaults.standard.string(forKey: "DuoVideoQuality") ?? "") ?? .efficient
+    @Published private(set) var streamSettings = StreamSettings.stored(.standard)
+    private var bandwidthTask: Task<Void, Never>?
+    private var bandwidthOperation: UUID?
+    private var lastBandwidthProbe = Date.distantPast
     @Published private(set) var videoMbps = 0.0
     @Published private(set) var videoFPS = 0.0
     private var traffic = VideoTrafficMeter()
@@ -235,9 +243,9 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         networkLease.update(viewerActive: sharing && connected, enabled: keepAwakeWhileSharing,
             onACPower: HostNetworkLease.onACPower, now: ProcessInfo.processInfo.systemUptime)
         // Keep network/capture work schedulable when the window is closed, without holding the display on.
-        if sharing && runtimeActivity == nil {
+        if sharing && connected && runtimeActivity == nil {
             runtimeActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep], reason: "Chordesk remote service")
-        } else if !sharing, let activity = runtimeActivity {
+        } else if (!sharing || !connected), let activity = runtimeActivity {
             ProcessInfo.processInfo.endActivity(activity); runtimeActivity = nil
         }
     }
@@ -279,21 +287,22 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
 
     private func retryInterruptedCapture() {
-        guard sharing, !systemSleeping, !displaySleeping, !switchingDisplay, !scaleBusy,
+        guard sharing, connected, viewerCapture.lease != nil, !systemSleeping, !displaySleeping, !switchingDisplay, !scaleBusy,
               captureInterrupted, captureRepair == nil, let id = displayID else { return }
         guard CGPreflightScreenCaptureAccess() else { stop(); status = "屏幕录制权限已撤销，请在设置中重新授权"; return }
-        let token = generation
+        let token = generation, lease = viewerCapture.lease
         captureRepair = Task { [weak self] in
             guard let self else { return }
-            defer { self.captureRepair = nil }
+            defer { if self.viewerCapture.accepts(lease) { self.captureRepair = nil } }
             for delay in [1, 2, 4] {
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
-                guard !Task.isCancelled, self.generation == token, self.sharing, !self.systemSleeping,
+                guard !Task.isCancelled, self.generation == token, self.sharing, self.connected, self.viewerCapture.lease != nil, !self.systemSleeping,
                       !self.displaySleeping, !self.scaleBusy, !self.switchingDisplay else { return }
                 guard CGPreflightScreenCaptureAccess() else { self.stop(); return }
                 do {
                     let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-                    guard self.generation == token, let display = content.displays.first(where: { $0.displayID == id }) else { return }
+                    guard !Task.isCancelled, self.generation == token, self.viewerCapture.accepts(lease), self.connected,
+                          let display = content.displays.first(where: { $0.displayID == id }) else { return }
                     try await self.installCapture(SCContentFilter(display: display, excludingWindows: []), display: display,
                         sessionToken: token, preserveRecovery: true)
                     self.captureInterrupted = false
@@ -510,7 +519,11 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 throw NSError(domain: "DuoDisplay", code: 1, userInfo: [NSLocalizedDescriptionKey: "所选显示器已断开"])
             }
             let filter = SCContentFilter(display: display, excludingWindows: [])
-            if sharing {
+            if sharing && !connected {
+                stopIdleCapture()
+                prepareCaptureTarget(display)
+                status = "服务在线 · 等待连接，未采集屏幕"
+            } else if sharing {
                 try await installCapture(filter, display: display, sessionToken: sessionToken)
                 guard generation == sessionToken else { return }
                 guard !fromPhone || allowsDisplaySwitching else { stop(); status = "切屏授权已撤销，共享已停止"; return }
@@ -616,21 +629,27 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         let mode = CGDisplayCopyDisplayMode(id)
         let pixels = CGSize(width: mode?.pixelWidth ?? Int(CGDisplayBounds(id).width),
                             height: mode?.pixelHeight ?? Int(CGDisplayBounds(id).height))
-        let size = videoQuality.captureSize(pixels: pixels)
+        let size = streamSettings.captureSize(pixels: pixels)
         config.width = Int(size.width); config.height = Int(size.height)
-        config.minimumFrameInterval = CMTime(value: 1, timescale: videoQuality.framesPerSecond)
+        config.minimumFrameInterval = CMTime(value: 1, timescale: streamSettings.framesPerSecond)
         config.queueDepth = 3; config.showsCursor = true; config.capturesAudio = false
         return config
     }
 
     func setVideoQuality(_ quality: LANVideoQuality, fromPhone: Bool = false) async {
-        guard !switchingDisplay, !scaleBusy else { return }
+        guard quality.framesPerSecond <= 120 else { return }
+        let value = StreamSettings.legacy(quality)
+        await setStreamSettings(value, fromPhone: fromPhone)
+        if streamSettings == value { videoQuality = quality; UserDefaults.standard.set(quality.rawValue, forKey: "DuoVideoQuality"); sendStatus() }
+    }
+
+    func setStreamSettings(_ value: StreamSettings, fromPhone: Bool = false) async {
+        guard value.isValid, !switchingDisplay, !scaleBusy else { return }
         if fromPhone && (!connected || !allowsDisplaySwitching) { return }
-        let old = videoQuality
-        videoQuality = quality
-        guard let stream, let id = displayID else {
-            UserDefaults.standard.set(quality.rawValue, forKey: "DuoVideoQuality"); return
-        }
+        let old = streamSettings
+        guard value != old else { return }
+        streamSettings = value
+        guard let stream, let id = displayID else { value.save(.standard); sendStatus(); return }
         let token = generation, controlToken = controlRevision, resume = controlAllowed
         switchingDisplay = true; controlAllowed = false; input.release()
         inputQueueEpoch += 1; pendingInputs.removeAll(); latestFrame = nil
@@ -638,15 +657,43 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         do {
             try await updateCaptureSize(stream, displayID: id)
             guard generation == token else { return }
-            frames?.setQuality(quality)
-            UserDefaults.standard.set(quality.rawValue, forKey: "DuoVideoQuality")
+            frames?.setQuality(value)
+            value.save(.standard)
             controlAllowed = resume && controlToken == controlRevision && connected
-            status = "画质：" + quality.title
+            status = "传输：" + value.detail
         } catch {
-            videoQuality = old; controlAllowed = false
-            status = "画质更新失败，请重新共享：" + error.localizedDescription
+            streamSettings = old; controlAllowed = false
+            status = "传输设置更新失败，请重新共享：" + error.localizedDescription
         }
         if generation == token { switchingDisplay = false; sendStatus(); sendCatalog() }
+    }
+
+    private func startBandwidthProbe(_ request: BandwidthProbeRequest, peer: LANLink) {
+        guard connected, sharing, link === peer else { return }
+        guard bandwidthTask == nil, Date().timeIntervalSince(lastBandwidthProbe) >= 10 else {
+            peer.send(.bandwidthEnd, value: BandwidthProbeEnd(id: request.id, bytes: 0)); return
+        }
+        lastBandwidthProbe = Date()
+        let token = generation, operation = UUID()
+        bandwidthOperation = operation
+        bandwidthTask = Task { [weak self, weak peer] in
+            guard let self, let peer else { return }
+            defer { if self.bandwidthOperation == operation { self.bandwidthTask = nil; self.bandwidthOperation = nil } }
+            let began = ProcessInfo.processInfo.systemUptime
+            var sent = 0
+            let data = BandwidthProbe.chunk(id: request.id)
+            while !Task.isCancelled, self.generation == token, self.link === peer, self.connected,
+                  sent < BandwidthProbe.maximumBytes,
+                  ProcessInfo.processInfo.systemUptime - began < BandwidthProbe.maximumDuration {
+                let success = await withCheckedContinuation { continuation in
+                    peer.send(.bandwidthChunk, data: data) { continuation.resume(returning: $0) }
+                }
+                guard success else { return }
+                sent += BandwidthProbe.chunkBytes
+            }
+            guard !Task.isCancelled, self.generation == token, self.link === peer else { return }
+            peer.send(.bandwidthEnd, value: BandwidthProbeEnd(id: request.id, bytes: sent))
+        }
     }
 
     private func configurePairedPhone(_ peer: LANLink, generation token: UUID, expectedRevision: Int) async {
@@ -719,6 +766,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 
     func stopAndRestore() async {
         stop()
+        await idleCaptureStop?.value
         await scaleRestoreTask?.value
     }
 
@@ -813,9 +861,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 }
                 additionalLANListeners.append(server)
             }
-            try await installCapture(filter, display: display, sessionToken: token)
+            prepareCaptureTarget(display)
             guard generation == token else { return }
             sharing = true
+            availabilityMessage = "服务在线 · 无观看者，未采集屏幕"
             refreshTailscale()
             Task { await self.refreshScaleOptions() }
             let listenerQueue = DispatchQueue(label: "dev.iphoneduo.listener")
@@ -831,12 +880,66 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         }
     }
 
+    private func prepareCaptureTarget(_ display: SCDisplay) {
+        displayID = display.displayID; selectedDisplay = display.displayID
+        currentDisplayName = displayName(display.displayID)
+        input.bounds = CGDisplayBounds(display.displayID)
+        captureRevision = UUID().uuidString; latestFrame = nil
+    }
+
+    private func stopIdleCapture() {
+        viewerCapture.end(); viewerCaptureTask?.cancel(); viewerCaptureTask = nil
+        captureRepair?.cancel(); captureRepair = nil; captureInterrupted = false
+        pendingAutomaticPeer = nil; captureRecovery = CaptureRecovery()
+        captureGeneration = UUID(); captureRevision = UUID().uuidString
+        let previous = stream; stream = nil; frames = nil; captureRunning = false
+        latestFrame = nil; traffic = VideoTrafficMeter(); videoMbps = 0; videoFPS = 0
+        let previousStop = idleCaptureStop
+        idleCaptureStop = Task {
+            await previousStop?.value
+            if let previous { try? await previous.stopCapture() }
+        }
+        updateAwakeLease()
+    }
+
+    private func beginViewerCapture(_ peer: LANLink, sessionToken: UUID) {
+        guard let lease = viewerCapture.begin(authenticatedViewer: connected && sharing && link === peer),
+              let id = displayID else { return }
+        viewerCaptureTask?.cancel()
+        capturePaused()
+        viewerCaptureTask = Task { [weak self, weak peer] in
+            guard let self, let peer else { return }
+            defer { if self.viewerCapture.accepts(lease) { self.viewerCaptureTask = nil } }
+            await self.idleCaptureStop?.value
+            await self.scaleRestoreTask?.value
+            guard !Task.isCancelled, self.generation == sessionToken, self.viewerCapture.accepts(lease), self.link === peer else { return }
+            guard CGPreflightScreenCaptureAccess() else { self.stop(); self.status = "屏幕录制权限未生效，请在 Mac 重新授权"; return }
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                guard !Task.isCancelled, self.generation == sessionToken, self.viewerCapture.accepts(lease),
+                      self.link === peer, self.displayID == id else { return }
+                guard let display = content.displays.first(where: { $0.displayID == id }) else {
+                    self.captureInterrupted = true; self.retryInterruptedCapture(); return
+                }
+                try await self.installCapture(SCContentFilter(display: display, excludingWindows: []), display: display,
+                    sessionToken: sessionToken, preserveRecovery: true)
+            } catch {
+                guard self.generation == sessionToken, self.viewerCapture.accepts(lease), self.link === peer else { return }
+                self.captureInterrupted = true; self.retryInterruptedCapture()
+                self.status = "画面启动尚未成功，正在重试：" + error.localizedDescription; self.sendStatus()
+            }
+        }
+    }
+
     private func installCapture(_ filter: SCContentFilter, display: SCDisplay, sessionToken: UUID, preserveRecovery: Bool = false) async throws {
+        guard connected, sharing, let viewer = link, let lease = viewerCapture.lease else { throw CancellationError() }
         let token = UUID(); captureGeneration = token
+        await idleCaptureStop?.value
+        guard connected, link === viewer, viewerCapture.accepts(lease) else { throw CancellationError() }
         if !preserveRecovery { captureRecovery = CaptureRecovery(); displayPresence = HostDisplayPresence() }
         let previous = stream; stream = nil; frames = nil
         if let previous { try await previous.stopCapture() }
-        guard generation == sessionToken else { throw CancellationError() }
+        guard generation == sessionToken, connected, link === viewer, viewerCapture.accepts(lease) else { throw CancellationError() }
         displayID = display.displayID; selectedDisplay = display.displayID
         currentDisplayName = displayName(display.displayID)
         input.bounds = CGDisplayBounds(display.displayID)
@@ -844,9 +947,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         captureRevision = UUID().uuidString
         sendStatus()
         let config = captureConfiguration(displayID: display.displayID)
-        let sink = LANFrameSource(quality: videoQuality, frame: { [weak self] data, codec, keyframe in
+        let sink = LANFrameSource(quality: streamSettings, frame: { [weak self] data, codec, keyframe in
             Task { @MainActor in
-                guard let self, self.generation == sessionToken, self.captureGeneration == token, !self.scaleBusy else { return }
+                guard let self, self.generation == sessionToken, self.captureGeneration == token,
+                      self.viewerCapture.accepts(lease), self.connected, self.link === viewer, !self.scaleBusy else { return }
                 // A queued frame from before sleep/disconnection must not restore
                 // input or show stale pixels as a successfully resumed capture.
                 guard !self.systemSleeping,
@@ -868,6 +972,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         }, stopped: { [weak self] error in
             Task { @MainActor in
                 guard let self, self.generation == sessionToken, self.captureGeneration == token else { return }
+                self.captureRunning = false
                 let value = error as NSError
                 let online = self.displayID.map { CGDisplayIsOnline($0) != 0 } ?? false
                 let screenPermission = CGPreflightScreenCaptureAccess()
@@ -894,9 +999,11 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         try capture.addStreamOutput(sink, type: .screen, sampleHandlerQueue: sink.queue)
         frames = sink; stream = capture
         try await capture.startCapture()
-        guard generation == sessionToken, captureGeneration == token else {
+        guard generation == sessionToken, captureGeneration == token, connected, link === viewer, viewerCapture.accepts(lease) else {
             try? await capture.stopCapture(); throw CancellationError()
         }
+        captureRunning = true
+        availabilityMessage = "正在向已配对手机共享屏幕"
     }
 
     private func accept(_ connection: NWConnection, token: UUID, network: RemoteNetwork = .lan) {
@@ -967,10 +1074,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                         // A static lock screen may only emit idle frames after
                         // disconnect/restore cleared the cached image. A fresh,
                         // authenticated session requests a new original stream.
-                        if self.captureRecovery.paused || self.latestFrame == nil {
-                            self.capturePaused(); self.captureInterrupted = true
-                        }
-                        self.retryInterruptedCapture()
+                        self.beginViewerCapture(candidate, sessionToken: token)
                         if self.autoConfigurePairing && self.peerSupportsDisplays {
                             let revision = self.controlRevision
                             Task { await self.configurePairedPhone(candidate, generation: token, expectedRevision: revision) }
@@ -1011,6 +1115,12 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                           let request = try? JSONDecoder().decode(LANScaleRequest.self, from: data),
                           request.displayID == self.displayID else { return }
                     Task { await self.adjustDisplayScale(request.choice, fromPhone: true) }
+                case .streamSettings:
+                    guard data.count < 512, let value = try? JSONDecoder().decode(StreamSettings.self, from: data), value.isValid else { return }
+                    Task { await self.setStreamSettings(value, fromPhone: true) }
+                case .bandwidthRequest:
+                    guard data.count < 128, let request = try? JSONDecoder().decode(BandwidthProbeRequest.self, from: data) else { return }
+                    self.startBandwidthProbe(request, peer: candidate)
                 case .videoQuality:
                     guard data.count < 128, let raw = try? JSONDecoder().decode(String.self, from: data),
                           let quality = LANVideoQuality(rawValue: raw) else { return }
@@ -1041,6 +1151,9 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     self.peerNetwork = .lan
                     self.controlRevision += 1
                     self.controlAllowed = false; self.connected = false; self.peerSupportsDisplays = false
+                    self.bandwidthTask?.cancel(); self.bandwidthTask = nil
+                    self.stopIdleCapture()
+                    self.availabilityMessage = "服务在线 · 手机已断开，已停止采集屏幕"
                     self.allowsDisplaySwitching = false; self.configuredPeer = nil
                     self.status = "手机已断开：\(reason)"; self.clientName = ""
                     self.restoreSessionSettings()
@@ -1094,7 +1207,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         }
         refreshInputPermissions()
         if connected && Date().timeIntervalSince(lastPing) > 4 { input.release(); link?.close() }
-        if let displayID, !scaleBusy {
+        if connected, let displayID, !scaleBusy {
             let online = CGDisplayIsOnline(displayID) != 0
             let change = displayPresence.update(online: online)
             if !online {
@@ -1229,13 +1342,16 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             switchingDisplay: switchingDisplay || scaleBusy, captureRevision: captureRevision, supportsDirectTouch: true,
             supportsTextInput: true, textFocus: controlAllowed ? textFocus : nil, mouseButtonDown: input.isDragging,
             videoQuality: videoQuality.rawValue, supportsWindowOverview: true, supportsDesktopSwitch: true,
-            supportedVideoQualities: LANVideoQuality.allCases.map(\.rawValue),
+            supportedVideoQualities: LANVideoQuality.allCases.filter { $0.framesPerSecond <= 120 }.map(\.rawValue),
             supportsMicrophone: ChordeskFeatures.remoteMicrophone, sourceRefreshRate: displayID.flatMap { CGDisplayCopyDisplayMode($0)?.refreshRate }, hostID: hostIdentity,
             supportsScrollDynamics: true, supportsPresenceProbe: true, supportsH264: true, videoCodec: activeVideoCodec, supportedVideoCodecs: LANVideoCodec.allCases.map(\.rawValue),
-            endpoints: (activeLANPairings + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) }))
+            endpoints: (activeLANPairings + tailscalePairings).map { LANEndpoint(host: $0.host, port: $0.port, network: $0.connectionNetwork) },
+            streamSettings: streamSettings, supportsBandwidthProbe: true))
     }
 
     func stop() {
+        bandwidthTask?.cancel(); bandwidthTask = nil
+        stopIdleCapture()
         captureRepair?.cancel(); captureRepair = nil; captureInterrupted = false; pendingAutomaticPeer = nil
         displayPresence = HostDisplayPresence()
         peerVideoCodecs = []; requestedVideoCodec = "jpeg"; activeVideoCodec = "jpeg"
@@ -1270,10 +1386,10 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
     let queue = DispatchQueue(label: "dev.iphoneduo.jpeg", qos: .userInitiated)
     private let context = CIContext(options: [.cacheIntermediates: false])
-    private var quality: LANVideoQuality
+    private var quality: StreamSettings
     private var codec = "jpeg"
     private var encoder = HardwareVideoEncoder()
-    func setQuality(_ value: LANVideoQuality) { queue.async { self.quality = value } }
+    func setQuality(_ value: StreamSettings) { queue.async { self.quality = value } }
     func setCodec(_ value: String) {
         queue.async {
             guard self.codec != value else { return }
@@ -1284,7 +1400,7 @@ private final class LANFrameSource: NSObject, SCStreamOutput, SCStreamDelegate {
     private let frame: (Data, String, Bool) -> Void
     private let pause: () -> Void
     private let stopped: (Error) -> Void
-    init(quality: LANVideoQuality, frame: @escaping (Data, String, Bool) -> Void, pause: @escaping () -> Void, stopped: @escaping (Error) -> Void) {
+    init(quality: StreamSettings, frame: @escaping (Data, String, Bool) -> Void, pause: @escaping () -> Void, stopped: @escaping (Error) -> Void) {
         self.quality = quality; self.frame = frame; self.pause = pause; self.stopped = stopped
     }
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {

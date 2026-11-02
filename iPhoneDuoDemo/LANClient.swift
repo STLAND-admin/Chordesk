@@ -261,6 +261,15 @@ final class LANClient: ObservableObject {
     @Published private(set) var mouseButtonDown = false
     @Published private(set) var textInputEpoch = 0
     @Published private(set) var videoQuality: LANVideoQuality?
+    @Published private(set) var streamSettings: StreamSettings?
+    @Published private(set) var supportsBandwidthProbe = false
+    @Published private(set) var testingBandwidth = false
+    @Published private(set) var bandwidthMessage = "检测当前 Mac 到手机的连接，推荐码率与帧率。"
+    @Published private(set) var streamRecommendation: StreamRecommendation?
+    private var bandwidthID: UUID?
+    private var bandwidthBytes = 0
+    private var bandwidthBegan: TimeInterval = 0
+    private var bandwidthTimeout: Task<Void, Never>?
     @Published private(set) var availableVideoQualities = LANVideoQuality.legacy
     @Published private(set) var sourceRefreshRate: Double?
     @Published var preferredVideoCodec = LANVideoCodec.storedPreference(.standard) {
@@ -379,6 +388,9 @@ final class LANClient: ObservableObject {
             }
             connected = true; controlAllowed = true; supportsDirectTouch = true; supportsTextInput = true
             sourceName = "UI Fixture"; videoQuality = .sharp; captureRevision = "fixture"
+            if ProcessInfo.processInfo.environment["DUO_UI_STREAM_SETTINGS"] == "1" {
+                streamSettings = .init(); canSwitchDisplays = true; supportsDisplaySelection = true
+            }
             availableVideoQualities = LANVideoQuality.allCases
             if ProcessInfo.processInfo.environment["DUO_UI_LIVE_FRAMES"] == "1" {
                 heartbeat = Timer.scheduledTimer(withTimeInterval: 1.0 / 24, repeats: true) { [weak self] _ in
@@ -574,6 +586,8 @@ final class LANClient: ObservableObject {
                     self.mouseButtonDown = state.mouseButtonDown ?? false
                     self.switchingDisplay = state.switchingDisplay ?? false
                     self.videoQuality = state.videoQuality.flatMap(LANVideoQuality.init(rawValue:))
+                    self.streamSettings = state.streamSettings.flatMap { $0.isValid ? $0 : nil }
+                    self.supportsBandwidthProbe = state.supportsBandwidthProbe == true
                     self.availableVideoQualities = LANVideoQuality.supported(by: state.supportedVideoQualities)
                     self.sourceRefreshRate = state.sourceRefreshRate.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
                     self.sourceName = state.name
@@ -583,6 +597,23 @@ final class LANClient: ObservableObject {
                     }
                     self.controlAllowed = state.canControl
                     self.status = "\(self.connectionNetwork.title) · \(state.message)"
+                case .bandwidthChunk:
+                    guard let id = self.bandwidthID, let count = BandwidthProbe.payloadCount(data, id: id),
+                          self.bandwidthBytes + count <= BandwidthProbe.maximumBytes else { return }
+                    self.bandwidthBytes += count
+                case .bandwidthEnd:
+                    guard data.count < 128, let end = try? JSONDecoder().decode(BandwidthProbeEnd.self, from: data),
+                          end.id == self.bandwidthID else { return }
+                    self.bandwidthTimeout?.cancel(); self.bandwidthTimeout = nil
+                    self.bandwidthID = nil; self.testingBandwidth = false
+                    guard end.bytes == self.bandwidthBytes, let settings = self.streamSettings,
+                          let result = StreamRecommendation.make(bytes: self.bandwidthBytes,
+                            elapsed: ProcessInfo.processInfo.systemUptime - self.bandwidthBegan,
+                            resolution: settings.resolution, rtt: self.roundTripMS, sourceFPS: self.sourceRefreshRate) else {
+                        self.bandwidthMessage = "本次样本不足；请稍后重试（两次检测至少间隔 10 秒）。"; return
+                    }
+                    self.streamRecommendation = result
+                    self.bandwidthMessage = String(format: "本次链路实测 %.1f Mbps；建议 %.1f Mbps、%d fps。", result.measuredMbps, Double(result.bitrate) / 1_000_000, result.fps)
                 case .microphoneState:
                     guard self.supportsMicrophone, data.count < 4096,
                           let state = try? JSONDecoder().decode(LANMicrophoneState.self, from: data) else { return }
@@ -694,6 +725,36 @@ final class LANClient: ObservableObject {
         link?.send(.input, value: event)
     }
 
+    func setStreamSettings(_ value: StreamSettings) {
+        guard connected, streamSettings != nil, value.isValid, canSwitchDisplays, !switchingDisplay else { return }
+#if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" { streamSettings = value; return }
+#endif
+        release(); link?.send(.streamSettings, value: value)
+    }
+
+    func testBandwidth() {
+        guard connected, supportsBandwidthProbe, !testingBandwidth, let link else { return }
+        let id = UUID(), token = generation
+        bandwidthID = id; bandwidthBytes = 0; bandwidthBegan = ProcessInfo.processInfo.systemUptime
+        streamRecommendation = nil; testingBandwidth = true
+        bandwidthMessage = "正在检测当前连接，可能短暂影响画面…"
+        link.send(.bandwidthRequest, value: BandwidthProbeRequest(id: id))
+        bandwidthTimeout?.cancel()
+        bandwidthTimeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(8)) } catch { return }
+            guard let self, self.generation == token, self.bandwidthID == id else { return }
+            self.bandwidthID = nil; self.testingBandwidth = false
+            self.bandwidthMessage = "检测超时，未调整画质；可降低码率后重试。"
+        }
+    }
+
+    func applyStreamRecommendation() {
+        guard var value = streamSettings, let recommendation = streamRecommendation else { return }
+        value.fps = recommendation.fps; value.bitrate = recommendation.bitrate
+        setStreamSettings(value)
+    }
+
     func setVideoQuality(_ quality: LANVideoQuality) {
         guard connected, videoQuality != nil, availableVideoQualities.contains(quality), canSwitchDisplays, !switchingDisplay else { return }
         release(); link?.send(.videoQuality, value: quality.rawValue)
@@ -744,6 +805,9 @@ final class LANClient: ObservableObject {
         supportsWindowOverview = false; supportsDesktopSwitch = false
         supportsTextInput = false; textFocus = nil; mouseButtonDown = false; textInputEpoch += 1
         displayMessage = "连接新版 Mac 主机后显示可用显示器"
+        bandwidthTimeout?.cancel(); bandwidthTimeout = nil; bandwidthID = nil; testingBandwidth = false
+        streamSettings = nil; supportsBandwidthProbe = false; streamRecommendation = nil
+        bandwidthMessage = "检测当前 Mac 到手机的连接，推荐码率与帧率。"
         scaleState = nil; videoQuality = nil; videoMbps = 0; videoFPS = 0; traffic = VideoTrafficMeter()
         roundTripMS = nil; pingNonce = nil; supportedVideoCodecs = []; videoCodec = "JPEG"
         availableVideoQualities = LANVideoQuality.legacy; sourceRefreshRate = nil
@@ -833,7 +897,7 @@ struct LANMonitor: View {
 
         }
         .clipped()
-        .background(RemoteFrameRateHint(target: Int(client.videoQuality?.framesPerSecond ?? 24),
+        .background(RemoteFrameRateHint(target: client.streamSettings?.fps ?? Int(client.videoQuality?.framesPerSecond ?? 24),
                                         frame: client.receivedFrames, active: client.connected && client.image != nil))
     }
 }

@@ -1,49 +1,45 @@
 # Chordesk 小范围试用
 
-目标：先找 5–10 位 Duo 用户验证背面和弦是否容易学会、是否误触，以及触控／触控板切换是否自然；同时用独立普通 iPhone 测试组开展手动切换与真机兼容性测试。网页、模拟器与真机反馈分开记录，不能用网页结果证明握持舒适或实际延迟。
+[操作指南](../OPERATION-GUIDE.md) · [首次安装检查](FIRST-RUN-CHECKLIST.md) · [发行状态](DISTRIBUTION.md)
 
-## 三个交付物
+## 当前入口
 
-| 交付物 | 试用入口 | 当前状态 |
-| --- | --- | --- |
-| 概念与操作演示 | https://stland-admin.github.io/Chordesk-site/ | GitHub Pages，具体部署见 VALIDATION-1.18.md |
-| iOS App | [公开 TestFlight 邀请](https://testflight.apple.com/join/WZDXKgvg) | 1.22.1 / 28 已获 Beta 审核批准；2026-10-31 核验公开页有安装入口，名额和设备条件以 Apple 为准 |
-| Mac 主机 | [Mac 0.18.1 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test) | Apple Silicon，macOS 15.2+，ad hoc 签名且未公证，安装说明随包提供 |
+| 交付物 | 版本与入口 |
+| --- | --- |
+| 概念与操作演示 | [中英文官网](https://stland-admin.github.io/Chordesk-site/) |
+| iPhone / Duo | [TestFlight 1.30 /39](https://testflight.apple.com/join/WZDXKgvg)，已启用外部测试 |
+| Apple Silicon Mac | [0.25.0 /38 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)，macOS 15.2+，ad hoc 签名，未公证 |
 
-本机现有 Apple Development 签名 App 继续用于稳定调试。Mac 同学试用包由独立 Release 构建生成，明确标为未公证；不是把本机开发包改名后当正式发行版，也不适用于 iOS。网站与原生源码仓库目前均已公开，自有内容采用 CC BY-NC-SA 4.0。当前 Mac 构建以 Apple Silicon 为准，不承诺 Intel。
+开发中的 **iOS 1.31 /40、Mac 0.26.0 /39** 尚未发布。测试报告须记录两端实际版本，不把开发功能当成公开版功能。Mac Developer ID／公证目前暂停；不要求测试者关闭 Gatekeeper，也不分发开发 IPA 代替 TestFlight。
 
-## 发行进度与后续准备
+## 安装和十分钟任务
 
-1. 确认 App Store Connect 可用并创建 Chordesk 记录；优先保留现有 bundle ID。准备隐私政策、支持联系方式、相机／麦克风用途、局域网说明及审查可复现步骤。
-2. build 28 已上传并获首次外部审核批准，三个组均已关联构建。公开邀请已放在官网；安装 TestFlight 后即可打开链接加入，无需填写问卷或获得 App Store Connect 管理权限。Duo 和普通 iPhone 使用同一构建，按设备选择对应测试项。
-3. 申请 Developer ID Application 证书，把公证凭据保存到本机 Keychain 的 notarytool profile。用 `scripts/package-macos-release.sh` 生成 Hardened Runtime、签名、公证并装订的 DMG，验证首次安装权限与配对。
-4. 把验证过的 DMG、SHA256、变更与安装说明附到 Chordesk 原生仓库的 GitHub prerelease；更新网页下载链接。iOS 只放真实 TestFlight 链接，不能把开发 IPA 放上去代替。
-5. 发送一条包含网页、Mac 下载与 TestFlight 的邀请；需要用户明确指定收件人后才代发。目前发布公开入口，不向指定联系人发送邀请或购买资源。
+1. Mac：拖入 Applications 后打开；仅在信任来源时按 macOS 隐私与安全性提示允许运行。分别授权屏幕录制、控制 Mac，每项授权后可能需要退出重开。两项生效后开启服务。详见[首次安装检查](FIRST-RUN-CHECKLIST.md)。
+2. 手机：安装 TestFlight，打开邀请链接；允许需要的本地网络与相机提示。首次扫描主机二维码，随后从记忆列表重连。
+3. 同局域网不需要账号。跨网络在两个 Chordesk 内登录同一私人 Tailscale 网络，不安装额外 Tailscale App；不要把账号或配对二维码发给反馈渠道。
+4. 使用可丢弃文稿或测试网页，依次尝试：轻点、滚动、长按拖选、输入文字、收起键盘；Duo 再试背面双指临时触控板，以及一指加正面双指的窗口总览／左右切桌面。普通 iPhone 用屏幕模式按钮，跳过背面手势。
+5. 断开、息屏再连、关闭主机窗口后重连。真正睡眠／合盖仍不保证可用。音频功能暂时关闭，勿把它作为会议麦克风测试。
 
-## 测试者准备与十分钟任务
+## 1.31 / 0.26 开发版重点
 
-- iPhone 与 Mac 在同一局域网；暂不支持公网。Mac 选一个可丢弃文稿，不共享带私人信息的窗口。允许屏幕录制和控制后扫码配对。
-- 不安装额外组件也能测基本画面、键盘、触控与和弦。内置文字大小后端可切换系统现有模式；无法确认原模式恢复时保持当前分辨率。自定义 HiDPI 可能仍需 BetterDisplay 兼容方案，不承诺全部档位。
-- 远程麦克风保持关闭。本轮先测操作逻辑；虚拟音频方案与许可确定后单独测音频。
-- 依次完成：点目标／滚动；长按拖选；输入并收起键盘；背面双指长按→正面移动光标→松手恢复；背面一指＋正面双指上推／下滑；断开连接。
-- 普通 iPhone 跳过背面操作，用右侧按钮切换直接触控／触控板，测试菜单窗口总览／桌面切换，以及键盘遮挡、横竖屏和重连。当前只通过两项普通 iPhone 模拟器 UI 检查，不能视为真机路径已通过。
-- Duo 额外重点：背面一指＋正面双指左右滑切桌面；闲置、操作 Mac、键盘／菜单、前后台及旋转后重新落指，检查背面灯和模式是否恢复。
-- 每项记录能否独立完成、是否误触、主观延迟、是否遮挡、哪一步需要提示；最后问“你更愿意用背面和弦还是菜单切换，为什么”。记录版本和系统，不收集设备序列号、配对二维码、密钥、账号密码或真实文档。
+- 新偏好默认背面双指接触即切换、抬起恢复；已有明确保存的长按偏好继续保留。
+- 分别修改 480p–2160p、15–120 fps、目标码率，确认互不改写；低分辨率并不保证实际 120 fps。
+- 新偏好默认 HEVC，观察 HUD 的实际编码及 H.264/JPEG 回退；已有编码选择继续保留。
+- 在当前认证连接执行限量测速，观察推荐，手动应用后确认分辨率不变；弱网／Tailscale 中继需单独记录。
+- 服务在线但未连接时应显示“未采集屏幕”；连接后有画面，断开后停止采屏。反复三次，在线查询不能启动采屏。macOS 其他应用可能也在共享屏幕，按应用辨认系统提示。
+- 检查两端 Tailscale 按钮、权限旁重启说明，以及 DMG 中 App → Applications 拖拽指引。
 
 ## 收集反馈
 
-网页提供 GitHub 反馈入口和模板，**提交内容公开**；没有 GitHub 账号的测试者可把下面的文字发回邀请人。优先使用 TestFlight 反馈渠道，上传截图前检查远程桌面内容。
+优先使用 TestFlight 反馈；GitHub issue **公开可见**。截图／录像先检查远程桌面内容。不收集序列号、密码、二维码、密钥或真实私密文档。
 
 ```text
-体验方式：网页 / Duo + Mac / 普通 iPhone + Mac
-版本与系统：
-尝试的任务：
-预期结果：
-实际结果与重现步骤：
-学习成本（1 容易–5 困难）：
-误触（无 / 偶尔 / 频繁）：
-主观延迟（不明显 / 可察觉 / 影响操作）：
-更喜欢和弦还是菜单，原因：
+体验方式：Duo + Mac / 普通 iPhone + Mac
+两端版本与系统：
+网络：LAN / Tailscale（Wi-Fi / 蜂窝）：
+动作和重现步骤：
+预期结果 / 实际结果：
+误触、遮挡或主观延迟：
 ```
 
-参考：[Apple 外部测试流程](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/)、[macOS 公证](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。外部 Beta 已获批准；正式 App Store 发行和 Mac 公证仍独立准备。
+网页模拟器、逻辑测试、真机反馈分别记录。正式 App Store 审核、普通 iPhone 真机、全部网络及长期稳定性并未因 Beta 通过而自动验收。

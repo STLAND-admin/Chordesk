@@ -13,7 +13,7 @@ struct ContentView: View {
     @AppStorage("outerTouchEdgeInset") private var outerEdgeInset = TouchpadTuning.defaultEdgeInset
     @AppStorage("keyboardDefaultModeV2") private var innerDefaultMode = InnerInputMode.touchpad.rawValue
     @AppStorage("rearActivation") private var rearActivation = RearActivation.momentary.rawValue
-    @AppStorage("rearTriggerV2") private var rearTrigger = RearTrigger.longPress.rawValue
+    @AppStorage("rearTriggerV2") private var rearTrigger = RearTrigger.touch.rawValue
     @AppStorage("keyboardTransparency") private var keyboardTransparency = 0.45
     @AppStorage("primaryPointerMode") private var frontTouchMode = FrontTouchMode.direct.rawValue
     @AppStorage("showPointerModeButtonV1") private var showPointerModeButton = true
@@ -473,17 +473,35 @@ struct ContentView: View {
             Text(client.streamMetadata).font(.caption.monospaced())
             Text("延迟为应用层往返 RTT，包含处理和排队时间，不是触控到显示的端到端延迟；fps 为接收画面帧率。")
                 .font(.caption).foregroundStyle(.secondary)
-            if let quality = client.videoQuality {
-                Picker("画质", selection: Binding(get: { quality }, set: { client.setVideoQuality($0) })) {
-                    ForEach(client.availableVideoQualities) { Text($0.title).tag($0) }
+            if let settings = client.streamSettings {
+                StreamSettingsControls(settings: settings, onChange: client.setStreamSettings)
+                    .disabled(!client.canSwitchDisplays || client.switchingDisplay || client.testingBandwidth)
+                if client.supportsBandwidthProbe {
+                    Button { client.testBandwidth() } label: {
+                        Label(client.testingBandwidth ? "正在检测…" : "检测连接并推荐设置", systemImage: "speedometer")
+                    }.buttonStyle(.borderedProminent).tint(.gray)
+                        .disabled(client.testingBandwidth || client.switchingDisplay)
+                        .accessibilityIdentifier("stream-bandwidth-test")
+                    Text(client.bandwidthMessage).font(.caption)
+                    if client.streamRecommendation != nil {
+                        Button("应用推荐码率与帧率") { client.applyStreamRecommendation() }
+                            .buttonStyle(.bordered).disabled(!client.canSwitchDisplays || client.switchingDisplay)
+                            .accessibilityIdentifier("stream-apply-recommendation")
+                    }
+                    Text("检测载荷不超过 512 KiB，另有少量协议开销；不连接外部测速服务器。结果包含当前路径、往返与排队影响，仅作保守建议；不会自动改动你的设置。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else if let quality = client.videoQuality {
+                Picker("旧版画质", selection: Binding(get: { quality }, set: { client.setVideoQuality($0) })) {
+                    ForEach(client.availableVideoQualities.filter { $0.framesPerSecond <= 120 }) { Text($0.title).tag($0) }
                 }.disabled(!client.canSwitchDisplays || client.switchingDisplay)
-                Text(quality.detail).font(.caption)
-            } else { Text("连接新版主机后可调整画质") }
+                Text("升级 Mac 主机到 0.26.0 可分别设置分辨率、帧率和码率。").font(.caption)
+            } else { Text("连接 Mac 后可调整传输画质") }
             Text("实际视频载荷 \(client.videoMbps, specifier: "%.1f") Mbps · \(client.videoFPS, specifier: "%.0f") fps")
             if let rate = client.sourceRefreshRate {
                 Text("Mac 显示模式标称刷新率 \(rate, specifier: "%.0f") Hz").font(.caption)
             }
-            Text("省流 15 fps 为默认。60 fps 降低传输分辨率；120／144 fps 为实验上限，实际受源屏刷新率、编码、网络和手机显示能力限制，静止画面会减少帧数。这里统计收到的视频帧，不等于屏幕实际刷新率。低分辨率不改变文字大小；文字过小请使用显示器菜单。")
+            Text("默认 720p、15 fps、H.265；硬件不支持时自动回退 H.264／JPEG。H.265 的压缩效率不代表更低编码延迟，可按实际连接效果选择。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -503,7 +521,7 @@ struct ContentView: View {
                 LabeledContent("正面双指左滑／右滑", value: "下一个／上一个桌面")
                 Text("左右切桌面需要 Mac 开启 System Events 权限和 Control＋方向键快捷键，并有至少两个桌面。").font(.footnote).foregroundStyle(.secondary)
             }
-            Section("2 指长按背屏（临时触控板 · 默认）") {
+            Section("2 指接触背屏（临时触控板 · 默认）") {
                 LabeledContent("正面单指滑动", value: "移动鼠标")
                 LabeledContent("单指轻点／双击", value: "左键／双击")
                 LabeledContent("单指长按后拖动", value: "按住左键拖选")
@@ -755,7 +773,7 @@ struct ContentView: View {
         client.release()
         grip.configure(defaultMode: automaticInnerMode ?? InnerInputMode(rawValue: innerDefaultMode) ?? .keyboard,
                        activation: RearActivation(rawValue: rearActivation) ?? .momentary,
-                       trigger: RearTrigger(rawValue: rearTrigger) ?? .longPress,
+                       trigger: RearTrigger(rawValue: rearTrigger) ?? .touch,
                        frontMode: FrontTouchMode(rawValue: frontTouchMode) ?? .direct)
     }
 

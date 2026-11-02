@@ -2,9 +2,21 @@
 
 [English](CHANGELOG.md) · [操作指南](OPERATION-GUIDE.md) · [首次安装检查](docs/FIRST-RUN-CHECKLIST.md)
 
-范围：从首个公开 TestFlight **iOS 1.22.1 / build 28**，到当前开发版 **iOS 1.29 / build 38、Mac 0.24.0 / build 37**（2026-11-01）。对应首发 Mac 为 **0.18.1 / build 26**。下面是首发之后的增量，不把已有功能重复算作新增。
+范围：首个公开 TestFlight **iOS 1.22.1 /28** 之后的增量。当前公开版为 **iOS 1.30 /39、Mac 0.25.0 /38**；当前开发版为 **iOS 1.31 /40、Mac 0.26.0 /39**（2026-11-02），尚未发布。正式 App Store 尚未提交。
 
-**发行状态：**首个 TestFlight 和 Mac 0.18.1 仍是对外发布基线；下列新版功能目前为源码与本地开发安装，尚未发布新版 Mac 安装包、TestFlight 或正式 App Store。可以直接准备 App Store 审核，不必再发一轮 TestFlight，但本地安装不等于已送审。
+## 1.31 / Mac 0.26.0 · 未发布
+
+- 服务监听与采屏分离：认证手机连接后才启动采集，断开后停止采集和编码；在线查询不采屏。保留已配对重连和远控期间系统隐私指示。
+- 分辨率（480p、720p、1080p、1440p、2160p）、帧率上限（15–120 fps）与目标码率独立设置；新偏好默认 720p /15 fps /1.5 Mbps、HEVC。保留已保存选择和 H.264/JPEG 回退。
+- 当前认证 Mac→手机连接提供最多 512 KiB 测试载荷的保守码率／帧率推荐，手动应用；不是外部宽带测速或自动调参。
+- 背面双指默认接触立即临时切换、抬起恢复，长按仍可选；已有明确保存的偏好保留。
+- Tailscale 操作入口采用明确按钮；权限旁说明可能需要逐项重启。DMG 提供中英文拖拽安装指引，不放可见说明文件。
+- 移除旧 Mac 双屏模拟与单窗口实验，保留概念网站和手机使用中的共享组件。历史验证与旧发行说明集中到[开发历史](docs/DEVELOPMENT-HISTORY.md)。
+
+## 1.30 / Mac 0.25.0 · 已公开
+
+- 内嵌 Tailscale、IPv4/IPv6 本地地址兼容、键盘与触控改进、禁用音频及新版隐私资料已进入公开测试版。
+- iOS 1.30 /39 已批准并启用原三个外部测试组；Mac 0.25.0 /38 提供未公证试用 DMG。不是正式 App Store 发行。
 
 ## 已更新的内容
 
@@ -14,7 +26,7 @@
 - 显示器、操控模式、窗口总览三个快捷键可独立隐藏，菜单整理为四类设置。
 - 手册改为 0／1／2 指动作速查；诊断页可关闭 HUD 并选择位置。
 - 两端音频功能暂时停用，旧自动开启偏好不生效。About 使用透明黑白 STLAND 文字标志。
-- 用户真机确认黑边、快捷键与菜单短按正常。图标选定 B 雾面玻璃方案，正式安装图标尚未替换。[验证](docs/VALIDATION-1.29.md)。
+- 用户真机确认黑边、快捷键与菜单短按正常。保留现有黑底 App 图标。[验证](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-29)。
 
 ### 1. 跨网络访问与自动连接
 
@@ -88,4 +100,4 @@
 
 发行前仍需：完整首次授权及真实下载流程、固定触控板惯性、1.28 真机背屏与双编码、跨网络冷启动／长连接和性能、普通 iPhone 真机。合盖远控和按需采集能耗优化仍是未解决项。新版内嵌加密与第三方账号服务需要重新核对隐私及出口合规，不能沿用第一版“仅系统加密”申报。
 
-[1.23 验证](docs/VALIDATION-1.23.md) · [1.24](docs/VALIDATION-1.24.md) · [1.25](docs/VALIDATION-1.25.md) · [1.26](docs/VALIDATION-1.26.md) · [1.27](docs/VALIDATION-1.27.md) · [1.28](docs/VALIDATION-1.28.md) · [公开待办](ROADMAP.md)
+[1.23 验证](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-23) · [1.24](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-24) · [1.25](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-25) · [1.26](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-26) · [1.27](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-27) · [1.28](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-28) · [公开待办](ROADMAP.md)

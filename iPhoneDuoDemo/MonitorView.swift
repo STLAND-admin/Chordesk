@@ -145,20 +145,6 @@ struct MonitorView: View {
     }
 }
 
-struct InnerDisplay: View {
-    @ObservedObject var session: DemoSession
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                MonitorView(session: session)
-                    .frame(height: geometry.size.height * 0.75)
-                TouchKeyboard(session: session)
-                    .frame(height: geometry.size.height * 0.25)
-            }
-        }
-    }
-}
-
 struct InteractionLog: View {
     @ObservedObject var session: DemoSession
     var body: some View {

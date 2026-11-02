@@ -1,6 +1,18 @@
 import Foundation
 import CoreGraphics
 
+/// Service discovery and authenticated presence queries never acquire a capture
+/// lease. Invalidating a viewer also invalidates its asynchronous start/retry work.
+struct ViewerCaptureLifetime {
+    private(set) var lease: UUID?
+    mutating func begin(authenticatedViewer: Bool) -> UUID? {
+        guard authenticatedViewer else { return nil }
+        let id = UUID(); lease = id; return id
+    }
+    func accepts(_ id: UUID?) -> Bool { id != nil && id == lease }
+    mutating func end() { lease = nil }
+}
+
 /// A paused stream can restore the same authorization, but never one revoked later.
 struct CaptureRecovery {
     private(set) var paused = false

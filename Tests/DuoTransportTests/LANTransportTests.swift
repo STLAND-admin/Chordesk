@@ -54,11 +54,13 @@ final class LANTransportTests: XCTestCase {
     }
 
     func testAuthenticatedRoundTripPreservesLargeAndEmptyPacketBoundaries() throws {
-        let echoed = expectation(description: "five correctly framed encrypted messages")
-        echoed.expectedFulfillmentCount = 5
+        let echoed = expectation(description: "old and new correctly framed encrypted messages")
+        echoed.expectedFulfillmentCount = 8
         let payloads: [(LANPacket, Data)] = [(.hello, Data("iPhone".utf8)), (.frame, Data(repeating: 0xa5, count: 700_000)),
             (.release, Data()), (.input, Data("after-large-frame".utf8)),
-            (.microphoneAudio, MicrophonePacket(streamID: UUID(), sequence: 7, pcm: Data(repeating: 0x3f, count: 960)).encoded)]
+            (.microphoneAudio, MicrophonePacket(streamID: UUID(), sequence: 7, pcm: Data(repeating: 0x3f, count: 960)).encoded),
+            (.streamSettings, try JSONEncoder().encode(StreamSettings(resolution: .p2160, fps: 120, bitrate: 25_000_000))),
+            (.bandwidthChunk, BandwidthProbe.chunk(id: UUID())), (.input, Data("after-bandwidth-sample".utf8))]
         var index = 0
         try listen(accepted: { server in server.onPacket = { kind, data in server.send(kind, data: data) } }, ready: { port in
             let client = LANLink(NWConnection(host: "127.0.0.1", port: port, using: LANTransport.parameters(secret: self.secret)))

@@ -254,8 +254,12 @@ struct HostPermissionActions: View {
         VStack(spacing: 8) {
             Button { setup.requestScreen(host) } label: { Label("1 · 允许屏幕录制", systemImage: "record.circle") }
                 .disabled(busy || setup.permissions.screen).accessibilityIdentifier("host-request-screen")
+            Text("允许屏幕录制后，macOS 可能要求退出并重新打开 Chordesk。请按提示重开，再继续第 2 步。")
+                .font(.caption).foregroundStyle(.secondary)
             Button { setup.requestControl(host) } label: { Label("2 · 允许控制 Mac", systemImage: "cursorarrow") }
                 .disabled(busy || (setup.permissions.accessibility && setup.permissions.input)).accessibilityIdentifier("host-request-control")
+            Text("允许控制后，也可能需要重启 Chordesk 才能生效。两项都显示已允许后，再开启服务；不需要重启 Mac。")
+                .font(.caption).foregroundStyle(.secondary)
             Button { Task { await setup.restart(host) } } label: { Label("重启 Chordesk", systemImage: "arrow.clockwise") }
                 .disabled(busy).accessibilityIdentifier("host-manual-restart")
         }.buttonStyle(.bordered)

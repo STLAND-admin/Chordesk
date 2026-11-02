@@ -292,7 +292,7 @@ enum LANCredentialStore {
 }
 
 enum LANWireError: Error { case random, malformed }
-enum LANPacket: UInt8 { case hello = 1, status = 2, frame = 3, input = 4, ping = 5, release = 6, acknowledgement = 7, displays = 8, selectDisplay = 9, requestDisplays = 10, adjustScale = 11, textInput = 12, videoQuality = 13, microphoneRequest = 14, microphoneState = 15, microphoneAudio = 16, presenceRequest = 17, presenceResponse = 18, videoFrame = 19, videoRequest = 20 }
+enum LANPacket: UInt8 { case hello = 1, status = 2, frame = 3, input = 4, ping = 5, release = 6, acknowledgement = 7, displays = 8, selectDisplay = 9, requestDisplays = 10, adjustScale = 11, textInput = 12, videoQuality = 13, microphoneRequest = 14, microphoneState = 15, microphoneAudio = 16, presenceRequest = 17, presenceResponse = 18, videoFrame = 19, videoRequest = 20, streamSettings = 21, bandwidthRequest = 22, bandwidthChunk = 23, bandwidthEnd = 24 }
 
 enum LANVideoQuality: String, CaseIterable, Identifiable, Codable {
     case efficient, sharp, ultra, responsive60, experimental120, experimental144
@@ -424,6 +424,8 @@ struct LANStatus: Codable {
     var videoCodec: String? = nil
     var supportedVideoCodecs: [String]? = nil
     var endpoints: [LANEndpoint]? = nil
+    var streamSettings: StreamSettings? = nil
+    var supportsBandwidthProbe: Bool? = nil
 }
 
 struct LANPresenceRequest: Codable, Equatable {
@@ -701,11 +703,11 @@ final class LANLink {
         if let data = try? JSONEncoder().encode(value) { send(kind, data: data) }
     }
 
-    func send(_ kind: LANPacket, data: Data = Data(), droppable: Bool = false, keyframe: Bool = false) {
+    func send(_ kind: LANPacket, data: Data = Data(), droppable: Bool = false, keyframe: Bool = false, completion: ((Bool) -> Void)? = nil) {
         queue.async { [weak self] in
-            guard let self, !self.closed, data.count <= Self.maximumPacketSize else { return }
+            guard let self, !self.closed, data.count <= Self.maximumPacketSize else { completion?(false); return }
             if kind == .microphoneAudio && (data.count != MicrophonePacket.byteCount || self.pendingBytes > MicrophonePacket.byteCount * 6) { return }
-            guard self.pendingBytes < Self.maximumPacketSize * 2 else { self.finish("连接过慢，已停止排队"); return }
+            guard self.pendingBytes < Self.maximumPacketSize * 2 else { completion?(false); self.finish("连接过慢，已停止排队"); return }
             let isVideo = kind == .frame || kind == .videoFrame
             if isVideo && !self.videoGate.admit(interFrame: kind == .videoFrame, keyframe: keyframe) {
                 if kind == .videoFrame { self.onVideoDropped?() }
@@ -718,11 +720,12 @@ final class LANLink {
             let count = packet.count
             self.pendingBytes += count
             self.connection.send(content: packet, completion: .contentProcessed { [weak self] error in
-                guard let self else { return }
+                guard let self else { completion?(false); return }
                 self.pendingBytes -= count
                 if isVideo { self.videoGate.completed() }
                 if let error { self.finish(error.localizedDescription) }
                 else if isVideo { self.onFrameSent?(data.count) }
+                completion?(error == nil)
             })
         }
     }

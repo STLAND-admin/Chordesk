@@ -2,6 +2,31 @@ import XCTest
 
 final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
+    func testIndependentStreamSettings() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_STREAM_SETTINGS"] = "1"
+        app.launch()
+        shortPress(app.buttons["remote-options"])
+        shortPressMenuItem("远程传输画质设置", in: app)
+        let resolution = app.buttons["stream-resolution"], fps = app.buttons["stream-fps"]
+        reveal(resolution, in: app.collectionViews.firstMatch)
+        shortPress(resolution)
+        shortPress(app.buttons["1080p"])
+        XCTAssertTrue(resolution.label.contains("1080p") || (resolution.value as? String)?.contains("1080p") == true)
+        reveal(fps, in: app.collectionViews.firstMatch)
+        shortPress(fps); shortPress(app.buttons["60 fps"])
+        XCTAssertTrue(fps.label.contains("60 fps") || (fps.value as? String)?.contains("60 fps") == true)
+        XCTAssertTrue(resolution.label.contains("1080p") || (resolution.value as? String)?.contains("1080p") == true)
+        let bitrate = app.sliders["stream-bitrate"]
+        reveal(bitrate, in: app.collectionViews.firstMatch)
+        XCTAssertTrue(bitrate.exists)
+        bitrate.adjust(toNormalizedSliderPosition: 0.05)
+        reveal(fps, in: app.collectionViews.firstMatch)
+        XCTAssertTrue(fps.label.contains("60 fps") || (fps.value as? String)?.contains("60 fps") == true)
+        XCTAssertTrue(resolution.label.contains("1080p") || (resolution.value as? String)?.contains("1080p") == true)
+    }
+    @MainActor
     func testKeyboardLetterboxAcceptsRelativeInputButRailDoesNot() {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
@@ -314,6 +339,7 @@ final class TouchpadInteractionUITests: XCTestCase {
             // SwiftUI Form's automatic whole-row button handling.
             let button = app.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
+            reveal(button, in: app.collectionViews.firstMatch)
             button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.05)
             expected.append(action)
             XCTAssertEqual(trace.label, expected.joined(separator: ","), identifier)

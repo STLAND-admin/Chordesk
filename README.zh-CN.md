@@ -6,79 +6,43 @@
 
 **指间和弦，掌控桌面。**
 
-为 iPhone Duo 设计的远程桌面：正面拇指触控和输入，背面手指像按和弦一样切换操作模式。包含 **iOS 控制端** 和 **Mac 主机端**。
+iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入，Duo 背屏像和弦一样切换模式；普通 iPhone 使用屏幕按钮。
 
-[概念与 3D 演示](https://stland-admin.github.io/Chordesk-site/) · [操作指南](OPERATION-GUIDE.md) · [开发计划](ROADMAP.md) · [TestFlight 后更新汇总](CHANGELOG.zh-CN.md)
+[官网与演示](https://stland-admin.github.io/Chordesk-site/?lang=zh) · [操作指南](OPERATION-GUIDE.md) · [开发计划](ROADMAP.md)
 
 ## 安装
 
-### Mac
-
-下载 [Mac 0.25.0 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)，打开 DMG，把 Chordesk 拖入“应用程序”。
-
-- Apple Silicon，macOS 15.2 或更新。测试包未公证，首次打开需由接收者按系统提示允许；[安装说明](docs/MAC-PEER-TEST.txt)。
-- 首次分别允许屏幕录制和控制权限，每项按 macOS 提示退出重开；两项生效后开启服务，默认共享内置屏。关闭窗口后保留菜单栏后台运行。
-- 本仓库与试用 Release 公开，可把下载链接直接发给测试者。历史私有仓库独立保留，公开提交不包含原作者的私人邮箱。
-
-### iPhone／iPhone Duo
-
-通过 [TestFlight 安装 Beta](https://testflight.apple.com/join/WZDXKgvg)。先在 iPhone 安装 TestFlight，再打开邀请链接；需配合上面的 Mac 主机在同一局域网使用。普通 iPhone 用屏幕按钮切换模式，Duo 可使用背面和弦。测试名额和设备条件以 Apple 页面为准。
-
-也可以自行编译：
-
-1. 安装 Xcode 27.1 或更新及 Go 1.27.1+，先执行 `./scripts/build-tailnet.sh`，再打开 `iPhoneDuoDemo.xcodeproj`（[构建说明](docs/DEVELOPMENT.md)）。
-2. 选择 `iPhoneDuoDemo` target，在 Signing & Capabilities 中选择自己的 Team，并使用自己可签名的 Bundle Identifier。
-3. USB 连接 Duo、按系统要求开启开发者模式并信任 Mac，选择真机后运行。Xcode 免费个人团队可自测，但需要定期重新签名。
-
-1.30/build 39 正等待 Beta 审核，新版开放前现有邀请仍安装旧版。源码安装更新时保持原 Bundle Identifier 和 Team。iOS **1.22.1 / build 28** 已通过外部 TestFlight Beta 审核；这不是正式 App Store 上架。[发行记录](docs/IOS-RELEASE-1.22.md)。
-
-## 怎么用
-
-两端连接同一局域网，首次扫描 Mac 二维码，之后从手机的已配对列表选择电脑。可保存多台 Mac，每次连接一台；IP 变化暂需重新扫码更新地址。
-
-| 操作 | 效果 |
+| 平台 | 当前公开版本 |
 | --- | --- |
-| 正面单指操作 | 默认直接触控；长按拖动选字 |
-| 背面一指＋正面双指上下滑 | 打开／退出 Mac 窗口总览 |
-| 背面一指＋正面双指左／右滑 | 下一个／上一个 Mac 桌面（Spaces） |
-| 背面双指长按 | 临时切到正面触控板，松开恢复 |
-| 右侧灰色按钮 | 菜单、模式、切屏和键盘，排列在同一列 |
+| iPhone / iPhone Duo | [TestFlight 1.30（39）](https://testflight.apple.com/join/WZDXKgvg) |
+| Apple Silicon Mac · macOS 15.2+ | [Mac 0.25.0 试用版](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test) |
 
-左右切桌面还需在 Mac「设置 → 桌面切换」允许 **System Events 自动化**，并启用系统 Control＋左右方向键；这是独立的可选权限，不影响普通远控。
+打开 Mac DMG，将 Chordesk 拖进 Applications。当前 Mac 试用包**未公证**，请仅在信任来源时按 macOS「隐私与安全性」提示放行。分别允许屏幕录制、控制 Mac，每项完成后按系统提示重开 App；两项生效后开启服务。[安装说明](docs/MAC-PEER-TEST.txt)。
 
-背面有效区可自由移动和缩放；文字输入支持 iPhone 系统／第三方输入法。普通 iPhone 使用屏幕按钮切换；iPhone 18 Pro／iOS 27.0 模拟器已通过两项针对性 UI 检查，普通 iPhone 真机兼容性仍待首轮验证。
+手机首次扫码绑定，以后点已配对电脑重连。局域网免账号；跨网时在两端 Chordesk 内登录同一 Tailscale 私人网络，无需另装 Tailscale。可记忆多台 Mac。[网络设置与边界](docs/TAILSCALE.md)。
 
-## 后续开发
+## 操作速查
 
-- [x] **跨网络远控 · Mac 试用版已发布，iOS 更新审核中**：两端内嵌 Tailscale，通过用户自己的私人网络连接，无需额外 App 或自建服务器。当前设备组合的蜂窝画面与触控已获用户确认；Mac 0.25.0 已公开，iOS 1.30 正等待 Beta 审核。
-- [ ] **P1 后台能耗**：测量无人连接时的采屏、JPEG 编码和保活，按需采集并保持低开销后台可达。
-- [ ] **键盘可视性**：探索 Liquid Glass 输入预览，减少远端输入框被键盘遮挡。
-- [ ] **RDP／客户端渲染**：验证 Mac 当前会话可行性，对比清晰度、带宽和延迟。
-- [ ] **普通 iPhone 真机测试**：验证屏幕按钮、输入法、布局和重连。
+| 手势 | Mac 操作 |
+| --- | --- |
+| 正面轻点／长按后拖动 | 点击／选择文字 |
+| 背面一指＋正面双指上／下滑 | 打开／退出窗口总览 |
+| 背面一指＋正面双指左／右滑 | 下一个／上一个桌面 |
+| 背面双指按住 | 临时触控板，抬起恢复 |
+| 右侧按钮 | 菜单、模式、显示器、总览与键盘 |
 
-已完成内容、剩余测试与发行准备见[公开开发计划](ROADMAP.md)。新版 TestFlight 已提交 Beta 审核，正式 App Store 与大陆备案准备并行进行。
+切换桌面需要可选 System Events 权限与 macOS Control＋方向键快捷键。支持原生／第三方 iPhone 输入法。[完整手册](OPERATION-GUIDE.md)。
 
-## 当前范围
+## 当前开发
 
-- **iOS 1.30 /39 正等待 Beta 审核；Mac 0.25.0 /38 未公证试用版已公开。** 新增 IPv6 配对与新版隐私说明。[发行与验证记录](docs/VALIDATION-1.30.md)。
+**未发布：iOS 1.31（40）＋Mac 0.26.0（39）。** 默认背面双指接触立即切换；480p–2160p、15–120 fps 和目标码率独立设置；默认 HEVC 并保留回退；限量链路测速与推荐；明显的按钮、逐项权限说明、拖拽安装 DMG；仅认证手机观看时采屏。已明确保存的偏好保留。上述公开下载仍为 1.30／0.25.0，不能把开发功能当作已经推送。
 
-- 开发版 **1.29** 支持键盘上方黑边作为触控板、三个可编辑的右侧快捷键、四类设置和精简手册。[操作速查](OPERATION-GUIDE.md) · [验证与真机反馈](docs/VALIDATION-1.29.md)。
+音频已关闭；不保证合盖／系统睡眠唤醒。支持 IPv4／IPv6 配对，纯 IPv6／NAT64、普通 iPhone 真机与更多网络仍需验证。帧率、码率受硬件与画面影响；HUD RTT 不等于操作到显示的完整延迟。Duo 背屏依赖相机辅助 API，相机帧丢弃。TestFlight 通过不等于正式 App Store 上架。
 
-- iOS **1.22.1 / build 28** 隔离忘记／连接按钮、把背面灯置于桌面上方，并加入有次数限制的相机恢复；闲置后背面失效仍待真机复测。完整手册与默认 iPhone 输入法保留。Mac 保持 **0.18.1 / build 26**。[验证记录](docs/VALIDATION-1.22.1.md)；[真实操作视频录制稿](docs/GUIDE-RECORDING.md)。
-- **公开 iOS 仍为 1.22.1 局域网版；1.30/build 39 已上传并提交 Beta 审核。Mac 0.25.0 未公证试用版已公开。**开发中 iOS **1.29 / build 38**、Mac **0.24.0 / build 37** 已加入内嵌 Tailscale：局域网免登录，公网使用各自的个人账号，不另装 Tailscale 或系统 VPN。用户已确认 1.23.2／0.19.0 的蜂窝跨网画面与触控正常；其他网络与长期测试仍待完成，Mac 0.25.0 已公开，iOS 1.30 待 Beta 审核。[设置与边界](docs/TAILSCALE.md)
-- 开发版直接触屏与触控板共用惯性：**设置 → 统一滚动惯性**，范围 **0（关闭）至 2**，默认 **1**；重新落指即可停止。需要两端更新。[实现与验证](docs/VALIDATION-1.24.md)
-- 开发版 iOS 1.25 新增可关闭的等比键盘避让、修正触控板抬手取消；Mac 0.20.1 在原共享屏暂时离线时保留监听。1.26 新增配对列表中的加密只读在线检查。用户已确认 1.27 键盘动画、按钮位置、可见键盘下两种触控、H.264 及蜂窝自动重连正常；用户澄清开盖锁屏正常，故障仅在合盖。Mac 0.22.1 新增接电且已认证会话的临时网络保活，用户复测合盖仍失败，不输入密码也会断开。[1.26 验证](docs/VALIDATION-1.26.md)。[验证记录](docs/VALIDATION-1.25.md) · [合盖与延迟审计](docs/HOST-WAKE-LATENCY.md)
-- 开发版 1.27 新增局域网／Tailscale 自动认证选路、键盘避让动画及贴键盘上沿的按钮、可关闭的左上统计。优先 H.264 硬件编解码，保留 JPEG 回退。默认 **省流 · 15 fps**：最长边 1280、H.264 目标 **1.5 Mbps**（JPEG 回退质量 65%），保留已存画质。实际 fps／码率随内容变化；RTT 是应用往返，非触控到画面的完整延迟。[1.27 验证](docs/VALIDATION-1.27.md)。
-- 开发版 1.28 正常背屏纯黑，仅编辑有效区域时显示边框；可选 H.264／H.265（HEVC），不支持时回退。自动连接优先 Tailscale，局域网先成功最多额外等 0.35 秒，新主机复用认证连接，减少重复握手。[验证与待测项](docs/VALIDATION-1.28.md)。
-- 开发版 Mac 0.23.1 提供独立的屏幕录制／控制授权按钮；每项授权后按系统提示退出重开（无提示可手动重启），再继续下一项。两项均生效后才开启服务，不再自动连续请求或倒计时重启。[验证记录](docs/VALIDATION-0.23.1.md)。
-- 显示模式默认目标 1600×900，使用系统现有安全模式；部分自定义 HiDPI 仍需可选 BetterDisplay 回退。[依赖说明](docs/DEPENDENCIES.md)
-- 开发版 1.29 / Mac 0.24.0 暂时停用麦克风采集、传输和路由，旧自动开启偏好不会生效。已发布旧版仍含可选功能。[历史音频方案](docs/REMOTE-MICROPHONE.md)
-- 背面实验使用相机辅助 API；相机帧不显示、不保存、不传输，不代表已获得通用外屏接口或上架许可。
+## 开发与贡献
 
-[Mac + iOS 首次安装检查](docs/FIRST-RUN-CHECKLIST.md) · [开发与构建](docs/DEVELOPMENT.md) · [开发历史](docs/DEVELOPMENT-HISTORY.md) · [品牌素材](Branding/README.md)
+[开发构建](docs/DEVELOPMENT.md) · [首次安装检查](docs/FIRST-RUN-CHECKLIST.md) · [分发准备](docs/DISTRIBUTION.md) · [文档索引](docs/README.md) · [开发与验证历史](docs/DEVELOPMENT-HISTORY.md)
 
-## 许可证
+iOS 从 `iPhoneDuoDemo.xcodeproj` 选择自己的 Team 编译；覆盖安装保持原应用身份。概念网站独立维护于 [Chordesk-site](https://github.com/STLAND-admin/Chordesk-site)。
 
-[CC BY-NC-SA 4.0](LICENSE)：署名、非商业性使用、相同方式共享。适用于项目自有代码、文档及素材；第三方依赖保留原许可证。[适用范围](NOTICE.md)。
-
-STLAND 出品
+自有代码、文档、品牌适用 **[CC BY-NC-SA 4.0](LICENSE)**，未授予自由商用；第三方依赖保留原许可，见 [NOTICE](NOTICE.md)。[隐私政策](https://stland-admin.github.io/Chordesk-site/privacy.html?lang=zh)。反馈：styj@zju.edu.cn。

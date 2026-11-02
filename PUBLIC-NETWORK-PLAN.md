@@ -8,7 +8,7 @@
 
 不买服务器、不做端口映射。穿透与必要时的中继使用 Tailscale 基础设施，仍保留 Chordesk TLS 密钥配对。Mac 需要运行、联网并有捕获／控制权限；大陆网络可达性和中继性能仍需实测。Personal 计划与商业／OEM 授权不能混同。
 
-[操作、隐私与实现边界](docs/TAILSCALE.md) · [本轮验证](docs/VALIDATION-1.23.md)。公开 TestFlight／Mac Release 尚未含内嵌功能；不能把构建成功当成已通过公网验收或已发布。本轮未购买资源。
+[操作、隐私与实现边界](docs/TAILSCALE.md) · [本轮验证](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-23)。公开 TestFlight／Mac Release 尚未含内嵌功能；不能把构建成功当成已通过公网验收或已发布。本轮未购买资源。
 
 以下是 **2026-10-29 的历史备选方案与费用估算**，保留供未来商业化或自建评估；不作为本轮需要购买服务器的要求。
 

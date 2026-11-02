@@ -13,7 +13,7 @@ if [[ $# -gt 0 || "$(uname -m)" != arm64 ]]; then
     printf '%s\n' 'This peer-test package is currently prepared only on Apple Silicon, with no arguments.' >&2
     exit 1
 fi
-test_output="${CHORDESK_TEST_OUTPUT:-$PWD/release-artifacts/mac-test-0.25.0-build38-arm64}"
+test_output="${CHORDESK_TEST_OUTPUT:-$PWD/release-artifacts/mac-test-0.26.0-build39-arm64}"
 if [[ "$test_output" != /* || -e "$test_output" ]]; then
     printf '%s\n' 'Choose a new absolute CHORDESK_TEST_OUTPUT directory; existing artifacts are not overwritten.' >&2
     exit 1
@@ -33,10 +33,9 @@ if [[ -e "$test_app/Contents/embedded.provisionprofile" ]]; then
     printf '%s\n' 'A provisioning profile must not be included in this test export.' >&2; exit 1
 fi
 codesign --verify --deep --strict "$test_app"
-cp docs/MAC-PEER-TEST.txt "$test_stage/image/先读我-安装与配对.txt"
 ln -s /Applications "$test_stage/image/Applications"
 test_name="Chordesk-Mac-$test_version-build$test_build-AppleSilicon-test.dmg"
-hdiutil create -volname 'Chordesk Test' -srcfolder "$test_stage/image" -format UDZO "$test_stage/$test_name"
+"${CHORDESK_DMG_PYTHON:-python3}" scripts/create-dmg.py "$test_stage/image" "$test_stage/$test_name" --volume 'Chordesk Test'
 hdiutil verify "$test_stage/$test_name"
 mkdir -p "$test_output"
 mv "$test_stage/$test_name" "$test_output/"

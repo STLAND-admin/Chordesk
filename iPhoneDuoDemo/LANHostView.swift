@@ -29,16 +29,21 @@ struct LANHostView: View {
                         .accessibilityIdentifier("host-network-mode")
                     Text(host.allowsTailscale && tailnet.ready ? "公网入口自动保持可用，无需切换桌面端模式。" : "局域网可直接使用；登录 Tailscale 后可启用跨网连接。")
                         .font(.callout).foregroundStyle(.secondary)
+                    if !tailnet.ready { EmbeddedTailnetControls() }
                     DisclosureGroup("Tailscale 账号与公网入口") {
                         Toggle("允许通过我的 Tailscale 连接", isOn: $host.allowsTailscale)
                             .accessibilityIdentifier("host-enable-tailscale")
                         Text(host.tailscaleMessage).font(.callout).foregroundStyle(.secondary)
-                        EmbeddedTailnetControls()
+                        if tailnet.ready { EmbeddedTailnetControls() }
                     }
                     Label(host.sharing ? (host.connected ? "已连接 · " + host.clientName : "等待连接") : "服务已停止",
                           systemImage: host.sharing ? "link" : "pause.circle")
                         .font(.title3.weight(.medium)).accessibilityIdentifier("host-service-state")
                     if host.sharing {
+                        Label(host.captureRunning ? "正在向已连接手机共享屏幕" : "未采集屏幕 · 手机连接后自动开启",
+                              systemImage: host.captureRunning ? "record.circle" : "display")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("host-capture-state")
                         Text(host.currentDisplayName).foregroundStyle(.secondary)
                         if let pairing = displayedPairing {
                             CachedPairingCode(code: pairing.code)
@@ -83,6 +88,7 @@ struct LANHostView: View {
             }.padding(24)
         }
         .background(LinearGradient(colors: [Color.primary.opacity(0.035), Color.primary.opacity(0.08), Color.clear], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .buttonStyle(.bordered)
         .tint(.gray)
         .disabled(permissionSetup.restarting)
         .toolbar {
@@ -136,10 +142,8 @@ struct LANHostView: View {
                     }
                 }
                 DisclosureGroup("画质与传输") {
-                    Picker("画质", selection: Binding(get: { host.videoQuality }, set: { value in Task { await host.setVideoQuality(value) } })) {
-                        ForEach(LANVideoQuality.allCases) { Text($0.title).tag($0) }
-                    }.disabled(host.switchingDisplay || host.scaleBusy)
-                    Text(host.videoQuality.detail).font(.caption).foregroundStyle(.secondary)
+                    StreamSettingsControls(settings: host.streamSettings, onChange: { value in Task { await host.setStreamSettings(value) } })
+                        .disabled(host.switchingDisplay || host.scaleBusy)
                 }
                 DisclosureGroup("网络与配对") {
                     Toggle("允许 Tailscale 公网连接", isOn: $host.allowsTailscale)

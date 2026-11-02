@@ -10,13 +10,14 @@ enum LANVideoCodec: String, Codable, CaseIterable, Identifiable {
     var parameterSetCount: Int { self == .hevc ? 3 : 2 }
     var fallback: Self { self == .hevc ? .h264 : .jpeg }
     static func negotiate(preferred: String?, supported: [String]) -> Self {
-        var choice = preferred.flatMap(Self.init(rawValue:)) ?? .h264
+        var choice = preferred.flatMap(Self.init(rawValue:)) ?? .hevc
         while choice != .jpeg && !supported.contains(choice.rawValue) { choice = choice.fallback }
         return choice
     }
     static func storedPreference(_ defaults: UserDefaults) -> Self {
         if let raw = defaults.string(forKey: "videoCodecV2"), let value = Self(rawValue: raw) { return value }
-        return defaults.object(forKey: "preferH264V1") as? Bool == false ? .jpeg : .h264
+        if let old = defaults.object(forKey: "preferH264V1") as? Bool { return old ? .h264 : .jpeg }
+        return .hevc
     }
 }
 
@@ -81,7 +82,7 @@ final class HardwareVideoEncoder {
     init(codec: LANVideoCodec = .h264) { self.codec = codec }
     private var session: VTCompressionSession?
     private var dimensions = CGSize.zero
-    private var quality: LANVideoQuality?
+    private var quality: StreamSettings?
     private var stream = UUID()
     private var sequence: UInt64 = 0
     private(set) var failed = false
@@ -91,7 +92,8 @@ final class HardwareVideoEncoder {
         session = nil; dimensions = .zero; quality = nil; stream = UUID(); sequence = 0; forceKeyframe = true
     }
     deinit { invalidate() }
-    private func prepare(width: Int, height: Int, quality: LANVideoQuality) -> Bool {
+    private func prepare(width: Int, height: Int, quality: StreamSettings) -> Bool {
+        guard quality.isValid else { failed = true; return false }
         if session != nil, dimensions == CGSize(width: width, height: height), self.quality == quality { return true }
         invalidate()
         var created: VTCompressionSession?
@@ -108,7 +110,7 @@ final class HardwareVideoEncoder {
             (kVTCompressionPropertyKey_RealTime, kCFBooleanTrue),
             (kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse),
             (kVTCompressionPropertyKey_ProfileLevel, codec == .hevc ? kVTProfileLevel_HEVC_Main_AutoLevel : kVTProfileLevel_H264_ConstrainedBaseline_AutoLevel),
-            (kVTCompressionPropertyKey_AverageBitRate, NSNumber(value: quality.bitrate(for: codec))),
+            (kVTCompressionPropertyKey_AverageBitRate, NSNumber(value: quality.bitrate)),
             (kVTCompressionPropertyKey_ExpectedFrameRate, NSNumber(value: quality.framesPerSecond)),
             (kVTCompressionPropertyKey_MaxKeyFrameInterval, NSNumber(value: quality.framesPerSecond * 2)),
             (kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, NSNumber(value: 2))
@@ -121,6 +123,11 @@ final class HardwareVideoEncoder {
         return true
     }
     func encode(_ pixel: CVPixelBuffer, time: CMTime, quality: LANVideoQuality) -> VideoPacket? {
+        var settings = StreamSettings.legacy(quality)
+        settings.bitrate = quality.bitrate(for: codec)
+        return encode(pixel, time: time, quality: settings)
+    }
+    func encode(_ pixel: CVPixelBuffer, time: CMTime, quality: StreamSettings) -> VideoPacket? {
         let width = CVPixelBufferGetWidth(pixel), height = CVPixelBufferGetHeight(pixel)
         guard prepare(width: width, height: height, quality: quality), let session else { return nil }
         let lock = NSLock()

@@ -26,6 +26,7 @@ final class GripInputStateTests: XCTestCase {
     }
     func testLongPressSwitchWaitsThenRestoresWithoutOpeningKeyboard() {
         var grip = GripInputState()
+        _ = grip.configure(defaultMode: .touchpad, activation: .momentary, trigger: .longPress)
         _ = grip.outerContacts(2)
         XCTAssertEqual(grip.requestedFrontMode, .direct)
         grip.gesture(.longPress)
@@ -33,6 +34,17 @@ final class GripInputStateTests: XCTestCase {
         _ = grip.outerContacts(0)
         XCTAssertEqual(grip.requestedFrontMode, .direct)
         XCTAssertEqual(grip.requestedMode, .touchpad)
+    }
+    func testDefaultRearContactIsImmediateAndReleaseRestoresDirectTouch() {
+        var grip = GripInputState()
+        _ = grip.outerContacts(1)
+        XCTAssertEqual(grip.requestedFrontMode, .direct)
+        _ = grip.outerContacts(2)
+        XCTAssertEqual(grip.requestedFrontMode, .trackpad)
+        XCTAssertEqual(grip.requestedMode, .touchpad)
+        _ = grip.outerContacts(1)
+        XCTAssertEqual(grip.requestedFrontMode, .direct)
+        XCTAssertFalse(grip.buttonHeld)
     }
     func testTogglePersistsAfterLiftAndSecondTriggerRestores() {
         var grip = GripInputState()

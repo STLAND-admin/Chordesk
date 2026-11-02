@@ -122,7 +122,7 @@ struct GripInputState {
     private(set) var defaultMode: InnerInputMode = .touchpad
     private(set) var defaultFrontMode: FrontTouchMode = .direct
     private(set) var activation: RearActivation = .momentary
-    private(set) var trigger: RearTrigger = .longPress
+    private(set) var trigger: RearTrigger = .touch
     private(set) var activated = false
     private(set) var outerCount = 0
     private(set) var innerCount = 0

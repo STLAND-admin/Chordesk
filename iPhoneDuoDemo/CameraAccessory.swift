@@ -33,7 +33,7 @@ enum OuterControlMode: String, CaseIterable, Identifiable {
 struct RearControlSettings: View {
     @AppStorage("keyboardDefaultModeV2") private var defaultMode = InnerInputMode.touchpad.rawValue
     @AppStorage("rearActivation") private var activation = RearActivation.momentary.rawValue
-    @AppStorage("rearTriggerV2") private var trigger = RearTrigger.longPress.rawValue
+    @AppStorage("rearTriggerV2") private var trigger = RearTrigger.touch.rawValue
     var body: some View {
         Section("内屏默认模式") {
             Picker("默认显示", selection: $defaultMode) {

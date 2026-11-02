@@ -130,7 +130,7 @@ final class VideoAndRouteTests: XCTestCase {
         let suite = "chordesk-codec-test-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(LANVideoCodec.storedPreference(defaults), .h264)
+        XCTAssertEqual(LANVideoCodec.storedPreference(defaults), .hevc)
         defaults.set(false, forKey: "preferH264V1")
         XCTAssertEqual(LANVideoCodec.storedPreference(defaults), .jpeg)
         defaults.set("hevc", forKey: "videoCodecV2")

@@ -33,7 +33,7 @@ Apple 的 [CGEventSource](https://developer.apple.com/documentation/coregraphics
 
 Mac 上生成图像的真实硬件编码／解码、缺帧恢复与流重建测试通过；尚没有同场景真机 JPEG/H.264 时延、清晰度或功耗对比。仍需测量分阶段耗时、Tailscale direct／relay 以及主线程呈现积压；后续可比较直接视频图层／Metal 呈现与独立视频通道。15 fps 帧间隔约 66.7 ms，这部分不能靠 H.264 消除。120／144 fps 仍为实验请求上限。
 
-依据：[Apple 低延迟 H.264 硬件模式](https://developer.apple.com/videos/play/wwdc2021/10158/)。实现与验收见 [1.27 验证](VALIDATION-1.27.md)。
+依据：[Apple 低延迟 H.264 硬件模式](https://developer.apple.com/videos/play/wwdc2021/10158/)。实现与验收见 [1.27 验证](DEVELOPMENT-HISTORY.md#archive-validation-1-27)。
 
 ## 锁屏二次重连反馈与修正
 
@@ -52,7 +52,7 @@ Mac 上生成图像的真实硬件编码／解码、缺帧恢复与流重建测�
 
 用户澄清开盖锁屏正常，问题是合盖后短暂连上、键盘出现后整体卡住，LAN／Tailscale 均如此。最新电源日志确认接电状态仍出现 Clamshell Sleep，短暂 Full Wake 后重入 Dark Wake／睡眠；单纯改编码无法修复系统睡眠。
 
-新增只在接电、已认证活动会话且原防睡眠偏好开启时的 NetworkClientActive 请求，断连／拔电／停止即释放。公开 IOPMLib.h 说明它可保持 Dark Wake 的 CPU、磁盘和网络，但不保证 framebuffer／GPU；系统仍可忽略请求。现有远程用户活动请求保留，不模拟密码／输入，也不安装系统 helper。158 项回归通过，已部署 Mac 0.22.1，用户复测仍失败：不输入密码也会卡住／断开。日志显示持有 NetworkClientActive 时仍重入 Dark Wake／睡眠，因此不把回车视为必要触发条件。[验证记录](VALIDATION-1.27.md)
+新增只在接电、已认证活动会话且原防睡眠偏好开启时的 NetworkClientActive 请求，断连／拔电／停止即释放。公开 IOPMLib.h 说明它可保持 Dark Wake 的 CPU、磁盘和网络，但不保证 framebuffer／GPU；系统仍可忽略请求。现有远程用户活动请求保留，不模拟密码／输入，也不安装系统 helper。158 项回归通过，已部署 Mac 0.22.1，用户复测仍失败：不输入密码也会卡住／断开。日志显示持有 NetworkClientActive 时仍重入 Dark Wake／睡眠，因此不把回车视为必要触发条件。[验证记录](DEVELOPMENT-HISTORY.md#archive-validation-1-27)
 
 ## 后续编码选择
 

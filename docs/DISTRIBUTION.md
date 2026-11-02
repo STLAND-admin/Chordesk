@@ -1,18 +1,20 @@
 # Chordesk 分发准备
 
-## 最新发行方向 · 2026-10-31
+## 当前状态 · 2026-11-02
 
-内嵌 Tailscale 的 iOS 1.23.2 / 31＋Mac 0.19.0 / 27 已获用户确认蜂窝画面和触控正常；新版 Mac Release 与 iOS TestFlight 尚未发布。用户倾向下一步直接准备 **App Store 正式送审**，不先发布另一轮 TestFlight。1.23.3／0.19.1 修正网络标签与首次授权重启；最新本地开发版 1.24／0.20.0 新增[统一滚动惯性](VALIDATION-1.24.md)。已准备[商店资料和审核备注草稿](APP-STORE-1.23-PREPARATION.md)，没有上传、提交或上架。
+- **公开 TestFlight：iOS 1.30 /39** 已通过 Beta Review，并经用户批准启用外部测试、通知测试员。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)保持不变。
+- **公开 Mac：0.25.0 /38**，Apple Silicon、macOS 15.2+ 的未公证 ad hoc 测试 DMG；[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)。接收者按系统提示为这一个 App 放行，不需要 Xcode；不关闭 Gatekeeper/SIP，不绕过受管理设备策略。
+- **本轮开发：iOS 1.31 /40、Mac 0.26.0 /39**，新画质、按需采屏与安装布局等尚未发布。历史验证统一见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
+- 正式 App Store 尚未提交。此前草稿保留，用户手动最终提交；仅美港发行的建议不代表已更改后台供应地区。大陆备案接入方式仍待主管部门／接入商确认。
+- Mac Developer ID／公证按用户要求暂停，不能把开发签名或 ad hoc 包称为公证包。
 
-TestFlight 不是 App Store 的前置步骤；完成商店资料并选定构建后可提交正式审核。[Apple 提交流程](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app)
+TestFlight 不是正式 App Store 的必经步骤。[Apple 提交流程](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app)。正式送审仍需完整元数据、截图、隐私标签、真实相机外屏用途与内嵌网络说明。内嵌 WireGuard／Go 使用外部标准加密，不能沿用旧版“仅系统加密”分类。Beta 通过不代表正式审核或各地区资质要求自动通过。
 
-送审前更新内嵌 Tailscale 的隐私说明、数据收集项与加密申报（不可沿用旧“仅系统加密”答案），准备截图、配套 Mac 安装包及可复现的登录／配对／背面操作审核说明，并补齐发行回归。Tailscale 解决连接方式，不代表 Apple 已批准此新版。
+## 安装与试用
 
-## 试用交付
+Mac：打开 DMG → 将 Chordesk 拖进 Applications → 从应用程序打开 → 允许屏幕录制并按提示重开 → 允许控制 Mac 并按提示重开 → 两项生效后开启服务。
 
-2026-10-31 核验 iOS **1.22.1 / build 28** 已通过外部 Beta 审核，[公开 TestFlight 邀请](https://testflight.apple.com/join/WZDXKgvg)已可用；发行状态见 [发行与审核记录](IOS-RELEASE-1.22.md)。小范围试用执行清单、十分钟任务与反馈模板见 [BETA-TESTING.md](BETA-TESTING.md)；BetterDisplay 与虚拟音频依赖见 [DEPENDENCIES.md](DEPENDENCIES.md)。尚未提交正式 App Store 发行；Mac Developer ID 公证包也未生成。
-
-2026-10-29 用户另行明确授权生成无付费会员的同学试用包：`scripts/package-macos-test.sh` 独立生成 Apple Silicon Release、本地 ad hoc 签名、未公证 DMG。接收者手动为该 App 放行并授予屏幕录制／辅助功能，不需要 Xcode；受管理的 Mac 可能禁止。具体说明见 [Mac 同学试用说明](MAC-PEER-TEST.txt)。此流程不修改本机稳定开发包，也不等于 Developer ID、公证或 TestFlight 分发。
+iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本。源码版本从 Xcode 用自己的 Team 签名；覆盖安装保持原 Bundle ID 和 Team。公网在两端 App 内登录用户自己的同一 Tailscale 私人网络。测试清单见 [BETA-TESTING.md](BETA-TESTING.md)，安装细节见 [MAC-PEER-TEST.txt](MAC-PEER-TEST.txt)。
 
 ## 当前验证范围与后续机型
 

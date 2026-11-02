@@ -314,27 +314,33 @@ struct EmbeddedTailnetControls: View {
             if !tailnet.ready, let health = tailnet.snapshot.health, !health.isEmpty {
                 Text(health.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary)
             }
-            HStack {
+            VStack(alignment: .leading, spacing: 8) {
                 if !tailnet.enabled && !(interactionFixture && fixtureEnabled) {
-                    Button("登录／连接 Tailscale") { invoke("connect") { tailnet.connect() } }.disabled(tailnet.busy)
+                    Button { invoke("connect") { tailnet.connect() } } label: { Label("登录／连接 Tailscale", systemImage: "person.crop.circle.badge.checkmark") }
+                        .buttonStyle(.borderedProminent).tint(.gray).controlSize(.large).disabled(tailnet.busy)
                         .accessibilityIdentifier("tailscale-connect")
                 } else {
                     if !tailnet.ready {
                         if tailnet.snapshot.state != "NeedsMachineAuth" {
                             Button("继续绑定这台设备") { invoke("authorize") { tailnet.presentLogin() } }.disabled(tailnet.busy)
+                                .buttonStyle(.borderedProminent).tint(.gray)
                                 .accessibilityIdentifier("tailscale-authorize")
                         }
                         Button("检查绑定状态") { invoke("status") { tailnet.refreshStatus() } }.disabled(tailnet.busy)
+                            .buttonStyle(.bordered)
                             .accessibilityIdentifier("tailscale-check-status")
                     }
                     Button("断开公网") { invoke("disconnect") { tailnet.disconnect() } }.disabled(tailnet.busy)
+                        .buttonStyle(.bordered)
                         .accessibilityIdentifier("tailscale-disconnect")
                     Button("退出账号", role: .destructive) { invoke("logout-prompt") { confirmLogout = true } }.disabled(tailnet.busy)
+                        .buttonStyle(.bordered)
                         .accessibilityIdentifier("tailscale-logout")
                 }
                 if tailnet.busy { ProgressView().controlSize(.small) }
             }
             Button("公网数据与隐私说明") { showPrivacy = true }
+                .buttonStyle(.bordered)
                 .accessibilityIdentifier("tailscale-own-privacy")
             Text("启用公网后，Tailscale 及身份提供商会处理账号、节点、IP 和连接元数据，可能涉及境外处理；画面和输入加密传输。可不启用公网，继续使用局域网。")
                 .font(.caption).foregroundStyle(.secondary)
