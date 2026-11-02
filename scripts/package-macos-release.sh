@@ -35,11 +35,19 @@ spctl --assess --type execute --verbose=2 "$release_app"
 mkdir -p "$release_stage/image" "$release_output"
 ditto "$release_app" "$release_stage/image/Chordesk.app"
 ln -s /Applications "$release_stage/image/Applications"
-release_dmg="$release_output/Chordesk-$release_version-$release_arch.dmg"
+release_name="Chordesk-$release_version-$release_arch.dmg"
+release_dmg="$release_output/$release_name"
 "${CHORDESK_DMG_PYTHON:-python3}" scripts/create-dmg.py "$release_stage/image" "$release_dmg"
 codesign --timestamp --sign "$release_identity" "$release_dmg"
+codesign --verify --strict "$release_dmg"
 xcrun notarytool submit "$release_dmg" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$release_dmg"
 xcrun stapler validate "$release_dmg"
-shasum -a 256 "$release_dmg" > "$release_output/SHA256SUMS.txt"
+codesign --verify --strict "$release_dmg"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$release_dmg"
+# Public checksums must not expose this build Mac's username or checkout path.
+(
+    cd "$release_output"
+    shasum -a 256 "$release_name" > SHA256SUMS.txt
+)
 printf '%s\n' "Prepared: $release_dmg" 'Test on a clean Mac before attaching to a GitHub prerelease. No BlackHole or BetterDisplay is bundled.'

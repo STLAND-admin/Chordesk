@@ -6,7 +6,7 @@
 - **公开 Mac：0.26.0 /39**，Apple Silicon、macOS 15.2+ 的未公证 ad hoc 测试 DMG；[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.26.0-test)。接收者按系统提示为这一个 App 放行，不需要 Xcode；不关闭 Gatekeeper/SIP，不绕过受管理设备策略。
 - **iOS 1.31 /40：正在等待 TestFlight 外部审核**；已关联原三个组，自动通知关闭，公开邀请暂仍提供 1.30。Mac 0.26 已公开；独立画质控制与即时背面触发新默认需搭配 iOS 1.31。历史验证统一见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
 - 正式 App Store 尚未提交。此前草稿保留，用户手动最终提交；仅美港发行的建议不代表已更改后台供应地区。大陆备案接入方式仍待主管部门／接入商确认。
-- 用户已恢复 Mac Developer ID／公证授权：0.26.1 /40 的证书、签名及可信时间戳已完成，已上传 Apple，当前仍在处理。公开 0.26.0 包不变；不能把签名成功或上传成功称为公证通过。
+- 用户已恢复 Mac Developer ID／公证授权：0.26.1 /40 的证书、签名及可信时间戳已完成，App 与最终 DMG 均已上传 Apple，当前仍在处理；本人已完成本机 notarytool 凭据配置，收尾进程会在 Accepted 后装订并校验。公开 0.26.0 包不变；不能把签名成功或上传成功称为公证通过。
 
 TestFlight 不是正式 App Store 的必经步骤。[Apple 提交流程](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app)。正式送审仍需完整元数据、截图、隐私标签、真实相机外屏用途与内嵌网络说明。内嵌 WireGuard／Go 使用外部标准加密，不能沿用旧版“仅系统加密”分类。Beta 通过不代表正式审核或各地区资质要求自动通过。
 

@@ -9,6 +9,8 @@
 - 最初时间戳请求出现时差错误，重新核对时间后请求；Documents 同步服务反复给包添加 FinderInfo 导致签名拒绝，改在 `/private/tmp` 本地暂存后通过。不关闭签名／时间戳验证，不调整用户时钟或禁用文件同步服务。
 - Xcode 使用已登录账号提交：北京时间 **01:18:16** 返回 `Uploaded Chordesk` / `EXPORT SUCCEEDED`。Organizer 显示 0.26.1 /40、Notarization **In Progress**；导出工具也明确说明处理中、不可分发。签名与上传成功不等于公证通过。
 - 最终 DMG 已采用原拖入 Applications 指引并完成 Developer ID 签名；只读挂载确认两项可见文件、版本／身份、维护工具、背景及严格签名，包内无凭据文件。指定要求为 Xcode 的稳定发行要求，Hardened Runtime 开启、仅 Apple Events entitlement、无 get-task-allow。其命令行公证需用户直接配置应用专用密码／notarytool 钥匙串 profile；用户已批准配置，官方页面与本机安全输入脚本已准备，生成和输入由用户本人完成，工具禁止控制系统 Terminal。不提取 Xcode 登录令牌。当前仅 App 上传完成，最终 DMG 公证尚未提交，未发布 GitHub Release，iOS 送审与现有公开下载不变。
+- 随后用户回复“配置完成”，notarytool 已可读取本人配置的本机钥匙串 profile；没有读取或保存密码到脚本／Git。最终 DMG 成功上传，回执 `56fa429f-d372-4d56-8b74-952f5556a9fd`，服务器仍处理中。替换本地十分钟等待后，启动最长 48 小时的收尾进程；仅等待此请求，不重传。只有 Apple Accepted、审计上传 SHA256／App cdhash 匹配、两种票据及 Gatekeeper／镜像校验均通过，才生成 `distribution/` 下的 DMG、App ZIP、校验和与说明；异常写入 STATUS 并停止，不发布 GitHub、不安装／授权。暂存与日志需本机保持运行联网，当前不保证完成时间。
+- 正式公证脚本补齐 DMG 严格签名／Gatekeeper 评估，公开校验和只记录文件名、不含本机用户名路径。脚本语法与 help 检查通过，不为了验证此调整重复提交 Apple。App 运行代码及现有 iOS 构建不变。
 - 归档暂存位置由 `release-artifacts/mac-0.26.1-build40-arm64-developer-id/STAGING.txt` 记录；本地上传与状态日志留在该忽略入 Git 的目录。后续以 Apple 处理结果、stapler、Gatekeeper 和完整镜像校验为准，不提前宣称免提示安装或同学机升级已验收。
 
 ## 2026-11-02 · Mac 0.26.1 升级恢复候选
