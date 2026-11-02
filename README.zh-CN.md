@@ -15,7 +15,7 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 | 平台 | 当前公开版本 |
 | --- | --- |
 | iPhone / iPhone Duo | [TestFlight 1.30（39）](https://testflight.apple.com/join/WZDXKgvg) |
-| Apple Silicon Mac · macOS 15.2+ | [Mac 0.25.0 试用版](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test) |
+| Apple Silicon Mac · macOS 15.2+ | [Mac 0.26.0 试用版](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.26.0-test) |
 
 打开 Mac DMG，将 Chordesk 拖进 Applications。当前 Mac 试用包**未公证**，请仅在信任来源时按 macOS「隐私与安全性」提示放行。分别允许屏幕录制、控制 Mac，每项完成后按系统提示重开 App；两项生效后开启服务。[安装说明](docs/MAC-PEER-TEST.txt)。
 
@@ -33,9 +33,9 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 
 切换桌面需要可选 System Events 权限与 macOS Control＋方向键快捷键。支持原生／第三方 iPhone 输入法。[完整手册](OPERATION-GUIDE.md)。
 
-## 当前开发
+## 最新进度
 
-**未发布：iOS 1.31（40）＋Mac 0.26.0（39）。** 默认背面双指接触立即切换；480p–2160p、15–120 fps 和目标码率独立设置；默认 HEVC 并保留回退；限量链路测速与推荐；明显的按钮、逐项权限说明、拖拽安装 DMG；仅认证手机观看时采屏。已明确保存的偏好保留。上述公开下载仍为 1.30／0.25.0，不能把开发功能当作已经推送。
+**Mac 0.26.0（39）已发布；iOS 1.31（40）正在等待 TestFlight 外部审核。** 默认背面双指接触立即切换；480p–2160p、15–120 fps 和目标码率独立设置；默认 HEVC 并保留回退；限量链路测速与推荐；明显的按钮、逐项权限说明、拖拽安装 DMG；仅认证手机观看时采屏。已明确保存的偏好保留。手机公开邀请在 1.31 获批并启用前仍提供 1.30。独立画质与背面即时触发新默认需要 iOS 1.31；原 1.30 客户端仍可连接新版 Mac。
 
 音频已关闭；不保证合盖／系统睡眠唤醒。支持 IPv4／IPv6 配对，纯 IPv6／NAT64、普通 iPhone 真机与更多网络仍需验证。帧率、码率受硬件与画面影响；HUD RTT 不等于操作到显示的完整延迟。Duo 背屏依赖相机辅助 API，相机帧丢弃。TestFlight 通过不等于正式 App Store 上架。
 

@@ -3,8 +3,8 @@
 ## 当前状态 · 2026-11-02
 
 - **公开 TestFlight：iOS 1.30 /39** 已通过 Beta Review，并经用户批准启用外部测试、通知测试员。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)保持不变。
-- **公开 Mac：0.25.0 /38**，Apple Silicon、macOS 15.2+ 的未公证 ad hoc 测试 DMG；[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)。接收者按系统提示为这一个 App 放行，不需要 Xcode；不关闭 Gatekeeper/SIP，不绕过受管理设备策略。
-- **本轮开发：iOS 1.31 /40、Mac 0.26.0 /39**，新画质、按需采屏与安装布局等尚未发布。历史验证统一见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
+- **公开 Mac：0.26.0 /39**，Apple Silicon、macOS 15.2+ 的未公证 ad hoc 测试 DMG；[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.26.0-test)。接收者按系统提示为这一个 App 放行，不需要 Xcode；不关闭 Gatekeeper/SIP，不绕过受管理设备策略。
+- **iOS 1.31 /40：正在等待 TestFlight 外部审核**；已关联原三个组，自动通知关闭，公开邀请暂仍提供 1.30。Mac 0.26 已公开；独立画质控制与即时背面触发新默认需搭配 iOS 1.31。历史验证统一见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
 - 正式 App Store 尚未提交。此前草稿保留，用户手动最终提交；仅美港发行的建议不代表已更改后台供应地区。大陆备案接入方式仍待主管部门／接入商确认。
 - Mac Developer ID／公证按用户要求暂停，不能把开发签名或 ad hoc 包称为公证包。
 
@@ -44,8 +44,8 @@ iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本�
 
 在干净 Mac 测试首次启动、屏幕录制／辅助功能申请、配对、断线释放和卸载流程。不要把本机开发证书、钥匙串、配对密钥或已有系统授权打进安装包。正式签名／ID 迁移需计划重新授权，不许悄悄退回 ad hoc。
 
-GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码仓库和 Mac 0.18.1 试用 Release 已公开，试用包仍为未公证的 ad hoc 签名；正式签名公证包、App Store 发行及自动发行流水线尚未完成。
+GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码仓库和 Mac 0.26.0 试用 Release 已公开，试用包仍为未公证的 ad hoc 签名；正式签名公证包、App Store 发行及自动发行流水线尚未完成。
 
 ## 公网与扩容
 
-按 [PUBLIC-NETWORK-PLAN.md](../PUBLIC-NETWORK-PLAN.md) 分阶段实施。当前只有规划，不开放公网监听；注册账号／设备认证、信令、直连与中继分别设计，不能用设备名称或公网 IP 代替认证。
+按 [PUBLIC-NETWORK-PLAN.md](../PUBLIC-NETWORK-PLAN.md) 分阶段实施。当前已内嵌 Tailscale，使用用户各自的私人网络，不暴露任意公网监听；开发者自建账号、信令和中继服务仍为后续路线。不能用设备名称或公网 IP 代替认证。

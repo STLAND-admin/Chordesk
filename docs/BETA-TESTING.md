@@ -8,9 +8,9 @@
 | --- | --- |
 | 概念与操作演示 | [中英文官网](https://stland-admin.github.io/Chordesk-site/) |
 | iPhone / Duo | [TestFlight 1.30 /39](https://testflight.apple.com/join/WZDXKgvg)，已启用外部测试 |
-| Apple Silicon Mac | [0.25.0 /38 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.25.0-test)，macOS 15.2+，ad hoc 签名，未公证 |
+| Apple Silicon Mac | [0.26.0 /39 试用 Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.26.0-test)，macOS 15.2+，ad hoc 签名，未公证 |
 
-开发中的 **iOS 1.31 /40、Mac 0.26.0 /39** 尚未发布。测试报告须记录两端实际版本，不把开发功能当成公开版功能。Mac Developer ID／公证目前暂停；不要求测试者关闭 Gatekeeper，也不分发开发 IPA 代替 TestFlight。
+**Mac 0.26.0 /39 已发布；iOS 1.31 /40 已提交并正在等待 TestFlight 外部审核**，获批并启用前公开邀请仍提供 1.30。测试报告须记录两端实际版本，不把开发功能当成公开版功能。Mac Developer ID／公证目前暂停；不要求测试者关闭 Gatekeeper，也不分发开发 IPA 代替 TestFlight。
 
 ## 安装和十分钟任务
 
