@@ -2,6 +2,15 @@
 
 这里集中保存历史验证、发行和早期原型记录。各节仅代表其当时状态；当前安装、操作与限制以 README、操作指南及本文件最上方最新记录为准。已删除的旧源文件可从 Git 历史恢复。
 
+## 2026-11-03 · Mac 0.26.1 Developer ID 签名与公证进行中
+
+- 用户明确恢复此前暂停的 Developer ID Application 证书创建、最新版签名和 Apple 公证；通过 Xcode 为现有 Team 创建证书，私钥留在本机钥匙串，未导出。未替用户完成密码或系统认证；Xcode 二次签名的钥匙串提示由用户确认“已允许”。
+- 使用已测试干净提交 `db4933b4bd1e6b5001f47bf65e292719b067eff8` 的 Mac 0.26.1 /40 独立副本，Developer ID + Hardened Runtime + Apple 可信时间戳严格校验通过，保留原 bundle ID、可选 Apple Events entitlement 和黑底图标。不修改运行代码或覆盖日常 App，不重置现有 TCC／配对／公网身份。
+- 最初时间戳请求出现时差错误，重新核对时间后请求；Documents 同步服务反复给包添加 FinderInfo 导致签名拒绝，改在 `/private/tmp` 本地暂存后通过。不关闭签名／时间戳验证，不调整用户时钟或禁用文件同步服务。
+- Xcode 使用已登录账号提交：北京时间 **01:18:16** 返回 `Uploaded Chordesk` / `EXPORT SUCCEEDED`。Organizer 显示 0.26.1 /40、Notarization **In Progress**；导出工具也明确说明处理中、不可分发。签名与上传成功不等于公证通过。
+- 最终 DMG 已采用原拖入 Applications 指引并完成 Developer ID 签名；只读挂载确认两项可见文件、版本／身份、维护工具、背景及严格签名，包内无凭据文件。指定要求为 Xcode 的稳定发行要求，Hardened Runtime 开启、仅 Apple Events entitlement、无 get-task-allow。其命令行公证需用户直接配置应用专用密码／notarytool 钥匙串 profile；用户已批准配置，官方页面与本机安全输入脚本已准备，生成和输入由用户本人完成，工具禁止控制系统 Terminal。不提取 Xcode 登录令牌。当前仅 App 上传完成，最终 DMG 公证尚未提交，未发布 GitHub Release，iOS 送审与现有公开下载不变。
+- 归档暂存位置由 `release-artifacts/mac-0.26.1-build40-arm64-developer-id/STAGING.txt` 记录；本地上传与状态日志留在该忽略入 Git 的目录。后续以 Apple 处理结果、stapler、Gatekeeper 和完整镜像校验为准，不提前宣称免提示安装或同学机升级已验收。
+
 ## 2026-11-02 · Mac 0.26.1 升级恢复候选
 
 - 用户确认同学是从旧版升级／重装，Tailscale 报 `Keychain read failed (-25293)`，没有系统认证弹窗。源码确认主机全局禁用可选钥匙串交互，0.26 公开包的指定要求为 cdhash-only ad hoc；这些是已确认因素，仍不能只凭截图排除对方钥匙串锁定、密码或旧 ACL 问题。

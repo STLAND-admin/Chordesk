@@ -72,4 +72,4 @@ python3 -m venv /private/tmp/chordesk-dmg-tools
 CHORDESK_DMG_PYTHON=/private/tmp/chordesk-dmg-tools/bin/python ./scripts/package-macos-test.sh
 ```
 
-脚本通过公开文件格式生成 Finder 图标位置和隐藏背景，无需操控 Finder。镜像中可见项目只有 Chordesk.app 与 Applications，背景包含中英文拖入指引。公证脚本保留但当前暂停，不运行或提交。
+脚本通过公开文件格式生成 Finder 图标位置和隐藏背景，无需操控 Finder。镜像中可见项目只有 Chordesk.app 与 Applications，背景包含中英文拖入指引。公证脚本使用本机钥匙串的 notarytool profile；若只使用 Xcode 已登录账号，也可通过 Organizer 的 Developer ID → Upload 提交 App 公证。最终 DMG 的命令行公证需单独配置 notarytool 凭据；不要导出或读取 Xcode 登录令牌。App 及归档先在本地临时目录暂存，避免 Documents 同步服务给包重新添加 FinderInfo。当前发行结果见开发历史。
