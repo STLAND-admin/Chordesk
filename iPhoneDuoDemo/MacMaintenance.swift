@@ -34,7 +34,7 @@ struct MacKeychainFailure: Equatable {
     var canAuthorize: Bool { [errSecAuthFailed, errSecInteractionNotAllowed, errSecNotAvailable, errSecUserCanceled].contains(status) }
     var message: String { "无法访问本机公网登录记录（钥匙串 \(status)）" }
     var explanation: String {
-        "升级后的签名、钥匙串锁定或访问许可变化都可能导致此错误。先授权钥匙串并重试；若仍失败，可重新绑定本机公网身份。屏幕录制／控制权限与此独立。"
+        "升级后的签名、钥匙串锁定或访问许可变化都可能导致此错误。先授权钥匙串并重试；如系统提供“始终允许”，请确认请求来自 Chordesk 后选择该项，单次允许可能无法保留到主进程。仍失败可重新绑定本机公网身份。屏幕录制／控制权限与此独立。"
     }
 }
 

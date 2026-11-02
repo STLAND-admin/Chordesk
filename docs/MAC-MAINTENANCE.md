@@ -8,7 +8,7 @@ Mac 0.26.1 introduces the recovery controls and maintenance tool below. This is 
 
 The 0.26 test package uses an ad hoc identity tied to its code hash. Rebuilding changes that identity. In addition, the host deliberately suppresses background Keychain dialogs; the old login button had no explicit recovery path. The 0.26.1 candidate adds a local, user-initiated recovery flow:
 
-1. Click **授权钥匙串并重试**. A fresh process of the same app requests access to the one Chordesk Tailscale item. Complete any system authentication on that Mac; never send a password to the developer. Credential bytes are not printed or returned to the host.
+1. Click **授权钥匙串并重试**. A fresh process of the same app requests access to the one Chordesk Tailscale item. Complete any system authentication on that Mac; never send a password to the developer. If macOS offers **Always Allow**, verify that the requester is Chordesk and choose that option to retain approval; a one-time allowance may not carry back to the host process. Credential bytes are not printed or returned to the host.
 2. If access still fails, **重新绑定本机公网身份…** explicitly removes that local Tailscale login and requires signing in again. The Tailscale address may change, requiring a new QR pairing. Existing LAN pairing is retained.
 3. If macOS also refuses item deletion, quit Chordesk and use the maintenance tool's rebind option, or open Keychain Access, search `dev.chordesk.embedded-tailnet`, and delete only the `node-state-v1` item. Do not reset the entire login keychain. Remove the obsolete node separately in your own Tailscale admin page if needed; local deletion is not remote revocation.
 
