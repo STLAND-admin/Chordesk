@@ -10,7 +10,7 @@
 | iPhone / Duo | [TestFlight 公开测试](https://testflight.apple.com/join/WZDXKgvg)，实际版本以 TestFlight 显示为准 |
 | Apple Silicon Mac | [0.27.1 /42 已签名公证](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1)，macOS 15.2+ |
 
-**Mac 0.27.1 /42 已发布；iOS 1.31 /40 已提交 TestFlight 外部审核**，获批并启用前公开邀请可能仍提供 1.30。测试报告须记录两端实际版本。Mac App 与最终 DMG 都已 Developer ID 签名、Apple 公证并装订票据；不要求关闭 Gatekeeper，也不分发开发 IPA 代替 TestFlight。
+**Mac 0.27.1 /42 已发布；iOS 1.31 /40 已通过并开放 TestFlight 测试**。2026-11-03 已启用新版并通知现有测试员，原三个测试组与公开邀请不变；后台已核实“正在测试”。测试报告须记录两端实际版本。Mac App 与最终 DMG 都已 Developer ID 签名、Apple 公证并装订票据；不要求关闭 Gatekeeper，也不分发开发 IPA 代替 TestFlight。
 
 ## 安装和十分钟任务
 
@@ -20,7 +20,7 @@
 4. 使用可丢弃文稿或测试网页，依次尝试：轻点、滚动、长按拖选、输入文字、收起键盘；Duo 再试背面双指临时触控板，以及一指加正面双指的窗口总览／左右切桌面。普通 iPhone 用屏幕模式按钮，跳过背面手势。
 5. 断开、息屏再连、关闭主机窗口后重连。真正睡眠／合盖仍不保证可用。音频功能暂时关闭，勿把它作为会议麦克风测试。
 
-## 1.31 / 0.26 开发版重点
+## iOS 1.31 / Mac 0.27.1 测试重点
 
 - 新偏好默认背面双指接触即切换、抬起恢复；已有明确保存的长按偏好继续保留。
 - 分别修改 480p–2160p、15–120 fps、目标码率，确认互不改写；低分辨率并不保证实际 120 fps。

@@ -2,7 +2,7 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](../developer/FIRST-RUN-CHECKLIST.md)
 
-Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.27.1 /42** is now available, signed and notarized. iOS **1.31 /40** has been submitted for Beta App Review; the last verified public build was 1.30 /39. Check the actual build available in TestFlight. No formal App Store submission has been made.
+Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.27.1 /42** is available, signed and notarized. iOS **1.31 /40** passed Beta App Review and was enabled for the existing groups on November 3, 2026, with testers notified. The original public invitation is unchanged. No formal App Store submission has been made.
 
 ## Mac 0.27.1 · Signed and notarized beta
 
@@ -11,7 +11,7 @@ Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26*
 - Source projects and tests grouped under ProjectFiles, with compatible bundle IDs and pairing namespaces preserved.
 - No new iOS features since the already uploaded 1.31 /40; internal project renaming only. Existing review was not withdrawn or duplicated.
 
-## 1.31 / Mac 0.26.0 · Mac released, iOS in Beta Review
+## 1.31 / Mac 0.26.0 · Public beta
 
 - Keep the service reachable without capturing. Screen capture and encoding start for an authenticated connected viewer and stop on disconnect; presence checks do not start capture. Active remote sessions retain the system privacy indicator.
 - Independent resolution (480p, 720p, 1080p, 1440p, 2160p), FPS ceiling (15–120) and target bitrate. New preferences default to 720p /15 fps /1.5 Mbps and HEVC; saved selections and H.264/JPEG fallback remain.

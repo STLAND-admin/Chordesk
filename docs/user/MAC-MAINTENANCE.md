@@ -43,6 +43,14 @@ Files in Trash can be restored. Deleted credentials and reset permission decisio
 
 **0.26.1** bundled an exportable command tool; **0.26.0's public test installer did not**. The shell backend remains in [scripts/Chordesk-Maintenance.command](../../scripts/Chordesk-Maintenance.command) for recovery and regression testing. Its interactive fallback supports read-only `--plan`, scoped permission reset, Tailscale rebind and the two uninstall scopes; quit Chordesk first and confirm the exact action.
 
+## Installer background outside the DMG / 普通 Finder 出现安装背景
+
+The drag-to-Applications image belongs only to the mounted installer. Do not choose Finder's **Use as Defaults** while that installer picture is selected. The packaging script writes the image and view options inside the DMG; it does not set global Finder preferences.
+
+If the picture appears in ordinary folders, restore a plain background in **View → Show View Options**, and use that plain view as the default. A folder that retains its own picture may need its background changed separately; switch away from icon view and back to refresh a cached image. Keep unrelated Finder preferences and folder contents intact. On the developer's Mac, the affected defaults were backed up and cleared; Recents, a normal project folder and the originally affected folder were visually checked. The signed 0.27.1 installer retains its own image.
+
+拖拽安装图片仅属于 DMG 内的窗口，不应设为 Finder 的“用作默认”。普通文件夹出现该图时，恢复普通背景；仍保留独立背景的文件夹单独处理，并切换一次视图刷新。无需为此卸载 Chordesk 或重置系统权限。
+
 ## Stable releases / 稳定升级与“仍要打开”
 
 For ordinary upgrades, quit and replace the app at the same Applications location; do not uninstall/reset permissions as a routine update step.

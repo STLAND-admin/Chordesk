@@ -2,9 +2,9 @@
 
 ## 当前状态 · 2026-11-03
 
-- **公开 TestFlight：最后核实 iOS 1.30 /39** 已通过并启用外部测试。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)不变；请核对 TestFlight 实际版本。
+- **公开 TestFlight：iOS 1.31 /40** 已通过并于 2026-11-03 启用外部测试、通知现有测试员，后台已核实“正在测试”。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)不变；请在 TestFlight 安装／更新并核对版本。
 - **公开 Mac：0.27.1 /42**，Apple Silicon、macOS 15.2+，[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1)。App 与最终 DMG 均已 Developer ID 签名、Apple 公证并装订票据，Gatekeeper 接受；匿名下载摘要与本地一致。普通更新退出后替换同一位置的 App，不要先完整卸载。
-- **iOS 1.31 /40 已上传并正式提交外部审核**；11月3日用户重新登录后实查仍为“正在等待审核”，详情可见“从审核中移除”，原内部验证／Duo／iPhone三组关联正常。中英测试说明及审核备注已保存Mac0.27.1已公证下载入口。尚未获批或启用外部更新。1.31 之后本地没有新增 iOS 功能，仅工程／入口类型更名与 Mac 条件编译修改，未重复上传或撤回队列。独立画质与即时背面触发新默认需 iOS 1.31。历史验证见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
+- **iOS 1.31 /40 分发已启用**；本次先核实“已批准”，按用户授权点击“通知测试员”，随后核实“正在测试”且通知按钮消失。原内部验证／Duo／iPhone三组保持关联；未新增测试员或修改公开链接、人数上限。中英测试说明及审核备注保留Mac0.27.1已公证下载入口。1.31 之后本地没有新增 iOS 功能，仅工程／入口类型更名与 Mac 条件编译修改，未重复上传或重送。独立画质与即时背面触发新默认需 iOS 1.31。历史验证见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
 - 正式 App Store 尚未提交。此前草稿保留，用户手动最终提交；仅美港发行的建议不代表已更改后台供应地区。大陆备案接入方式仍待主管部门／接入商确认。
 - 本轮已恢复读取原公证凭据，0.27.1 App 与 DMG 均获 Apple Accepted；本机已安装带票据的同版并通过 Gatekeeper。期间本机原 App 已完整卸载，重装界面两项未授权、Tailscale 未登录，需本人重新设置；这不是公证失败，也不代表普通覆盖升级必然失去授权。
 
