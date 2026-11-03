@@ -45,17 +45,30 @@ private final class RailHitView: UIView {
     }
 }
 
+/// A padded, clipped viewport leaves room for Apple's elastic glass while
+/// still culling offscreen controls. Its padding does not steal canvas touches.
+private final class RailGlassScrollView: UIScrollView {
+    var glassOutset: CGFloat = 0
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: glassOutset, dy: 0).contains(point)
+    }
+}
+
 /// A vertical arrangement of Apple's segmented control. The system supplies the
 /// elastic selection lens; rotating symbol artwork merely keeps symbols upright.
-private final class PointerModeSegments: UIView {
+private final class PointerModeSegments: UIVisualEffectView {
     let control: UISegmentedControl
     var onChange: ((FrontTouchMode) -> Void)?
     private var symbolExtent: CGFloat = 0
     private let options = [("直接触控", "hand.point.up.left"), ("触控板", "cursorarrow.motionlines")]
-    override init(frame: CGRect) {
+    init() {
         control = UISegmentedControl(items: ["", ""])
-        super.init(frame: frame)
+        super.init(effect: nil)
         insetsLayoutMarginsFromSafeArea = false
+        contentView.insetsLayoutMarginsFromSafeArea = false
+        clipsToBounds = false
+        if #available(iOS 26.0, *) { cornerConfiguration = .capsule() }
+        updateMaterial()
         control.accessibilityIdentifier = "pointer-mode-toggle"
         control.accessibilityLabel = "操控模式"
         control.selectedSegmentIndex = 0
@@ -66,7 +79,17 @@ private final class PointerModeSegments: UIView {
         let extent = control.intrinsicContentSize.height * 1.5
         for index in options.indices { control.setWidth(extent, forSegmentAt: index) }
         refreshSymbols()
-        addSubview(control)
+        contentView.addSubview(control)
+    }
+    func updateMaterial() {
+        if #available(iOS 26.0, *), !UIAccessibility.isReduceTransparencyEnabled {
+            // The segmented control retains its native thumb. A clear outer
+            // interactive glass supplies whole-capsule press/drag feedback
+            // without stacking a second regular blur behind that control.
+            let glass = UIGlassEffect(style: .clear)
+            glass.isInteractive = true
+            effect = glass
+        } else { effect = nil }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var intrinsicContentSize: CGSize {
@@ -92,7 +115,7 @@ private final class PointerModeSegments: UIView {
         super.layoutSubviews()
         control.transform = .identity
         control.bounds = CGRect(origin: .zero, size: CGSize(width: bounds.height, height: bounds.width))
-        control.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        control.center = CGPoint(x: contentView.bounds.midX, y: contentView.bounds.midY)
         control.transform = CGAffineTransform(rotationAngle: -.pi / 2)
     }
     @objc private func changed() { onChange?(control.selectedSegmentIndex == 0 ? .direct : .trackpad) }
@@ -101,7 +124,7 @@ private final class PointerModeSegments: UIView {
 final class ChordRailController: UIViewController {
     private var configuration: ChordControlRail?
     private let root = RailHitView()
-    private let scroll = UIScrollView()
+    private let scroll = RailGlassScrollView()
     private let stack = UIStackView()
     private let actionsGlass = UIVisualEffectView()
     private let mode = PointerModeSegments()
@@ -124,6 +147,10 @@ final class ChordRailController: UIViewController {
         scroll.contentInsetAdjustmentBehavior = .never
         scroll.showsVerticalScrollIndicator = false; scroll.delaysContentTouches = false
         scroll.insetsLayoutMarginsFromSafeArea = false
+        // Keep clipping for offscreen shortcuts, but pad the viewport around
+        // their resting frames so native elastic glass has room to expand.
+        scroll.clipsToBounds = true
+        view.clipsToBounds = false
         view.addSubview(scroll); scroll.addSubview(actionsGlass); scroll.addSubview(mode)
         if #available(iOS 26.0, *) { actionsGlass.cornerConfiguration = .capsule() }
         actionsGlass.layer.cornerCurve = .circular
@@ -163,15 +190,15 @@ final class ChordRailController: UIViewController {
         updateMaterial()
     }
     private func updateMaterial() {
+        mode.updateMaterial()
         if UIAccessibility.isReduceTransparencyEnabled {
             actionsGlass.effect = nil; actionsGlass.backgroundColor = .secondarySystemBackground
             modifierContainer.effect = nil
         } else if #available(iOS 26.0, *) {
             let effect = UIGlassEffect(style: .regular)
-            // A grouped action surface stays a fixed capsule. Interactive glass
-            // expands the entire group and gets clipped flat at the scroll edge.
-            // Only the segmented mode switch owns the elastic selection lens.
-            effect.isInteractive = false
+            // Apple owns press scaling, elastic dragging and spring-back.
+            // Do not add a custom transform, shader or competing pan recognizer.
+            effect.isInteractive = true
             actionsGlass.effect = effect; actionsGlass.backgroundColor = .clear
             modifierContainer.effect = UIGlassContainerEffect()
         } else {
@@ -225,19 +252,23 @@ final class ChordRailController: UIViewController {
         let offset = keyboardY == nil ? view.bounds.height * ControlRailPosition.fraction(c.bottomOffset, maximum: 0.30) : 0
         keyboard.view.frame = CGRect(x: anchor - side / 2, y: max(area.minY, lower - side - 8 - offset), width: side, height: side)
         let top = area.minY + 8 + view.bounds.height * ControlRailPosition.fraction(c.topOffset, maximum: 0.25)
-        scroll.frame = CGRect(x: anchor - width / 2, y: top, width: width, height: max(0, keyboard.view.frame.minY - top - 12))
+        let glassOutset = side / 2
+        scroll.glassOutset = glassOutset
+        scroll.frame = CGRect(x: anchor - width / 2 - glassOutset, y: top - glassOutset,
+                              width: width + glassOutset * 2,
+                              height: max(0, keyboard.view.frame.minY - top - 12) + glassOutset * 2)
         let count = stack.arrangedSubviews.filter { !$0.isHidden }.count
-        actionsGlass.frame = CGRect(x: (width - side) / 2, y: 0, width: side, height: side * CGFloat(count) + 12)
+        actionsGlass.frame = CGRect(x: glassOutset + (width - side) / 2, y: glassOutset, width: side, height: side * CGFloat(count) + 12)
         if #unavailable(iOS 26.0) { actionsGlass.layer.cornerRadius = side / 2 }
-        actionsGlass.clipsToBounds = true
+        actionsGlass.clipsToBounds = false
         stack.frame = actionsGlass.bounds.insetBy(dx: 0, dy: 6)
-        mode.frame = CGRect(x: (width - side) / 2, y: actionsGlass.frame.maxY + 12, width: side, height: max(mode.intrinsicContentSize.height, side * 2))
-        scroll.contentSize = CGSize(width: width, height: c.showMode ? mode.frame.maxY : actionsGlass.frame.maxY)
+        mode.frame = CGRect(x: glassOutset + (width - side) / 2, y: actionsGlass.frame.maxY + 12, width: side, height: max(mode.intrinsicContentSize.height, side * 2))
+        scroll.contentSize = CGSize(width: width + glassOutset * 2, height: (c.showMode ? mode.frame.maxY : actionsGlass.frame.maxY) + glassOutset)
         let modifiersSize = CGSize(width: side * CGFloat(modifierButtons.count) + modifierStack.spacing * CGFloat(max(0, modifierButtons.count - 1)), height: side)
         modifierContainer.frame = CGRect(x: keyboard.view.frame.minX - modifiersSize.width - 8, y: keyboard.view.frame.minY,
                                          width: modifiersSize.width, height: modifiersSize.height)
         modifierStack.frame = modifierContainer.bounds
-        let global = view.convert(CGRect(x: scroll.frame.minX, y: area.minY, width: width, height: max(0, lower - area.minY)), to: nil)
+        let global = view.convert(CGRect(x: column.minX, y: area.minY, width: width, height: max(0, lower - area.minY)), to: nil)
         let globalAnchor = view.convert(CGPoint(x: anchor, y: 0), to: nil).x
         if global != lastGeometry || lastAnchor != globalAnchor {
             lastGeometry = global; lastAnchor = globalAnchor

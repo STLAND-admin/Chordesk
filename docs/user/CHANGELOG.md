@@ -4,11 +4,11 @@
 
 Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.28.0 /43** is available, signed and notarized. iOS **1.31 /40** passed Beta App Review and was enabled for the existing groups on November 3, 2026, with testers notified. The original public invitation is unchanged. No formal App Store submission has been made.
 
-## iOS 1.32 /43 · Local development build
+## iOS 1.32 /44 · Local development build
 
 - Integrate the approved native right rail: grouped menu / display / overview shortcuts, a two-section pointer-mode selector immediately below, and a single keyboard button at the bottom. The rail stays on the right in every orientation; Ctrl / Option / Cmd expand to the keyboard button's left.
 - Use Apple's interactive glass effects and native segmented-control tracking, plus `UITextLoupeSession` for the optional long-press magnifier. Keep stable short-tap menu lists, the existing iPhone IME bridge and full-screen trackpad letterboxing.
-- Center all rail bubbles in the complete system-provided trailing bar region, use a shared width and native capsule corners, and keep each modifier circular. Normalize symbol size; pressing an upper action highlights only that button without deforming the group, while the mode selector retains its native elastic lens.
+- Center all rail bubbles in the complete system-provided trailing bar region, use a shared width and native capsule corners, and keep each modifier circular. Normalize symbol size; all three groups use Apple's native interactive glass for press/drag elasticity and spring-back. Padded scroll clipping leaves room for the effect, while the mode selector retains its system selection lens.
 - Share the effective pointer mode with rear contact state. Manual selection releases the current front gesture without discarding a held rear chord. Keep the independent top rear/network strip and full-bleed remote content.
 - This is a development-device update, not a new TestFlight or App Store release. Public TestFlight remains 1.31 /40; Mac remains the signed/notarized 0.28.0 /43.
 
