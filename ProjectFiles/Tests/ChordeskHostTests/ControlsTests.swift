@@ -46,20 +46,22 @@ final class ControlsTests: XCTestCase {
         XCTAssertEqual(ControlRailPosition.trailingInset(containerWidth: 600, anchorX: nil, buttonWidth: 60), 0)
         XCTAssertEqual(ControlRailPosition.trailingInset(containerWidth: 600, anchorX: .nan, buttonWidth: 60), 0)
     }
-    func testStatusLaneCentersControlColumnAndKeepsWidthForCapsuleEnds() {
+    func testExplicitBarRegionWinsOverContentSafeAreaEstimate() {
         let bounds = CGRect(x: 0, y: 0, width: 951, height: 669)
-        let lane = ControlRailPosition.column(in: bounds, content: CGRect(x: 0, y: 0, width: 867, height: 669),
-                                             margin: 20, preferredWidth: 58)
-        XCTAssertEqual(lane.midX, 909)
-        XCTAssertEqual(lane.width, 44)
-        let movedOrigin = ControlRailPosition.column(in: bounds.offsetBy(dx: 100, dy: 20),
-            content: CGRect(x: 100, y: 20, width: 867, height: 669), margin: 20, preferredWidth: 58)
-        XCTAssertEqual(movedOrigin.midX, lane.midX + 100)
-        XCTAssertEqual(movedOrigin.width, lane.width)
+        let systemBar = CGRect(x: 881, y: 124, width: 44, height: 511)
+        let column = ControlRailPosition.column(in: bounds, barRegion: systemBar, margin: 0, preferredWidth: 44)
+        XCTAssertEqual(column, systemBar)
+        XCTAssertEqual(column.midX, 903)
+        // The old midpoint of the 84-point content safe-area strip was 909.
+        XCTAssertNotEqual(column.midX, (867 + bounds.maxX) / 2)
+        let shifted = ControlRailPosition.column(in: bounds.offsetBy(dx: 100, dy: 20),
+            barRegion: systemBar.offsetBy(dx: 100, dy: 20), margin: 0, preferredWidth: 44)
+        XCTAssertEqual(shifted.midX, column.midX + 100)
+        XCTAssertEqual(shifted.width, column.width)
     }
     func testHorizontalStatusBarUsesSystemMarginsRatherThanWindowMidpoint() {
         let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
-        let column = ControlRailPosition.column(in: bounds, content: CGRect(x: 0, y: 50, width: 400, height: 720),
+        let column = ControlRailPosition.column(in: bounds, barRegion: nil,
                                                margin: 16, preferredWidth: 44)
         XCTAssertEqual(column.midX, 362)
         XCTAssertEqual(column.width, 44)

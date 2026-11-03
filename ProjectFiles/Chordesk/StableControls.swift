@@ -4,22 +4,17 @@ enum ControlRailPosition {
     static func fraction(_ value: Double, maximum: Double) -> Double {
         value.isFinite ? min(max(value, 0), maximum) : 0
     }
-    /// Use the public trailing status lane as a shared centerline. When the
-    /// system uses a horizontal status bar instead, fall back to layout margins.
-    static func column(in bounds: CGRect, content: CGRect, margin: CGFloat,
+    /// The bar layout region is the actual control column, not the content safe
+    /// area's excluded strip. Those two centerlines need not coincide.
+    static func column(in bounds: CGRect, barRegion: CGRect?, margin: CGFloat,
                        preferredWidth: CGFloat, minimumWidth: CGFloat = 44) -> CGRect {
-        let lane = max(0, bounds.maxX - content.maxX)
-        let preferred = max(minimumWidth, preferredWidth)
-        let width: CGFloat
-        let center: CGFloat
-        if lane >= minimumWidth {
-            width = min(preferred, max(minimumWidth, lane - max(0, margin) * 2))
-            center = bounds.maxX - lane / 2
-        } else {
-            width = preferred
-            center = bounds.maxX - max(0, margin) - width / 2
+        if let region = barRegion, !region.isNull, !region.isInfinite,
+           region.width > 0, region.height > 0 {
+            return region
         }
-        return CGRect(x: center - width / 2, y: bounds.minY, width: width, height: bounds.height)
+        let width = max(minimumWidth, preferredWidth)
+        return CGRect(x: bounds.maxX - max(0, margin) - width, y: bounds.minY,
+                      width: width, height: bounds.height)
     }
     static func trailingInset(containerWidth: CGFloat, anchorX: CGFloat?, buttonWidth: CGFloat) -> CGFloat {
         guard let anchorX, anchorX.isFinite else { return 0 }
@@ -99,50 +94,6 @@ final class RearStatusPositionView: UIView {
     }
 }
 
-/// Read the public bar layout region so an edge Dock avoids system ornaments.
-/// Its extent comes from the actual controls, never a device/model threshold.
-struct SystemStatusBoundaryReader: UIViewRepresentable {
-    var extent: CGFloat
-    var onChange: (CGFloat, CGFloat, CGFloat?) -> Void
-    func makeUIView(context: Context) -> StatusBoundaryView { StatusBoundaryView() }
-    func updateUIView(_ view: StatusBoundaryView, context: Context) {
-        view.onChange = onChange; view.extent = extent
-        view.setNeedsLayout()
-    }
-}
-
-final class StatusBoundaryView: UIView {
-    var onChange: ((CGFloat, CGFloat, CGFloat?) -> Void)?
-    var extent: CGFloat = 0
-    private var last = CGPoint(x: -1, y: -1)
-    private var lastAnchor: CGFloat?
-    override func didMoveToWindow() { super.didMoveToWindow(); setNeedsLayout() }
-    override func safeAreaInsetsDidChange() { super.safeAreaInsetsDidChange(); setNeedsLayout() }
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard let window, extent > 0 else { return }
-        let inset: UIEdgeInsets
-        var anchor: CGFloat?
-        if #available(iOS 27.1, *) {
-            inset = window.edgeInsets(for: .bar(onEdge: NSDirectionalRectEdge.trailing, extent: extent))
-            // Align beneath the system's upper trailing occlusion, not a private
-            // Wi-Fi subview or a guessed model-specific screen coordinate.
-            if let region = window.reservedRegions(kind: .occlusion)
-                .filter({ $0.isActive && $0.frame.midX > window.bounds.midX && $0.frame.midY < window.bounds.midY })
-                .max(by: { $0.frame.maxX < $1.frame.maxX }) {
-                anchor = convert(region.frame.inset(by: region.margins), from: window).midX
-            }
-        } else { inset = window.safeAreaInsets }
-        let safe = convert(window.bounds.inset(by: inset), from: window)
-        let top = max(0, safe.minY), bottom = max(0, bounds.maxY - safe.maxY)
-        guard top.isFinite, bottom.isFinite,
-              abs(top - last.x) > 0.5 || abs(bottom - last.y) > 0.5 || anchor != lastAnchor else { return }
-        last = CGPoint(x: top, y: bottom)
-        lastAnchor = anchor
-        DispatchQueue.main.async { [weak self] in self?.onChange?(top, bottom, anchor) }
-    }
-}
-
 struct SystemMenuItem: Equatable {
     var id: String
     var title: String
@@ -155,6 +106,24 @@ struct SystemMenuSection: Equatable {
     var title = ""
     var submenu = false
     var items: [SystemMenuItem]
+}
+
+/// Normalize native SF Symbols to one optical box; wide glyphs such as display.2
+/// must not dominate the narrower pointer-mode icons.
+enum RailSymbol {
+    static var extent: CGFloat { ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight) }
+    static func image(_ name: String, rotated: Bool = false) -> UIImage? {
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        guard let source = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(font: font)) else { return nil }
+        let side = extent
+        let scale = min(1, side / max(source.size.width, source.size.height))
+        let size = CGSize(width: source.size.width * scale, height: source.size.height * scale)
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { context in
+            context.cgContext.translateBy(x: side / 2, y: side / 2)
+            if rotated { context.cgContext.rotate(by: .pi / 2) }
+            source.draw(in: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height))
+        }.withRenderingMode(.alwaysTemplate)
+    }
 }
 
 /// A native popover with ordinary table rows avoids context-menu press tracking.
@@ -190,6 +159,7 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
     private var selection: ((String) -> Void)?
     private var configuredSymbol = ""
     private var configuredGlass = false
+    private var configuredSymbolExtent: CGFloat = 0
     private var menuTitle = ""
     private var panel: UINavigationController?
     private var inactiveObserver: NSObjectProtocol?
@@ -220,18 +190,13 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
         if hold.isEnabled != usesHold { hold.isEnabled = usesHold }
         // A showing popover is never rebuilt by a video frame or rear-contact update.
         guard !menuState.presented else { return }
-        if configuredSymbol != symbol || configuredGlass != glass {
-            configuredSymbol = symbol; configuredGlass = glass
+        if configuredSymbol != symbol || configuredGlass != glass || configuredSymbolExtent != RailSymbol.extent {
+            configuredSymbol = symbol; configuredGlass = glass; configuredSymbolExtent = RailSymbol.extent
             var config = UIButton.Configuration.plain()
             if #available(iOS 26.0, *), glass { config = .glass() }
             config.cornerStyle = .capsule
-            let symbols = UIImage.SymbolConfiguration(font: .preferredFont(forTextStyle: .title3))
-            let image = UIImage(systemName: symbol, withConfiguration: symbols)
-            let glyphWidth = ["slider.horizontal.3", "keyboard", "keyboard.chevron.compact.down"]
-                .compactMap { UIImage(systemName: $0, withConfiguration: symbols)?.size.width }.max() ?? 0
-            let glyphHeight = ["slider.horizontal.3", "keyboard", "keyboard.chevron.compact.down"]
-                .compactMap { UIImage(systemName: $0, withConfiguration: symbols)?.size.height }.max() ?? 0
-            let diameter = max(44, max(glyphWidth, glyphHeight) + 12)
+            let image = RailSymbol.image(symbol)
+            let diameter = max(44, RailSymbol.extent + 12)
             buttonDiameter = ceil(diameter)
             let sidePadding = max(0, diameter - (image?.size.width ?? 0)) / 2
             let verticalPadding = max(0, diameter - (image?.size.height ?? 0)) / 2
@@ -239,6 +204,12 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
             config.image = image
             config.contentInsets = NSDirectionalEdgeInsets(top: verticalPadding, leading: sidePadding, bottom: verticalPadding, trailing: sidePadding)
             button.configuration = config
+            button.configurationUpdateHandler = glass ? nil : { button in
+                guard var config = button.configuration else { return }
+                config.baseForegroundColor = button.isHighlighted ? .label : .secondaryLabel
+                config.background.backgroundColor = button.isHighlighted ? .tertiarySystemFill : .clear
+                button.configuration = config
+            }
             if #available(iOS 26.0, *), glass { button.cornerConfiguration = .capsule() }
             button.layer.cornerCurve = .circular
             button.invalidateIntrinsicContentSize()

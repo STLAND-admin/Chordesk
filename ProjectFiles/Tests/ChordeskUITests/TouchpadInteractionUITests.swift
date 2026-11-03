@@ -80,6 +80,14 @@ final class TouchpadInteractionUITests: XCTestCase {
             XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)
             XCTAssertEqual(menu.frame.midX, keyboard.frame.midX, accuracy: 2)
             XCTAssertEqual(menu.frame.midX, mode.frame.midX, accuracy: 2)
+            let metrics = app.otherElements["rail-layout-metrics"].value as? String ?? ""
+            let fields = Dictionary(uniqueKeysWithValues: metrics.split(separator: ";").compactMap { part -> (String, Double)? in
+                let pair = part.split(separator: "=")
+                guard pair.count == 2, let value = Double(pair[1]) else { return nil }
+                return (String(pair[0]), value)
+            })
+            XCTAssertEqual(menu.frame.midX, fields["barX"] ?? -1, accuracy: 1)
+            XCTAssertEqual(menu.frame.width, fields["barWidth"] ?? -1, accuracy: 1)
             XCTAssertGreaterThan(mode.frame.minY, app.buttons["overview-dock-button"].frame.maxY)
             XCTAssertEqual(menu.frame.width, keyboard.frame.width, accuracy: 1)
             XCTAssertEqual(menu.frame.width, mode.frame.width, accuracy: 1)

@@ -50,6 +50,7 @@ private final class RailHitView: UIView {
 private final class PointerModeSegments: UIView {
     let control: UISegmentedControl
     var onChange: ((FrontTouchMode) -> Void)?
+    private var symbolExtent: CGFloat = 0
     private let options = [("直接触控", "hand.point.up.left"), ("触控板", "cursorarrow.motionlines")]
     override init(frame: CGRect) {
         control = UISegmentedControl(items: ["", ""])
@@ -63,22 +64,23 @@ private final class PointerModeSegments: UIView {
         if #available(iOS 26.0, *) { control.cornerConfiguration = .capsule() }
         control.layer.cornerCurve = .circular
         let extent = control.intrinsicContentSize.height * 1.5
-        for (index, pair) in options.enumerated() {
-            let source = UIImage(systemName: pair.1)!
-            let image = UIGraphicsImageRenderer(size: CGSize(width: source.size.height, height: source.size.width)).image { context in
-                context.cgContext.translateBy(x: source.size.height / 2, y: source.size.width / 2)
-                context.cgContext.rotate(by: .pi / 2)
-                source.draw(in: CGRect(x: -source.size.width / 2, y: -source.size.height / 2, width: source.size.width, height: source.size.height))
-            }.withRenderingMode(.alwaysTemplate)
-            control.setAction(UIAction(title: pair.0, image: image) { _ in }, forSegmentAt: index)
-            control.setWidth(extent, forSegmentAt: index)
-        }
+        for index in options.indices { control.setWidth(extent, forSegmentAt: index) }
+        refreshSymbols()
         addSubview(control)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var intrinsicContentSize: CGSize {
         let size = control.intrinsicContentSize
         return CGSize(width: size.height, height: size.width)
+    }
+    func refreshSymbols() {
+        guard symbolExtent != RailSymbol.extent, !control.isTracking else { return }
+        symbolExtent = RailSymbol.extent
+        let selected = control.selectedSegmentIndex
+        for (index, pair) in options.enumerated() {
+            control.setAction(UIAction(title: pair.0, image: RailSymbol.image(pair.1, rotated: true)) { _ in }, forSegmentAt: index)
+        }
+        control.selectedSegmentIndex = selected
     }
     func select(_ mode: FrontTouchMode) {
         // Video frames must not interrupt the native thumb's press/drag tracking.
@@ -165,7 +167,11 @@ final class ChordRailController: UIViewController {
             actionsGlass.effect = nil; actionsGlass.backgroundColor = .secondarySystemBackground
             modifierContainer.effect = nil
         } else if #available(iOS 26.0, *) {
-            let effect = UIGlassEffect(style: .regular); effect.isInteractive = true
+            let effect = UIGlassEffect(style: .regular)
+            // A grouped action surface stays a fixed capsule. Interactive glass
+            // expands the entire group and gets clipped flat at the scroll edge.
+            // Only the segmented mode switch owns the elastic selection lens.
+            effect.isInteractive = false
             actionsGlass.effect = effect; actionsGlass.backgroundColor = .clear
             modifierContainer.effect = UIGlassContainerEffect()
         } else {
@@ -191,7 +197,7 @@ final class ChordRailController: UIViewController {
         keyboard.button.accessibilityHint = "轻点显示或收起键盘，长按打开快捷菜单"
         overview.button.accessibilityHint = "轻点打开总览；长按可选择退出"
         display.view.isHidden = !value.showDisplay; overview.view.isHidden = !value.showOverview
-        mode.isHidden = !value.showMode; mode.select(value.mode)
+        mode.isHidden = !value.showMode; mode.refreshSymbols(); mode.select(value.mode)
         modifierContainer.isHidden = !value.keyboardShown
         for (flag, button) in modifierButtons {
             button.isSelected = value.modifiers & flag != 0
@@ -205,21 +211,15 @@ final class ChordRailController: UIViewController {
         guard let c = configuration, let window = view.window else { return }
         let preferred = max(keyboard.buttonDiameter, mode.intrinsicContentSize.width)
         guard preferred > 0 else { return }
-        let publicContent = view.convert(window.safeAreaLayoutGuide.layoutFrame, from: window)
-        let column = ControlRailPosition.column(in: view.bounds, content: publicContent,
+        let systemBar: CGRect?
+        if #available(iOS 27.1, *) {
+            systemBar = view.convert(window.bounds.inset(by: window.edgeInsets(for: .bar(onEdge: .trailing, extent: preferred))), from: window)
+        } else { systemBar = nil }
+        let column = ControlRailPosition.column(in: view.bounds, barRegion: systemBar,
             margin: systemMinimumLayoutMargins.trailing, preferredWidth: preferred)
         let side = column.width, width = side
-        var area = view.bounds
-        var anchor = column.midX
-        if #available(iOS 27.1, *) {
-            area = view.convert(window.bounds.inset(by: window.edgeInsets(for: .bar(onEdge: .trailing, extent: width))), from: window)
-            if view.bounds.maxX - publicContent.maxX < 44,
-               let region = window.reservedRegions(kind: .occlusion)
-                .filter({ $0.isActive && $0.frame.midX > window.bounds.midX && $0.frame.midY < window.bounds.midY })
-                .max(by: { $0.frame.maxX < $1.frame.maxX }) {
-                anchor = view.convert(region.frame.inset(by: region.margins), from: window).midX
-            }
-        } else { area = view.convert(window.safeAreaLayoutGuide.layoutFrame, from: window) }
+        let area = column
+        let anchor = column.midX
         let keyboardY = c.keyboardTop.map { view.convert(CGPoint(x: 0, y: $0), from: nil).y }
         let lower = min(area.maxY, keyboardY ?? area.maxY)
         let offset = keyboardY == nil ? view.bounds.height * ControlRailPosition.fraction(c.bottomOffset, maximum: 0.30) : 0
@@ -241,6 +241,12 @@ final class ChordRailController: UIViewController {
         let globalAnchor = view.convert(CGPoint(x: anchor, y: 0), to: nil).x
         if global != lastGeometry || lastAnchor != globalAnchor {
             lastGeometry = global; lastAnchor = globalAnchor
+#if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" {
+                root.accessibilityIdentifier = "rail-layout-metrics"
+                root.accessibilityValue = "barX=\(column.midX);barWidth=\(column.width);symbol=\(RailSymbol.extent)"
+            }
+#endif
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.lastGeometry == global, self.lastAnchor == globalAnchor else { return }
                 self.configuration?.onGeometry(global, globalAnchor)
