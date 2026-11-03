@@ -39,8 +39,6 @@ struct ContentView: View {
     @AppStorage("controlRailTopV1") private var controlRailTop = 0.0
     @AppStorage("controlRailBottomV1") private var controlRailBottom = 0.0
     @State private var menuPresented = false
-    @State private var statusAreaBottom: CGFloat = 0
-    @State private var edgeBarBottom: CGFloat = 0
     @State private var edgeBarWidth: CGFloat = 0
     @State private var edgeAnchorX: CGFloat?
     @State private var workspaceFrame = CGRect.zero
@@ -71,7 +69,6 @@ struct ContentView: View {
         NavigationStack {
             ZStack(alignment: .topTrailing) {
                 presentedWorkspace
-                    .padding(.top, rearBadgeFrame.maxY)
                     .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
             }
             .background(.black)
@@ -99,7 +96,7 @@ struct ContentView: View {
                 if mode == KeyboardInvocation.manual.rawValue { chooseInnerMode(.touchpad) }
             }
             .onChange(of: rearTrigger) { _, _ in configureGrip() }
-            .onChange(of: frontTouchMode) { _, _ in releaseInteractions(); configureGrip(); configureInputRouting() }
+            .onChange(of: frontTouchMode) { _, _ in configureGrip(); configureInputRouting() }
             .onChange(of: grip.state.requestedFrontMode) { _, _ in
                 inputEpoch += 1; grip.releaseFront(); grip.innerContacts(0)
                 client.release(); configureInputRouting()
@@ -140,6 +137,7 @@ struct ContentView: View {
         }
         // Attach outside NavigationStack's inset content proposal. Ignoring the
         // safe area on the old child alone did not recover the window's width.
+        .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
         .overlay { controlRail }
         .overlay(alignment: (MetadataCorner(rawValue: metadataCorner) ?? .topLeft).alignment) {
             if showStreamMetadata && client.connected && !modalVisible {
@@ -149,8 +147,8 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            // A dedicated top strip prevents any contact light covering the
-            // desktop. Its position never inherits Dock or keyboard offsets.
+            // This independent overlay never changes the desktop geometry or
+            // inherits Dock / keyboard offsets.
             GeometryReader { _ in
                 rearStatusBadge.fixedSize()
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { rearBadgeSize = $0 }
@@ -203,11 +201,6 @@ struct ContentView: View {
         }
     }
 
-    private var controlMenu: some View {
-        StableMenuButton(symbol: "slider.horizontal.3", title: "远程控制菜单", identifier: "remote-options",
-            sections: controlMenuSections, onPresentation: setMenuPresented, onSelect: selectControl)
-            .modifier(EdgeDockGlass())
-    }
     private var controlMenuSections: [SystemMenuSection] {
         var sections = [SystemMenuSection(title: client.connected ? client.sourceName : "Chordesk", items: [
             .init(id: "connect", title: "连接 Mac", symbol: "network")
@@ -223,7 +216,7 @@ struct ContentView: View {
         }
         switch id {
         case "connect": releaseInteractions(); showingConnect = true
-        case "trackpad", "direct": releaseInteractions(); frontTouchMode = id
+        case "trackpad", "direct": if let mode = FrontTouchMode(rawValue: id) { selectPointerMode(mode) }
         case "displays": releaseInteractions(); showingDisplays = true; client.requestDisplays()
         case "magnifier": magnifierEnabled.toggle()
         case "overview-show": sendWindowOverview(.show)
@@ -242,9 +235,11 @@ struct ContentView: View {
         default: break
         }
     }
-    private func switchPointerMode() {
-        let next: FrontTouchMode = directTouchSelected ? .trackpad : .direct
-        releaseInteractions(); frontTouchMode = next.rawValue
+    private func selectPointerMode(_ selected: FrontTouchMode) {
+        keyboardPolicy.suppress(through: client.sentEvents)
+        inputEpoch += 1; grip.releaseFront(); client.release()
+        frontTouchMode = grip.state.baseFrontMode(for: selected).rawValue
+        configureGrip(); configureInputRouting()
     }
     private func setMenuPresented(_ value: Bool) {
         menuPresented = value
@@ -254,59 +249,19 @@ struct ContentView: View {
         updateRearCapture()
     }
     private var controlRail: some View {
-        GeometryReader { geometry in
-            let keyboardBottomInset = nativeKeyboardVisible && nativeKeyboardTop != nil
-                ? max(0, geometry.frame(in: .global).maxY - (workspaceFrame.minY + (nativeKeyboardTop ?? 0))) : edgeBarBottom
-            if !modalVisible {
-                VStack(alignment: .trailing) {
-                    ScrollView(.vertical) {
-                      VStack(spacing: 8) {
-                        controlMenu
-                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { edgeBarWidth = $0 }
-                        if showPointerModeButton {
-                            StableMenuButton(symbol: directTouchSelected ? "hand.tap" : "hand.draw", title: directTouchSelected ? "切换为触控板" : "切换为直接触控",
-                                identifier: "pointer-mode-toggle", sections: [], primaryAction: switchPointerMode,
-                                onPresentation: { _ in }, onSelect: { _ in })
-                                .modifier(EdgeDockGlass())
-                                .accessibilityValue(directTouchSelected ? "直接触控" : "触控板")
-                        }
-                        if showDisplayButton {
-                            StableMenuButton(symbol: "display", title: "显示器与文字大小", identifier: "display-dock-button", sections: [],
-                                primaryAction: { releaseInteractions(); showingDisplays = true; client.requestDisplays() },
-                                onPresentation: { _ in }, onSelect: { _ in }).modifier(EdgeDockGlass())
-                        }
-                        if showOverviewButton {
-                            StableMenuButton(symbol: "rectangle.3.group", title: "窗口总览", identifier: "overview-dock-button",
-                                sections: [.init(items: [
-                                    .init(id: "overview-show", title: "打开窗口总览", symbol: "rectangle.3.group", enabled: client.acceptsInput),
-                                    .init(id: "overview-hide", title: "退出窗口总览", symbol: "rectangle", enabled: client.acceptsInput)
-                                ])], primaryAction: { sendWindowOverview(.show) },
-                                onPresentation: setMenuPresented, onSelect: selectControl)
-                                .modifier(EdgeDockGlass()).accessibilityHint("轻点打开总览；长按可选择退出")
-                        }
-                      }
-                    }.scrollIndicators(.hidden)
-                        .frame(maxWidth: edgeBarWidth > 0 ? edgeBarWidth : nil, alignment: .trailing)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { railFrame = $0 }
-                        .padding(.top, geometry.size.height * ControlRailPosition.fraction(controlRailTop, maximum: 0.25))
-                    Spacer(minLength: 0)
-                    if !customKeyboardShown { keyboardDock
-                        .padding(.bottom, nativeKeyboardVisible ? 0 : geometry.size.height * ControlRailPosition.fraction(controlRailBottom, maximum: 0.30))
-                    }
-                }
-                .padding(.top, 8).padding(.bottom, nativeKeyboardVisible ? 4 : 8)
-                .padding(.top, statusAreaBottom)
-                .padding(.bottom, keyboardBottomInset)
-                .animation(keyboardResizeAnimation, value: keyboardBottomInset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                .padding(.trailing, ControlRailPosition.trailingInset(containerWidth: geometry.size.width,
-                    anchorX: edgeAnchorX, buttonWidth: edgeBarWidth))
-            }
-        }
-        .background { SystemStatusBoundaryReader(extent: edgeBarWidth) { top, bottom, anchor in
-            statusAreaBottom = top; edgeBarBottom = bottom; edgeAnchorX = anchor
-        }.allowsHitTesting(false) }
-        .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
+        ChordControlRail(mode: grip.state.requestedFrontMode, showMode: showPointerModeButton,
+            showDisplay: showDisplayButton, showOverview: showOverviewButton, keyboardShown: keyboardShown,
+            modifiers: [UInt(8), 4, 2].reduce(0) { $0 | (modifierSelected($1) ? $1 : 0) },
+            inputAllowed: client.acceptsInput, visible: !modalVisible,
+            keyboardTop: customKeyboardShown && !customKeyboardFrame.isEmpty ? customKeyboardFrame.minY :
+                (nativeKeyboardVisible ? nativeKeyboardTop.map { workspaceFrame.minY + $0 } : nil),
+            topOffset: controlRailTop, bottomOffset: controlRailBottom,
+            menuSections: controlMenuSections, keyboardSections: keyboardMenuSections,
+            onMode: selectPointerMode, onKeyboard: { chooseInnerMode(keyboardShown ? .touchpad : .keyboard) },
+            onModifier: toggleModifier, onDisplay: { selectControl("displays") }, onOverview: sendWindowOverview,
+            onPresentation: setMenuPresented, onMenu: selectControl, onKeyboardMenu: selectKeyboardMenu,
+            onGeometry: { frame, anchor in railFrame = frame; edgeBarWidth = frame.width; edgeAnchorX = anchor })
+            .ignoresSafeArea(.container).ignoresSafeArea(.keyboard)
     }
 
     private var rearStatusBadge: some View {
@@ -319,6 +274,9 @@ struct ContentView: View {
                         .foregroundStyle(ready && index < contacts ? Color.primary : Color.secondary.opacity(0.55))
                 }
                 if !ready { Image(systemName: "pause.fill").foregroundStyle(.secondary) }
+                Image(systemName: client.connected ? "network" : "network.slash")
+                    .foregroundStyle(.secondary)
+                if client.connected { Text(client.connectionNetwork == .lan ? "LAN" : "Tailscale").foregroundStyle(.secondary) }
             }
             .font(.caption2).padding(.horizontal).padding(.vertical, 6)
             .accessibilityHidden(true)
@@ -326,7 +284,7 @@ struct ContentView: View {
         .buttonStyle(.plain).background(.ultraThinMaterial, in: Capsule())
         .accessibilityIdentifier("rear-status-badge")
         .accessibilityLabel("背面接触指示灯")
-        .accessibilityValue("\(ready ? "就绪" : "未就绪")，\(contacts) 指，\(grip.state.requestedFrontMode.title)")
+        .accessibilityValue("\(ready ? "就绪" : "未就绪")，\(contacts) 指，\(grip.state.requestedFrontMode.title)，\(client.connected ? client.connectionNetwork.title : "未连接")")
         .accessibilityHint("打开背面控制设置。三盏灯分别表示一指、两指、三指及以上。")
         .overlay(alignment: .leading) {
             if ready && !directTouchSelected {
@@ -373,40 +331,6 @@ struct ContentView: View {
             if let shortcut = modifiers.shortcut(for: text) { client.nativeKey(shortcut.key, modifiers: shortcut.flags) }
             else { client.nativeText(LANTextEdit(deleteCount: 0, text: text)) }
         case .key(let key): client.nativeKey(key, modifiers: customModifierFlags)
-        }
-    }
-    @ViewBuilder private var keyboardDockItems: some View {
-        Group {
-            if keyboardShown {
-                ForEach([UInt(8), UInt(2), UInt(4)], id: \.self) { flag in
-                    Button { toggleModifier(flag) } label: {
-                        Text(flag == 8 ? "Ctrl" : flag == 2 ? "⌘" : "⌥").font(.title3)
-                            .padding(.horizontal, 12).padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                    .modifier(EdgeDockGlass())
-                    .foregroundStyle(modifierSelected(flag) ? Color.primary : Color.secondary)
-                    .accessibilityLabel(flag == 8 ? "Ctrl" : flag == 2 ? "Command" : "Option")
-                    .accessibilityValue(modifierSelected(flag) ? "已按下，下一次快捷键后释放" : "未按下")
-                    .accessibilityIdentifier("native-modifier-\(flag)")
-                }
-            }
-            StableMenuButton(symbol: keyboardShown ? "keyboard.chevron.compact.down" : "keyboard",
-                title: keyboardShown ? "收起键盘／快捷菜单" : "显示键盘／快捷菜单", identifier: "keyboard-dock-toggle",
-                sections: keyboardMenuSections, primaryAction: { chooseInnerMode(keyboardShown ? .touchpad : .keyboard) },
-                onPresentation: setMenuPresented, onSelect: selectKeyboardMenu)
-            .modifier(EdgeDockGlass())
-            .accessibilityHint("轻点显示或收起键盘，长按打开快捷菜单")
-        }
-    }
-    private var keyboardDock: some View {
-        Group {
-            if customKeyboardShown {
-                VStack(alignment: .trailing, spacing: 4) { keyboardDockItems }
-            } else {
-                // Stable hierarchy while the system keyboard hides for a menu.
-                HStack(spacing: 4) { keyboardDockItems }
-            }
         }
     }
     private var keyboardMenuSections: [SystemMenuSection] {
@@ -527,12 +451,12 @@ struct ContentView: View {
                 LabeledContent("单指长按后拖动", value: "按住左键拖选")
                 LabeledContent("双指滑动／轻点", value: "滚轮／右键")
                 LabeledContent("松开背面手指", value: "回到直接触控")
-                Text("键盘上方的黑边也可作为触控板，右侧快捷栏除外。也可用右侧操控模式按钮固定切换；背屏设置可改为触发一次切换，再触发一次恢复。").font(.footnote).foregroundStyle(.secondary)
+                Text("键盘上方的黑边也可作为触控板，右侧快捷栏除外。也可用右侧双段操控模式选择器固定切换；背屏设置可改为触发一次切换，再触发一次恢复。").font(.footnote).foregroundStyle(.secondary)
             }
             Section("iPhone 键盘与快捷键") {
                 Text("默认 iPhone 输入法、自动唤起。点 Mac 输入位置后抬起手指，键盘会弹出；无法识别时点右下键盘按钮。快捷键设置可改为手动唤起。")
                 Text("输入结果直接看远程桌面。画面默认等比例放到键盘上方，可在快捷键设置关闭。长按空格后滑动调整 Mac 文字光标；第三方输入法需支持系统光标回调。")
-                Text("键盘上方 Ctrl／⌘／⌥ 可组合，下次快捷键后释放，再点可取消。长按键盘按钮打开 Esc、Tab、复制粘贴、方向键和 F1–F12。")
+                Text("键盘按钮左侧 Ctrl／⌥／⌘ 可组合，下次快捷键后释放，再点可取消。长按键盘按钮打开 Esc、Tab、复制粘贴、方向键和 F1–F12。")
                 Text("快捷键设置中可编辑右侧三个入口：显示器、操控模式、窗口总览。右侧栏可上下滑动。")
             }
             Section("显示与画质") {
@@ -676,7 +600,6 @@ struct ContentView: View {
                     MobileTouchKeyboard(onAction: sendMobileInput)
                         .frame(height: height).clipped()
                 }
-                keyboardDock.frame(height: height)
             }
             .background(InputGlass(transparency: keyboardTransparency))
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { customKeyboardFrame = $0 }
@@ -797,7 +720,7 @@ struct ContentView: View {
             Toggle("切换显示器", isOn: $showDisplayButton).accessibilityIdentifier("show-display-button")
             Toggle("切换操控模式", isOn: $showPointerModeButton).accessibilityIdentifier("show-pointer-mode-button")
             Toggle("窗口总览", isOn: $showOverviewButton).accessibilityIdentifier("show-overview-button")
-            Text("三个快捷键默认显示。右侧栏可上下滑动；菜单和键盘按钮始终保留。窗口总览轻点打开、长按选择退出。").font(.footnote).foregroundStyle(.secondary)
+            Text("上方为菜单、显示器与窗口总览；其下是可隐藏的双段操控模式。键盘为独立圆形按钮，打开后在左侧显示 Ctrl、Option、Cmd。右侧栏可上下滑动，横竖屏均保留在右侧。窗口总览轻点打开、长按选择退出。").font(.footnote).foregroundStyle(.secondary)
         }
                 Section("右侧按钮位置") {
                     Text("菜单与键盘按钮越过内容安全区，沿右侧系统状态区下方对齐。上下位置可调整；背面手指数提示固定在原位置，不随菜单移动。")
@@ -807,7 +730,7 @@ struct ContentView: View {
                     LabeledContent("键盘按钮向上", value: "\(Int(controlRailBottom * 100))%")
                     Slider(value: $controlRailBottom, in: 0...0.30, step: 0.01) { Text("键盘按钮垂直位置") }
                     Button("恢复默认按钮位置") { controlRailTop = 0; controlRailBottom = 0 }
-                    Text("iPhone／微信键盘由系统管理，快捷键放在其上方靠右。选择“手机布局 · 可调”可将四个快捷入口放在键盘右侧，并调整键盘高度与玻璃透明度。")
+                    Text("iPhone／微信键盘由系统管理，快捷键放在其上方靠右。选择“手机布局 · 可调”可调整键盘高度与玻璃透明度；修饰键仍在键盘按钮左侧。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("文字输入") {
@@ -823,7 +746,7 @@ struct ContentView: View {
                     }.pickerStyle(.segmented).accessibilityIdentifier("keyboard-invocation")
                     Text("默认自动：点击识别出的 Mac 输入框后唤起；可切为手动。右下玻璃按钮轻点显示／收起，长按打开快捷菜单。仅远程桌面显示输入结果，不显示本地输入栏。")
                         .font(.footnote).foregroundStyle(.secondary)
-                    Text("iPhone 输入法使用你已启用的系统或微信输入法，通过键盘上的切换键选择。拼音候选确认后发送到 Mac；右下 Dock 提供 Ctrl、Cmd、Option 和键盘菜单。")
+                    Text("iPhone 输入法使用你已启用的系统或微信输入法，通过键盘上的切换键选择。拼音候选确认后发送到 Mac；键盘按钮左侧提供 Ctrl、Option、Cmd，长按键盘按钮打开快捷菜单。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Text("手机布局支持 ABC／123／#+= 切换，Shift 单次大写、连续双击锁定大写。它不提供拼音候选，中文输入请切回 iPhone 输入法。按键发送所显示的符号，不依赖 Mac 的物理键盘布局。")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -892,7 +815,7 @@ struct ContentView: View {
                 }
                 Section("选字放大镜") {
                     Toggle("长按时显示放大镜", isOn: $magnifierEnabled).accessibilityIdentifier("touch-magnifier-toggle")
-                    Text("放大镜浮在手指上方，显示实际落点和选字位置；只改变本机查看，不修改 Mac 缩放。")
+                    Text("使用 iOS 原生放大镜显示手指落点附近的远程画面，抬手关闭；只改变本机查看，不修改 Mac 缩放。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("内屏指针灵敏度 · \(Int((TouchpadTuning.sensitivity(innerSensitivity) * 100).rounded()))%") {
@@ -980,16 +903,6 @@ private struct InputGlass: View {
                 RoundedRectangle(cornerRadius: 18).fill(.ultraThinMaterial).opacity(opacity)
             }
         }.allowsHitTesting(false)
-    }
-}
-
-private struct EdgeDockGlass: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    func body(content: Content) -> some View {
-        let shape = Circle()
-        if reduceTransparency { content.background(Color(uiColor: .secondarySystemBackground), in: shape) }
-        else if #available(iOS 26.0, *) { content.background { shape.fill(.clear).glassEffect(.regular, in: shape).allowsHitTesting(false) } }
-        else { content.background(.ultraThinMaterial, in: shape) }
     }
 }
 

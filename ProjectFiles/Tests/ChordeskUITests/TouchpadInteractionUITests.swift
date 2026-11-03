@@ -55,12 +55,41 @@ final class TouchpadInteractionUITests: XCTestCase {
         let rail = app.buttons["remote-options"]
         XCTAssertLessThanOrEqual(surface.frame.maxX, rail.frame.minX + 2)
         // Use the gap between shortcuts, not a button that intentionally sends input.
-        let mode = app.buttons["pointer-mode-toggle"]
-        let gap = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: rail.frame.midX, dy: (rail.frame.maxY + mode.frame.minY) / 2))
+        let mode = app.segmentedControls["pointer-mode-toggle"]
+        let gap = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: rail.frame.midX, dy: mode.frame.maxY + 12))
         let after = counter.value as? String
         gap.press(forDuration: 0.05)
         XCTAssertEqual(counter.value as? String, after)
         XCTAssertTrue(app.keyboards.firstMatch.exists)
+    }
+
+    @MainActor
+    func testNativeRailStaysRightAndModeFollowsShortTapAcrossOrientations() {
+        let app = XCUIApplication()
+        app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
+        app.launchEnvironment["DUO_UI_RESET_CONTROLS"] = "1"
+        app.launchArguments = ["-primaryPointerMode", "direct", "-phoneKeyboardStyle", "system", "-keyboardInvocationV1", "manual"]
+        app.launch()
+        defer { XCUIDevice.shared.orientation = .portrait }
+        for orientation in [UIDeviceOrientation.landscapeLeft, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            let menu = app.buttons["remote-options"], keyboard = app.buttons["keyboard-dock-toggle"]
+            let mode = app.segmentedControls["pointer-mode-toggle"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 5))
+            XCTAssertTrue(mode.exists)
+            XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)
+            XCTAssertEqual(menu.frame.midX, keyboard.frame.midX, accuracy: 2)
+            XCTAssertEqual(menu.frame.midX, mode.frame.midX, accuracy: 2)
+            XCTAssertGreaterThan(mode.frame.minY, app.buttons["overview-dock-button"].frame.maxY)
+            XCTAssertEqual(menu.frame.width, keyboard.frame.width, accuracy: 1)
+            XCTAssertEqual(menu.frame.width, mode.frame.width, accuracy: 1)
+            let upper = mode.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
+            upper.press(forDuration: 0.05)
+            XCTAssertTrue(app.otherElements["grip-front-touchpad"].waitForExistence(timeout: 3))
+            mode.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).press(forDuration: 0.3,
+                thenDragTo: mode.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)))
+            XCTAssertTrue(app.otherElements["direct-remote-touch"].waitForExistence(timeout: 3))
+        }
     }
 
     @MainActor
@@ -70,7 +99,8 @@ final class TouchpadInteractionUITests: XCTestCase {
         app.launchEnvironment["DUO_UI_RESET_CONTROLS"] = "1"
         app.launch()
         app.launchEnvironment.removeValue(forKey: "DUO_UI_RESET_CONTROLS")
-        for id in ["pointer-mode-toggle", "display-dock-button", "overview-dock-button"] {
+        XCTAssertTrue(app.segmentedControls["pointer-mode-toggle"].waitForExistence(timeout: 5))
+        for id in ["display-dock-button", "overview-dock-button"] {
             XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 5))
         }
         shortPress(app.buttons["remote-options"])
@@ -84,7 +114,8 @@ final class TouchpadInteractionUITests: XCTestCase {
             toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
         }
         shortPress(app.buttons["完成"])
-        for id in ["pointer-mode-toggle", "display-dock-button", "overview-dock-button"] { XCTAssertFalse(app.buttons[id].exists) }
+        XCTAssertFalse(app.segmentedControls["pointer-mode-toggle"].exists)
+        for id in ["display-dock-button", "overview-dock-button"] { XCTAssertFalse(app.buttons[id].exists) }
         shortPress(app.buttons["remote-options"]); shortPressMenuItem("诊断信息", in: app)
         let metadata = app.switches["show-stream-metadata"]
         if metadata.value as? String == "1" { metadata.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap() }
@@ -181,7 +212,8 @@ final class TouchpadInteractionUITests: XCTestCase {
             let app = XCUIApplication()
             app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
             app.launchEnvironment["DUO_UI_KEYBOARD_LAYOUT"] = "1"
-            app.launchArguments += ["-phoneKeyboardStyle", "system", "-keyboardInvocationV1", "manual", "-primaryPointerMode", mode, "-showStreamMetadataV1", "YES"]
+            app.launchEnvironment["DUO_UI_RESET_CONTROLS"] = "1"
+            app.launchArguments += ["-controlRailTopV1", "0", "-controlRailBottomV1", "0", "-phoneKeyboardStyle", "system", "-keyboardInvocationV1", "manual", "-primaryPointerMode", mode, "-showStreamMetadataV1", "YES"]
             app.launch()
             let surface = app.otherElements[mode == "direct" ? "direct-remote-touch" : "grip-front-touchpad"]
             XCTAssertTrue(surface.waitForExistence(timeout: 8))
@@ -195,6 +227,12 @@ final class TouchpadInteractionUITests: XCTestCase {
                     && abs(toggle.frame.maxY - app.textViews.firstMatch.frame.minY) < 30
             }, object: nil)
             XCTAssertEqual(XCTWaiter.wait(for: [fitted], timeout: 8), .completed, "surface=\(surface.frame), dock=\(toggle.frame), keyboard=\(keyboard.frame)")
+            for flag in [8, 4, 2] {
+                let modifier = app.buttons["native-modifier-\(flag)"]
+                XCTAssertTrue(modifier.exists)
+                XCTAssertLessThan(modifier.frame.maxX, toggle.frame.minX)
+                XCTAssertEqual(modifier.frame.midY, toggle.frame.midY, accuracy: 5)
+            }
             let counter = app.staticTexts["stream-metadata"]
             let before = counter.value as? String
             surface.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.4)).press(forDuration: 0.1,
@@ -233,7 +271,7 @@ final class TouchpadInteractionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
         app.launchEnvironment["DUO_UI_RESET_CONTROLS"] = "1"
-        app.launchArguments += ["-phoneKeyboardStyle", "system", "-controlRailTopV1", "0", "-controlRailBottomV1", "0"]
+        app.launchArguments += ["-phoneKeyboardStyle", "system", "-keyboardDefaultModeV2", "touchpad", "-primaryPointerMode", "direct", "-controlRailTopV1", "0", "-controlRailBottomV1", "0"]
         app.launchEnvironment["DUO_UI_LIVE_FRAMES"] = "1"
         app.launch()
         app.launchEnvironment.removeValue(forKey: "DUO_UI_RESET_CONTROLS")
@@ -249,18 +287,17 @@ final class TouchpadInteractionUITests: XCTestCase {
         if option.value as? String != "1" { option.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).press(forDuration: 0.05) }
         XCTAssertEqual(option.value as? String, "1")
         shortPress(app.buttons["完成"])
-        let toggle = app.buttons["pointer-mode-toggle"], display = app.buttons["display-dock-button"], menu = app.buttons["remote-options"]
+        let toggle = app.segmentedControls["pointer-mode-toggle"], display = app.buttons["display-dock-button"], menu = app.buttons["remote-options"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         XCTAssertEqual(toggle.frame.midX, menu.frame.midX, accuracy: 2)
         XCTAssertEqual(display.frame.midX, menu.frame.midX, accuracy: 2)
         XCTAssertEqual(app.buttons["keyboard-dock-toggle"].frame.midX, menu.frame.midX, accuracy: 2)
         XCTAssertGreaterThan(toggle.frame.minY, menu.frame.maxY)
-        XCTAssertGreaterThan(display.frame.minY, toggle.frame.maxY)
-        let original = toggle.label
-        shortPress(toggle)
-        XCTAssertNotEqual(toggle.label, original)
-        shortPress(toggle)
-        XCTAssertEqual(toggle.label, original)
+        XCTAssertGreaterThan(toggle.frame.minY, display.frame.maxY)
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).press(forDuration: 0.05)
+        XCTAssertEqual(toggle.value as? String, "触控板")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)).press(forDuration: 0.05)
+        XCTAssertEqual(toggle.value as? String, "直接触屏")
         shortPress(display)
         XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 5))
         shortPress(app.buttons["完成"])
@@ -630,8 +667,8 @@ final class TouchpadInteractionUITests: XCTestCase {
         let badge = app.buttons["rear-status-badge"]
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         let originalBadge = badge.frame
-        XCTAssertLessThanOrEqual(badge.frame.maxY, app.images["lan-remote-monitor"].frame.minY + 1,
-                                 "The rear lights must not cover desktop pixels.")
+        XCTAssertLessThan(badge.frame.maxY, menu.frame.minY,
+                          "Rear lights stay at the top, independently of the rail and full-bleed desktop.")
         XCTAssertGreaterThan(menu.frame.midX, app.windows.firstMatch.frame.width * 0.9)
         XCTAssertEqual(menu.frame.midX, keyboard.frame.midX, accuracy: 2)
         XCTAssertLessThan(badge.frame.midX, menu.frame.midX)

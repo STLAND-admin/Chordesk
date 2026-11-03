@@ -4,6 +4,23 @@ enum ControlRailPosition {
     static func fraction(_ value: Double, maximum: Double) -> Double {
         value.isFinite ? min(max(value, 0), maximum) : 0
     }
+    /// Use the public trailing status lane as a shared centerline. When the
+    /// system uses a horizontal status bar instead, fall back to layout margins.
+    static func column(in bounds: CGRect, content: CGRect, margin: CGFloat,
+                       preferredWidth: CGFloat, minimumWidth: CGFloat = 44) -> CGRect {
+        let lane = max(0, bounds.maxX - content.maxX)
+        let preferred = max(minimumWidth, preferredWidth)
+        let width: CGFloat
+        let center: CGFloat
+        if lane >= minimumWidth {
+            width = min(preferred, max(minimumWidth, lane - max(0, margin) * 2))
+            center = bounds.maxX - lane / 2
+        } else {
+            width = preferred
+            center = bounds.maxX - max(0, margin) - width / 2
+        }
+        return CGRect(x: center - width / 2, y: bounds.minY, width: width, height: bounds.height)
+    }
     static func trailingInset(containerWidth: CGFloat, anchorX: CGFloat?, buttonWidth: CGFloat) -> CGFloat {
         guard let anchorX, anchorX.isFinite else { return 0 }
         return max(0, containerWidth - anchorX - buttonWidth / 2)
@@ -172,6 +189,7 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
     private var presentation: ((Bool) -> Void)?
     private var selection: ((String) -> Void)?
     private var configuredSymbol = ""
+    private var configuredGlass = false
     private var menuTitle = ""
     private var panel: UINavigationController?
     private var inactiveObserver: NSObjectProtocol?
@@ -193,7 +211,7 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
     }
     func configure(symbol: String, title: String, identifier: String, sections: [SystemMenuSection],
                    primaryAction: (() -> Void)?, onPresentation: @escaping (Bool) -> Void,
-                   onSelect: @escaping (String) -> Void) {
+                   onSelect: @escaping (String) -> Void, glass: Bool = false) {
         loadViewIfNeeded()
         latest = sections; primary = primaryAction; presentation = onPresentation; selection = onSelect
         menuTitle = title
@@ -202,16 +220,18 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
         if hold.isEnabled != usesHold { hold.isEnabled = usesHold }
         // A showing popover is never rebuilt by a video frame or rear-contact update.
         guard !menuState.presented else { return }
-        if configuredSymbol != symbol {
-            configuredSymbol = symbol
+        if configuredSymbol != symbol || configuredGlass != glass {
+            configuredSymbol = symbol; configuredGlass = glass
             var config = UIButton.Configuration.plain()
+            if #available(iOS 26.0, *), glass { config = .glass() }
+            config.cornerStyle = .capsule
             let symbols = UIImage.SymbolConfiguration(font: .preferredFont(forTextStyle: .title3))
             let image = UIImage(systemName: symbol, withConfiguration: symbols)
             let glyphWidth = ["slider.horizontal.3", "keyboard", "keyboard.chevron.compact.down"]
                 .compactMap { UIImage(systemName: $0, withConfiguration: symbols)?.size.width }.max() ?? 0
             let glyphHeight = ["slider.horizontal.3", "keyboard", "keyboard.chevron.compact.down"]
                 .compactMap { UIImage(systemName: $0, withConfiguration: symbols)?.size.height }.max() ?? 0
-            let diameter = max(glyphWidth, glyphHeight) + 28
+            let diameter = max(44, max(glyphWidth, glyphHeight) + 12)
             buttonDiameter = ceil(diameter)
             let sidePadding = max(0, diameter - (image?.size.width ?? 0)) / 2
             let verticalPadding = max(0, diameter - (image?.size.height ?? 0)) / 2
@@ -219,6 +239,8 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
             config.image = image
             config.contentInsets = NSDirectionalEdgeInsets(top: verticalPadding, leading: sidePadding, bottom: verticalPadding, trailing: sidePadding)
             button.configuration = config
+            if #available(iOS 26.0, *), glass { button.cornerConfiguration = .capsule() }
+            button.layer.cornerCurve = .circular
             button.invalidateIntrinsicContentSize()
         }
     }

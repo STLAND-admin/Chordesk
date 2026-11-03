@@ -87,4 +87,38 @@ final class GripInputStateTests: XCTestCase {
         grip.innerContacts(0); grip.innerContacts(1)
         XCTAssertEqual(grip.route(.leftClick), [.leftClick])
     }
+    func testManualSelectorDuringRearChordKeepsContactsAndMatchesChosenMode() {
+        var grip = GripInputState()
+        _ = grip.outerContacts(2)
+        XCTAssertEqual(grip.requestedFrontMode, .trackpad)
+        let base = grip.baseFrontMode(for: .direct)
+        _ = grip.configure(defaultMode: .touchpad, activation: .momentary, trigger: .touch, frontMode: base)
+        XCTAssertEqual(grip.outerCount, 2)
+        XCTAssertTrue(grip.activated)
+        XCTAssertEqual(grip.requestedFrontMode, .direct)
+        _ = grip.outerContacts(0)
+        XCTAssertEqual(grip.requestedFrontMode, .trackpad)
+    }
+    func testChangingBaselineReleasesDragButSuppressesRestingFrontUntilLift() {
+        var grip = GripInputState()
+        _ = grip.outerContacts(2); grip.innerContacts(1)
+        grip.innerContacts(0)
+        XCTAssertEqual(grip.route(.dragBegan), [.dragBegan])
+        grip.innerContacts(1)
+        XCTAssertEqual(grip.configure(defaultMode: .keyboard, activation: .momentary, trigger: .touch, frontMode: .trackpad), [.dragEnded])
+        XCTAssertEqual(grip.outerCount, 2)
+        XCTAssertEqual(grip.route(.leftClick), [])
+        XCTAssertEqual(grip.releaseFront(), [])
+        grip.innerContacts(0)
+        XCTAssertEqual(grip.route(.leftClick), [.leftClick])
+    }
+    func testChangingRearTriggerStillCancelsOldChord() {
+        var grip = GripInputState()
+        _ = grip.outerContacts(2)
+        _ = grip.configure(defaultMode: .touchpad, activation: .momentary, trigger: .longPress)
+        XCTAssertFalse(grip.activated)
+        XCTAssertEqual(grip.outerCount, 0)
+        XCTAssertEqual(grip.requestedFrontMode, .direct)
+    }
+
 }

@@ -246,7 +246,7 @@ final class DirectTouchView: UIView {
     private var windowChord = false
     private var windowFingerIDs: [ObjectIdentifier] = []
     private let picture = UIImageView()
-    private let lens = RemoteMagnifierView()
+    private var loupe: UITextLoupeSession?
     private var magnifierEnabled = true
     private var viewport = RemoteViewport(container: .zero, content: .zero)
     private var state = DirectTouchState()
@@ -269,7 +269,6 @@ final class DirectTouchView: UIView {
         super.init(frame: frame)
         backgroundColor = .black; clipsToBounds = true; isMultipleTouchEnabled = true
         picture.isUserInteractionEnabled = false; addSubview(picture)
-        lens.isHidden = true; lens.isUserInteractionEnabled = false; addSubview(lens)
         accessibilityLabel = "直接触屏远程桌面"
         accessibilityIdentifier = "direct-remote-touch"
         accessibilityTraits = .allowsDirectInteraction
@@ -285,7 +284,7 @@ final class DirectTouchView: UIView {
         if self.inputEpoch != inputEpoch { cancelInput() }
         self.inputEpoch = inputEpoch
         self.magnifierEnabled = magnifierEnabled
-        if !magnifierEnabled { lens.isHidden = true }
+        if !magnifierEnabled { dismissMagnifier() }
         if windowChord && (!windowGesturesEnabled || readRearContacts?() != 1) { overviewSwipe.cancel() }
         self.enabled = enabled; self.revision = revision; self.resetToken = resetToken
         self.rearHeld = rearHeld
@@ -294,7 +293,6 @@ final class DirectTouchView: UIView {
         if !rearHeld { emit(state.setRearHeld(false)) }
         viewport.content = size
         picture.image = UIImage(cgImage: image)
-        lens.image = picture.image; lens.setNeedsDisplay()
         picture.frame = viewport.imageRect
     }
     override func layoutSubviews() {
@@ -317,7 +315,7 @@ final class DirectTouchView: UIView {
     func cancelInput() {
         invalidateHold()
         if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
-        lens.isHidden = true; overviewSwipe.cancel()
+        dismissMagnifier(); overviewSwipe.cancel()
         emit(state.cancel())
         ignored = !active.isEmpty
         // Defer SwiftUI state publication until after updateUIView/layoutSubviews.
@@ -343,7 +341,7 @@ final class DirectTouchView: UIView {
         let fingers = Array(active.values)
         if fingers.count > 1 {
             if let cancelled = scrollTracker.cancel() { onScroll?(cancelled) }
-            timer?.invalidate(); lens.isHidden = true; emit(state.cancel()); multi = true
+            timer?.invalidate(); dismissMagnifier(); emit(state.cancel()); multi = true
             if fingers.count == 2 {
                 let a = fingers[0].location(in: self), b = fingers[1].location(in: self)
                 let center = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
@@ -412,7 +410,7 @@ final class DirectTouchView: UIView {
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         if let sample = scrollTracker.end(at: event?.timestamp ?? touches.first?.timestamp ?? ProcessInfo.processInfo.systemUptime) { onScroll?(sample) }
-        lens.isHidden = true; overviewSwipe.cancel()
+        dismissMagnifier(); overviewSwipe.cancel()
         invalidateHold()
         for touch in touches { active.removeValue(forKey: ObjectIdentifier(touch)) }
         if active.isEmpty {
@@ -428,37 +426,19 @@ final class DirectTouchView: UIView {
         if active.isEmpty { ignored = false; multi = false }
         onContacts?(active.count)
     }
+    private func dismissMagnifier() {
+        loupe?.invalidate(); loupe = nil
+    }
     private func updateMagnifier(at position: CGPoint) {
-        guard magnifierEnabled, let point = viewport.normalized(position, clamped: true) else { lens.isHidden = true; return }
-        let safe = bounds.inset(by: safeAreaInsets).inset(by: layoutMargins)
-        lens.frame = MagnifierGeometry.frame(around: position, within: safe)
-        lens.sourcePoint = point; lens.renderedSize = viewport.imageRect.size
-        lens.layer.cornerRadius = lens.bounds.height * 0.22
-        lens.isHidden = false; lens.setNeedsDisplay()
+        guard magnifierEnabled, window != nil, viewport.normalized(position, clamped: true) != nil else {
+            dismissMagnifier(); return
+        }
+        if let loupe { loupe.move(to: position, withCaretRect: .null, trackingCaret: false) }
+        else { loupe = UITextLoupeSession.begin(at: position, fromSelectionWidgetView: nil, in: self) }
     }
     override func willMove(toWindow newWindow: UIWindow?) {
         if newWindow == nil { active.removeAll(); cancelInput() }
         super.willMove(toWindow: newWindow)
-    }
-}
-private final class RemoteMagnifierView: UIView {
-    var image: UIImage?
-    var sourcePoint = CGPoint.zero
-    var renderedSize = CGSize.zero
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        clipsToBounds = true; backgroundColor = .black
-        layer.borderColor = UIColor.white.withAlphaComponent(0.8).cgColor; layer.borderWidth = 2
-        accessibilityLabel = "选字放大镜"
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override func draw(_ rect: CGRect) {
-        let size = CGSize(width: renderedSize.width * 2.2, height: renderedSize.height * 2.2)
-        image?.draw(in: CGRect(x: bounds.midX - sourcePoint.x * size.width,
-                              y: bounds.midY - sourcePoint.y * size.height, width: size.width, height: size.height))
-        UIColor.systemMint.setStroke()
-        let ring = UIBezierPath(ovalIn: CGRect(x: bounds.midX - 3, y: bounds.midY - 3, width: 6, height: 6))
-        ring.lineWidth = 1; ring.stroke()
     }
 }
 #endif

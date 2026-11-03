@@ -46,4 +46,23 @@ final class ControlsTests: XCTestCase {
         XCTAssertEqual(ControlRailPosition.trailingInset(containerWidth: 600, anchorX: nil, buttonWidth: 60), 0)
         XCTAssertEqual(ControlRailPosition.trailingInset(containerWidth: 600, anchorX: .nan, buttonWidth: 60), 0)
     }
+    func testStatusLaneCentersControlColumnAndKeepsWidthForCapsuleEnds() {
+        let bounds = CGRect(x: 0, y: 0, width: 951, height: 669)
+        let lane = ControlRailPosition.column(in: bounds, content: CGRect(x: 0, y: 0, width: 867, height: 669),
+                                             margin: 20, preferredWidth: 58)
+        XCTAssertEqual(lane.midX, 909)
+        XCTAssertEqual(lane.width, 44)
+        let movedOrigin = ControlRailPosition.column(in: bounds.offsetBy(dx: 100, dy: 20),
+            content: CGRect(x: 100, y: 20, width: 867, height: 669), margin: 20, preferredWidth: 58)
+        XCTAssertEqual(movedOrigin.midX, lane.midX + 100)
+        XCTAssertEqual(movedOrigin.width, lane.width)
+    }
+    func testHorizontalStatusBarUsesSystemMarginsRatherThanWindowMidpoint() {
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+        let column = ControlRailPosition.column(in: bounds, content: CGRect(x: 0, y: 50, width: 400, height: 720),
+                                               margin: 16, preferredWidth: 44)
+        XCTAssertEqual(column.midX, 362)
+        XCTAssertEqual(column.width, 44)
+    }
+
 }

@@ -135,11 +135,17 @@ struct GripInputState {
     }
     var overlayVisible: Bool { requestedMode == .touchpad || innerCount > 0 }
 
+    /// A manual selector chooses the currently visible mode, even while the rear
+    /// chord is held. Persist its corresponding baseline without losing contacts.
+    func baseFrontMode(for selected: FrontTouchMode) -> FrontTouchMode {
+        activated ? (selected == .direct ? .trackpad : .direct) : selected
+    }
+
     mutating func configure(defaultMode: InnerInputMode, activation: RearActivation, trigger: RearTrigger,
                             frontMode: FrontTouchMode = .direct) -> [TouchpadEvent] {
         guard self.defaultMode != defaultMode || self.activation != activation || self.trigger != trigger || self.defaultFrontMode != frontMode else { return [] }
-        if self.activation == activation && self.trigger == trigger && self.defaultFrontMode == frontMode {
-            self.defaultMode = defaultMode
+        if self.activation == activation && self.trigger == trigger {
+            self.defaultMode = defaultMode; self.defaultFrontMode = frontMode
             return releaseFront()
         }
         let result = cancel()

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F10000000000000000000009 /* ChordControlRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000009 /* ChordControlRail.swift */; };
         F10000000000000000000008 = {isa = PBXBuildFile; fileRef = F20000000000000000000008; };
         F10000000000000000000007 = {isa = PBXBuildFile; fileRef = F20000000000000000000007; };
         F10000000000000000000006 = {isa = PBXBuildFile; fileRef = F20000000000000000000006; };
@@ -46,6 +47,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F20000000000000000000009 /* ChordControlRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChordControlRail.swift; sourceTree = "<group>"; };
         F20000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSettings.swift; sourceTree = "<group>"; };
         F20000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCodec.swift; sourceTree = "<group>"; };
         F20000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollDynamics.swift; sourceTree = "<group>"; };
@@ -121,6 +123,7 @@
 				D20000000000000000000005 /* DirectTouch.swift */,
 				D20000000000000000000006 /* NativeInput.swift */,
 				E20000000000000000000001 /* StableControls.swift */,
+				F20000000000000000000009 /* ChordControlRail.swift */,
 				E20000000000000000000002 /* MobileKeyboard.swift */,
 				E20000000000000000000003,
 				E20000000000000000000006,
@@ -268,6 +271,7 @@
 				D10000000000000000000005 /* DirectTouch.swift in Sources */,
 				D10000000000000000000006 /* NativeInput.swift in Sources */,
 				E10000000000000000000001 /* StableControls.swift in Sources */,
+				F10000000000000000000009 /* ChordControlRail.swift in Sources */,
 				E10000000000000000000002 /* MobileKeyboard.swift in Sources */,
 				E10000000000000000000003,
 				E10000000000000000000006,
@@ -299,7 +303,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 42;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Chordesk/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -307,7 +311,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.31;
+				MARKETING_VERSION = 1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.iphoneduo.remotedemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -325,7 +329,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 42;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Chordesk/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -333,7 +337,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.31;
+				MARKETING_VERSION = 1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.iphoneduo.remotedemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -352,7 +356,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Chordesk/Info.plist;
@@ -375,7 +379,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Chordesk/Info.plist;
