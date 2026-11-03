@@ -27,7 +27,7 @@ App 与最终 DMG 均已 Developer ID 签名、Apple 公证并装订票据，Gat
 - Help（帮助）→ 卸载 Chordesk…，无损预检后选择保留数据或完整卸载，再点“卸载并退出”。
   App 会先停止服务、恢复显示模式并正常退出，再执行所选清理；无需导出工具或打开终端。
   App／数据移入废纸篓；删除配对／登录需重新绑定，不会重置整个登录钥匙串或其他 App。
-  完整步骤：https://github.com/STLAND-admin/Chordesk/blob/main/docs/MAC-MAINTENANCE.md
+  完整步骤：https://github.com/STLAND-admin/Chordesk/blob/main/docs/user/MAC-MAINTENANCE.md
 
 首次连接：同学操作 Mac，你操作自己的 Duo
 1. 两台设备连接到同一、允许设备互访的局域网。

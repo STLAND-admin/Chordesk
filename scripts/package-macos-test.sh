@@ -39,7 +39,7 @@ test_name="Chordesk-Mac-$test_version-build$test_build-AppleSilicon-test.dmg"
 hdiutil verify "$test_stage/$test_name"
 mkdir -p "$test_output"
 mv "$test_stage/$test_name" "$test_output/"
-cp docs/MAC-PEER-TEST.txt "$test_output/INSTALL-zh-CN.txt"
+cp docs/user/MAC-PEER-TEST.txt "$test_output/INSTALL-zh-CN.txt"
 test_commit=$(git rev-parse HEAD)
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
     test_commit="$test_commit + local tracked changes (not a clean commit build)"

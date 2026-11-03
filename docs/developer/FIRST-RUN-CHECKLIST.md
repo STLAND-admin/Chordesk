@@ -2,7 +2,7 @@
 
 本轮目标：iOS **1.31 /40**、Mac **0.27.0 /41**；表内已填写结果是对应历史版本的证据，新版仍需复测。这是一份可逐项记录的真实首次使用检查，不以“已构建／已安装”替代交互验收。
 
-[本轮更新](../CHANGELOG.zh-CN.md) · [完整操作指南](../OPERATION-GUIDE.md) · [Mac 隔离实现](DEVELOPMENT-HISTORY.md#archive-mac-first-run-qa)
+[本轮更新](../user/CHANGELOG.zh-CN.md) · [完整操作指南](../user/OPERATION-GUIDE.md) · [Mac 隔离实现](DEVELOPMENT-HISTORY.md#archive-mac-first-run-qa)
 
 ## 本机本轮实际重装结果
 

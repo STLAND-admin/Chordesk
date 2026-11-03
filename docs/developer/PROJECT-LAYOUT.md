@@ -1,6 +1,6 @@
 # Project files / 工程目录
 
-All application code, build projects, tests and artwork live here. The iPhone client and Mac host are one product: **Chordesk**.
+All application code, build projects, tests and artwork live in [`ProjectFiles/`](../../ProjectFiles/). The iPhone client and Mac host are one product: **Chordesk**. Paths below are relative to that directory.
 
 | Path | Purpose / 用途 |
 | --- | --- |
@@ -11,8 +11,8 @@ All application code, build projects, tests and artwork live here. The iPhone cl
 | `Native/Tailnet/` | Embedded Tailscale userspace engine bridge, written in Go/C, with pinned dependency versions. / 公网网络引擎桥接，属于基础功能代码。 |
 | `Branding/` | SVG masters, rendered app icons and design references. / 品牌和图标源素材；App 运行只使用打包后的必要资源。 |
 
-The root `Package.swift` builds the Mac executable/module **ChordeskHost**. `scripts/` contains build/package/maintenance tools; `docs/` contains current instructions. Generated `build/` and `release-artifacts/` are local-only and excluded from Git.
+The root [`Package.swift`](../../Package.swift) builds the Mac executable/module **ChordeskHost**. [`scripts/`](../../scripts/) contains build/package/maintenance tools. Documentation is grouped into [`docs/user/`](../user/) and [`docs/developer/`](./). Generated `build/` and `release-artifacts/` are local-only and excluded from Git.
 
 The original bundle IDs and credential namespaces deliberately remain stable so a project rename does not create a new app or lose existing pairing. Historical names may appear in migration compatibility code and the consolidated development history.
 
-[Build instructions](../docs/DEVELOPMENT.md) · [Operation guide](../OPERATION-GUIDE.md)
+[Build instructions](DEVELOPMENT.md) · [Operation guide](../user/OPERATION-GUIDE.md)

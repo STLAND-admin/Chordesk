@@ -1,6 +1,6 @@
 # Chordesk 小范围试用
 
-[操作指南](../OPERATION-GUIDE.md) · [首次安装检查](FIRST-RUN-CHECKLIST.md) · [发行状态](DISTRIBUTION.md)
+[操作指南](OPERATION-GUIDE.md) · [首次安装检查](../developer/FIRST-RUN-CHECKLIST.md) · [发行状态](../developer/DISTRIBUTION.md)
 
 ## 当前入口
 
@@ -14,7 +14,7 @@
 
 ## 安装和十分钟任务
 
-1. Mac：拖入 Applications 后打开；仅在信任来源时按 macOS 隐私与安全性提示允许运行。分别授权屏幕录制、控制 Mac，每项授权后可能需要退出重开。两项生效后开启服务。详见[首次安装检查](FIRST-RUN-CHECKLIST.md)。
+1. Mac：拖入 Applications 后打开；仅在信任来源时按 macOS 隐私与安全性提示允许运行。分别授权屏幕录制、控制 Mac，每项授权后可能需要退出重开。两项生效后开启服务。详见[首次安装检查](../developer/FIRST-RUN-CHECKLIST.md)。
 2. 手机：安装 TestFlight，打开邀请链接；允许需要的本地网络与相机提示。首次扫描主机二维码，随后从记忆列表重连。
 3. 同局域网不需要账号。跨网络在两个 Chordesk 内登录同一私人 Tailscale 网络，不安装额外 Tailscale App；不要把账号或配对二维码发给反馈渠道。
 4. 使用可丢弃文稿或测试网页，依次尝试：轻点、滚动、长按拖选、输入文字、收起键盘；Duo 再试背面双指临时触控板，以及一指加正面双指的窗口总览／左右切桌面。普通 iPhone 用屏幕模式按钮，跳过背面手势。

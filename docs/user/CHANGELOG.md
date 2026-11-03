@@ -1,6 +1,6 @@
 # Chordesk changes since the first TestFlight beta
 
-[简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](docs/FIRST-RUN-CHECKLIST.md)
+[简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](../developer/FIRST-RUN-CHECKLIST.md)
 
 Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.27.1 /42** is now available, signed and notarized. iOS **1.31 /40** has been submitted for Beta App Review; the last verified public build was 1.30 /39. Check the actual build available in TestFlight. No formal App Store submission has been made.
 
@@ -18,7 +18,7 @@ Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26*
 - Bounded Mac-to-phone route sample (up to 512 KiB test payload) recommends bitrate/FPS for manual application. It is not an external ISP speed test or automatic quality controller.
 - Two rear contacts immediately activate temporary trackpad mode; lift restores the prior mode. Long press remains selectable and saved preferences are retained.
 - Clear Tailscale action buttons, restart guidance beside each permission, and bilingual drag-to-Applications DMG layout without a visible readme file.
-- Remove legacy Mac dual-screen and single-window experiments. Keep the concept website and shared components used on iPhone; consolidate old validation/distribution notes into [development history](docs/DEVELOPMENT-HISTORY.md).
+- Remove legacy Mac dual-screen and single-window experiments. Keep the concept website and shared components used on iPhone; consolidate old validation/distribution notes into [development history](../developer/DEVELOPMENT-HISTORY.md).
 
 ## 1.30 / Mac 0.25.0 · Public beta
 
@@ -31,7 +31,7 @@ Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26*
 - Display switching, pointer-mode switching and Mission Control can each be shown or hidden. Four setting categories replace the long action menu.
 - The guide uses 0/1/2-rear-finger action tables. Diagnostics controls HUD visibility and corner placement.
 - Audio forwarding is temporarily disabled on both ends, including saved auto-start preferences. About uses a transparent monochrome STLAND wordmark.
-- The user confirmed black-margin control, shortcuts and menu short taps on Duo. The existing black-background app icons are retained. [Validation](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-29).
+- The user confirmed black-margin control, shortcuts and menu short taps on Duo. The existing black-background app icons are retained. [Validation](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-29).
 
 ## Connectivity
 
@@ -99,4 +99,4 @@ Version 1.28 passed 165 full logic/TLS tests, 23 final focused checks, and two s
 
 Before release: complete first-run and actual-download checks, trackpad momentum confirmation, 1.28 device checks, cold-start/long-session network tests, performance/energy comparison, and regular-iPhone hardware tests. Closed-lid access and capture-on-demand energy work remain unresolved. Bundled cryptography and optional third-party identity services require updated export-compliance and privacy review; do not reuse the first beta's system-only encryption declaration.
 
-[1.23 validation](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-23) · [1.24](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-24) · [1.25](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-25) · [1.26](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-26) · [1.27](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-27) · [1.28](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-28) · [Roadmap](ROADMAP.md)
+[1.23 validation](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-23) · [1.24](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-24) · [1.25](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-25) · [1.26](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-26) · [1.27](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-27) · [1.28](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-28) · [Roadmap](../developer/ROADMAP.md)

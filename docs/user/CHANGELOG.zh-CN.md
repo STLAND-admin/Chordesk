@@ -1,6 +1,6 @@
 # Chordesk 更新汇总
 
-[English](CHANGELOG.md) · [操作指南](OPERATION-GUIDE.md) · [首次安装检查](docs/FIRST-RUN-CHECKLIST.md)
+[English](CHANGELOG.md) · [操作指南](OPERATION-GUIDE.md) · [首次安装检查](../developer/FIRST-RUN-CHECKLIST.md)
 
 范围：首个公开 TestFlight **iOS 1.22.1 /28** 之后的增量。Mac **0.27.1 /42** 已签名公证发布；iOS **1.31 /40** 已提交外部审核，最后核实的公开版为1.30 /39，实际可下载构建以TestFlight显示为准。正式 App Store 尚未提交。
 
@@ -18,7 +18,7 @@
 - 当前认证 Mac→手机连接提供最多 512 KiB 测试载荷的保守码率／帧率推荐，手动应用；不是外部宽带测速或自动调参。
 - 背面双指默认接触立即临时切换、抬起恢复，长按仍可选；已有明确保存的偏好保留。
 - Tailscale 操作入口采用明确按钮；权限旁说明可能需要逐项重启。DMG 提供中英文拖拽安装指引，不放可见说明文件。
-- 移除旧 Mac 双屏模拟与单窗口实验，保留概念网站和手机使用中的共享组件。历史验证与旧发行说明集中到[开发历史](docs/DEVELOPMENT-HISTORY.md)。
+- 移除旧 Mac 双屏模拟与单窗口实验，保留概念网站和手机使用中的共享组件。历史验证与旧发行说明集中到[开发历史](../developer/DEVELOPMENT-HISTORY.md)。
 
 ## 1.30 / Mac 0.25.0 · 已公开
 
@@ -33,7 +33,7 @@
 - 显示器、操控模式、窗口总览三个快捷键可独立隐藏，菜单整理为四类设置。
 - 手册改为 0／1／2 指动作速查；诊断页可关闭 HUD 并选择位置。
 - 两端音频功能暂时停用，旧自动开启偏好不生效。About 使用透明黑白 STLAND 文字标志。
-- 用户真机确认黑边、快捷键与菜单短按正常。保留现有黑底 App 图标。[验证](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-29)。
+- 用户真机确认黑边、快捷键与菜单短按正常。保留现有黑底 App 图标。[验证](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-29)。
 
 ### 1. 跨网络访问与自动连接
 
@@ -107,4 +107,4 @@
 
 发行前仍需：完整首次授权及真实下载流程、固定触控板惯性、1.28 真机背屏与双编码、跨网络冷启动／长连接和性能、普通 iPhone 真机。合盖远控和按需采集能耗优化仍是未解决项。新版内嵌加密与第三方账号服务需要重新核对隐私及出口合规，不能沿用第一版“仅系统加密”申报。
 
-[1.23 验证](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-23) · [1.24](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-24) · [1.25](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-25) · [1.26](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-26) · [1.27](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-27) · [1.28](docs/DEVELOPMENT-HISTORY.md#archive-validation-1-28) · [公开待办](ROADMAP.md)
+[1.23 验证](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-23) · [1.24](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-24) · [1.25](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-25) · [1.26](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-26) · [1.27](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-27) · [1.28](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-28) · [公开待办](../developer/ROADMAP.md)

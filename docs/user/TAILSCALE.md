@@ -1,8 +1,8 @@
 # Chordesk 内嵌公网模式
 
-公开版本：iOS TestFlight **1.30 /39**、Mac **0.25.0 /38** 已包含内嵌 Tailscale；无需额外安装客户端。本轮开发 **1.31／0.26.0** 增加独立画质、连接检测与按需采屏，尚未对外发布。蜂窝画面与触控的既有验收见 [开发与验证历史](DEVELOPMENT-HISTORY.md#archive-validation-1-23)。
+公开版本：iOS TestFlight **1.30 /39**、Mac **0.25.0 /38** 已包含内嵌 Tailscale；无需额外安装客户端。本轮开发 **1.31／0.26.0** 增加独立画质、连接检测与按需采屏，尚未对外发布。蜂窝画面与触控的既有验收见 [开发与验证历史](../developer/DEVELOPMENT-HISTORY.md#archive-validation-1-23)。
 
-跨网基本功能已解决，用户已确认蜂窝连接的画面与触控正常；新版两端公开安装包仍待发布。开发源码默认使用“省流 · 15 fps”（最长边 1280，优先 H.264 目标 1.5 Mbps、JPEG 回退质量 65%），保留已保存的画质选择，实际 Mbps 随画面变化。下一步优先准备 App Store 正式送审，详见[发行准备](DISTRIBUTION.md)。
+跨网基本功能已解决，用户已确认蜂窝连接的画面与触控正常；新版两端公开安装包仍待发布。开发源码默认使用“省流 · 15 fps”（最长边 1280，优先 H.264 目标 1.5 Mbps、JPEG 回退质量 65%），保留已保存的画质选择，实际 Mbps 随画面变化。下一步优先准备 App Store 正式送审，详见[发行准备](../developer/DISTRIBUTION.md)。
 
 ## 使用方式
 
@@ -55,7 +55,7 @@ Mac 0.23.1 提供“1 · 允许屏幕录制”和“2 · 允许控制 Mac”两�
 后台只更新检查状态，不启动权限弹窗、子进程预检或重启倒计时。部分权限允许时也可手动重启，但只有两项均生效、且本进程没有刚请求过权限时才能开启服务。授权后的新进程按原自动启动偏好共享内置屏；不重启 Mac、不清除 TCC、不更改锁屏。基础远控不要求访问 Documents，运行数据使用 Application Support 和 Keychain。
 ## 构建与后续发布
 
-见 [开发说明](DEVELOPMENT.md)。两端共用 `ProjectFiles/Native/Tailnet` Go/C 源码、版本锁与 Keychain 存储；XCFramework 从源码生成，未把依赖二进制提交到 Git。第三方许可随两端 App 提供于“关于 → 第三方组件许可”。
+见 [开发说明](../developer/DEVELOPMENT.md)。两端共用 `ProjectFiles/Native/Tailnet` Go/C 源码、版本锁与 Keychain 存储；XCFramework 从源码生成，未把依赖二进制提交到 Git。第三方许可随两端 App 提供于“关于 → 第三方组件许可”。
 
 **本版引入了 WireGuard／Go 加密代码。**下次发行必须重新核对 Apple 出口合规问卷和隐私申报，不能沿用 1.22.1 的“只调用 Apple 系统加密”分类；不把本地开发签名安装等同于 TestFlight 已更新。参见 [Apple 加密出口说明](https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations)。
 

@@ -14,7 +14,7 @@ TestFlight 不是正式 App Store 的必经步骤。[Apple 提交流程](https:/
 
 Mac：打开 DMG → 将 Chordesk 拖进 Applications → 从应用程序打开 → 允许屏幕录制并按提示重开 → 允许控制 Mac 并按提示重开 → 两项生效后开启服务。
 
-iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本。源码版本从 Xcode 用自己的 Team 签名；覆盖安装保持原 Bundle ID 和 Team。公网在两端 App 内登录用户自己的同一 Tailscale 私人网络。测试清单见 [BETA-TESTING.md](BETA-TESTING.md)，安装细节见 [MAC-PEER-TEST.txt](MAC-PEER-TEST.txt)。
+iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本。源码版本从 Xcode 用自己的 Team 签名；覆盖安装保持原 Bundle ID 和 Team。公网在两端 App 内登录用户自己的同一 Tailscale 私人网络。测试清单见 [BETA-TESTING.md](../user/BETA-TESTING.md)，安装细节见 [MAC-PEER-TEST.txt](../user/MAC-PEER-TEST.txt)。
 
 ## 当前验证范围与后续机型
 
@@ -48,4 +48,4 @@ GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight�
 
 ## 公网与扩容
 
-按 [PUBLIC-NETWORK-PLAN.md](../PUBLIC-NETWORK-PLAN.md) 分阶段实施。当前已内嵌 Tailscale，使用用户各自的私人网络，不暴露任意公网监听；开发者自建账号、信令和中继服务仍为后续路线。不能用设备名称或公网 IP 代替认证。
+按 [PUBLIC-NETWORK-PLAN.md](PUBLIC-NETWORK-PLAN.md) 分阶段实施。当前已内嵌 Tailscale，使用用户各自的私人网络，不暴露任意公网监听；开发者自建账号、信令和中继服务仍为后续路线。不能用设备名称或公网 IP 代替认证。

@@ -13,7 +13,7 @@ try:
     from ds_store import DSStore
     from mac_alias import Alias
 except ImportError:
-    raise SystemExit("DMG layout requires ds-store==1.3.1 in the build Python. See docs/DEVELOPMENT.md.")
+    raise SystemExit("DMG layout requires ds-store==1.3.1 in the build Python. See docs/developer/DEVELOPMENT.md.")
 
 
 def run(*args):

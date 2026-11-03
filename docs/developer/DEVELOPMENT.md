@@ -22,7 +22,7 @@
 python3 scripts/collect-tailnet-notices.py
 ```
 
-注意：这不是嵌入外部 Tailscale 可执行文件，不应把机器上已有的登录状态、auth key 或配置目录复制进 App。跨网测试步骤、适用条件及发布要求见 [TAILSCALE.md](TAILSCALE.md)。
+注意：这不是嵌入外部 Tailscale 可执行文件，不应把机器上已有的登录状态、auth key 或配置目录复制进 App。跨网测试步骤、适用条件及发布要求见 [TAILSCALE.md](../user/TAILSCALE.md)。
 
 ## iOS
 
@@ -36,7 +36,7 @@ CHORDESK_SIGNING_IDENTITY="Apple Development" ./scripts/build-workbench.sh
 ./scripts/build-workbench.sh --install
 ```
 
-正式使用打开 Applications 中唯一的 Chordesk。开发构建与发行包使用不同构建目录；升级先正常退出，再替换同一位置的 App。旧版本权限和钥匙串问题见 [维护与卸载](MAC-MAINTENANCE.md)。
+正式使用打开 Applications 中唯一的 Chordesk。开发构建与发行包使用不同构建目录；升级先正常退出，再替换同一位置的 App。旧版本权限和钥匙串问题见 [维护与卸载](../user/MAC-MAINTENANCE.md)。
 
 ```sh
 # 测试不会投递真实输入或调整实体屏；固定端口若被日常主机占用，应报告跳过而不强停服务。
@@ -47,7 +47,7 @@ swift test --scratch-path /private/tmp/ChordeskTests
 
 ## 代码导航
 
-所有源码、工程、测试和素材集中在 [ProjectFiles](../ProjectFiles/README.md)。`Package.swift` 留在根目录，作为 Mac 的 SwiftPM 构建入口。
+所有源码、工程、测试和素材集中在 [ProjectFiles](PROJECT-LAYOUT.md)。`Package.swift` 留在根目录，作为 Mac 的 SwiftPM 构建入口。
 
 已安装过的 Mac 和 iPhone 可用 [双端首次安装检查](FIRST-RUN-CHECKLIST.md) 复测空白偏好、授权和配对。`python3 scripts/build-first-run-qa.py --platform both --team TEAM_ID` 生成隔离副本；默认 `--platform macos` 保留 Mac 单端流程。无需清除原版的权限、配对或 Tailscale 节点。[Mac 隔离原理与历史记录](DEVELOPMENT-HISTORY.md#archive-mac-first-run-qa)。正式发行准备见 [分发准备](DISTRIBUTION.md)。
 

@@ -2,6 +2,12 @@
 
 这里集中保存历史验证、发行和早期原型记录。各节仅代表其当时状态；当前安装、操作与限制以 README、操作指南及本文件最上方最新记录为准。已删除的旧源文件可从 Git 历史恢复。
 
+## 2026-11-03 · 文档按用户与开发者归档
+
+- 根目录的操作指南、更新记录、路线图、公网规划和编码规范迁入 `docs/`；工程目录说明也归入开发者文档。根目录保留双语 README、LICENSE、NOTICE、gitignore，以及 SwiftPM 必需的 `Package.swift`；源码和脚本目录保留原位。
+- `docs/user/` 提供安装、操作、联网、维护、测试反馈、更新与已采用的隐私政策；`docs/developer/` 提供工程、构建、编码规范、首次使用验收、分发、依赖、开发计划和历史，录制素材也归入此处。`docs/README.md` 按两类索引；两种语言的根 README 提供入口。
+- 更新文档间的相对链接、Mac 试用包的安装说明输入路径及官网指向仓库的文档地址；修复历史记录中已有的品牌素材失效链接。产品源码、已发布安装包、应用版本与隐私政策正文不变。
+
 ## 2026-11-03 · Apple登录恢复后的TestFlight实查
 
 - 用户完成Edge App Store Connect登录后，重新打开Chordesk构建列表，1.31 /40仍显示“正在等待审核”；详情提供“从审核中移除”，原内部验证、Duo手势体验、iPhone兼容性测试三组均已关联。确认是已提交的Beta审核队列，不是未送审、获批或已外部分发。
@@ -57,7 +63,7 @@
 - 设置增加仅 `dev.iphoneduo.workbench` 的 `tccutil reset All <bundle-id>` 和重启入口，先停止远控、恢复显示模式；不编辑 TCC 数据库、不自动批准权限。可导出项目维护工具：检查、权限修复、公网重新绑定、保留数据卸载、彻底卸载逐项确认。只移动匹配身份的标准 Applications 包，App／本地数据进废纸篓，偏好先备份；凭据删除需重新绑定。保留 First Run、其他产品、全局钥匙串与系统安全设置。
 - 187 项 SwiftPM 测试：**186 通过、1 跳过、0 失败**，跳过原固定生产端口测试，未强停日常主机。新增 4 项测试覆盖错误分类、固定作用域、辅助进程参数和非交互拒绝；另 7 项 Python/PTY 测试仅在隔离文件夹和假 App 上运行，TCC／Keychain／defaults 命令全替换为测试桩，验证完整卸载、保留数据、运行中拒绝、符号链接拒绝、钥匙串失败、取消及首次创建废纸篓，不碰真实权限或数据。两端兼容编译、Mac 候选打包与脚本语法通过。
 - 候选：`release-artifacts/mac-test-0.26.1-build40-arm64/`，尚未发布或覆盖安装。首次真实钥匙串认证／旧身份迁移与同学机复测仍待进行。当前无 Developer ID Application 证书，先前证书／公证暂停仍有效，已询问用户是否恢复；未创建证书、上传公证或改当前发行状态。
-- 日志：`/private/tmp/chordesk-0.26.1-tests.log`、`chordesk-0.26.1-maintenance-fixtures.log`、`chordesk-0.26.1-package-final.log`、`chordesk-0.26.1-ios-compat.log`。当前使用与恢复说明见 [Mac 维护与卸载](MAC-MAINTENANCE.md)。
+- 日志：`/private/tmp/chordesk-0.26.1-tests.log`、`chordesk-0.26.1-maintenance-fixtures.log`、`chordesk-0.26.1-package-final.log`、`chordesk-0.26.1-ios-compat.log`。当前使用与恢复说明见 [Mac 维护与卸载](../user/MAC-MAINTENANCE.md)。
 
 ## 2026-11-02 · Mac 0.26 发布、iOS 1.31 外部送审
 
@@ -121,7 +127,7 @@
 
 这个项目包括 iOS App、Mac 主机 / 调试台和网页握持演示。原始设想是 Monitor、触摸键盘和独立外屏 Touchpad；新版 iOS 提供**全屏直接触控／触控板、独立的 iPhone 键盘，背面只负责切换正面指针模式**。iOS 与 Mac 已加入真实局域网远控和公开相机辅助外屏 API 的实验代码；网页维持原概念的本地模拟。实现与验证状态分别记录如下。
 
-**当前为 iPhone 1.14 / build 18、Mac 0.11.0 / build 18。**已沿用现有 Apple Development 身份覆盖安装，手机版本查询和启动成功；Mac 恢复 MAG 共享、二维码和实时帧，两项控制权限仍有效。1.14 新增系统 Liquid Glass 菜单材料、60／120／144 fps 档位，以及共享期间防睡眠和捕获暂停恢复；操作见 [指南](../OPERATION-GUIDE.md)。最终玻璃背景版本已再次覆盖安装并启动。
+**当前为 iPhone 1.14 / build 18、Mac 0.11.0 / build 18。**已沿用现有 Apple Development 身份覆盖安装，手机版本查询和启动成功；Mac 恢复 MAG 共享、二维码和实时帧，两项控制权限仍有效。1.14 新增系统 Liquid Glass 菜单材料、60／120／144 fps 档位，以及共享期间防睡眠和捕获暂停恢复；操作见 [指南](../user/OPERATION-GUIDE.md)。最终玻璃背景版本已再次覆盖安装并启动。
 
 菜单继续使用 1.13.1 的系统弹出面板、导航栏和 UITableView 普通行，短按选择；展开期间固定快照、暂停正反面输入，关闭后执行。玻璃材料通过公开 UIGlassEffect／UIPresentationController.backgroundEffect 设置，列表背景透明，不恢复 UIMenu 的按压选择路径；降低透明度时使用系统可读背景。旧问题与 Context Menu 按压跟踪、实时更新和跨屏接触之间的关系是排查方向，未隔离出单一系统内部根因。**1.13.1 用户已确认“短按正常”，1.14 外观与触控仍需新一轮真机反馈**，不把材质升级等同于新的硬件验证。
 
@@ -137,17 +143,17 @@ Duo 原实现在显示器息屏事件中永久关闭控制。新版只释放按�
 
 UU 的原因仍未确诊：最近 21:24–22:37 息屏区间没有整机睡眠记录，UU 同时持有防空闲睡眠请求；更早一次睡眠明确来自电池 1% 的低电量。UU 当前可见设备列表正常，后台 TCP 存在连接；无障碍树里包含“无法连接服务器”隐藏文案，截图未显示，不据此认定当下离线。UU 设置为开机自启、关闭隐藏菜单栏、网络“不使用代理”，唤醒选项显示“永不”，其文字与实际 assertion 需另行核实，未盲目修改。系统有本地代理，不能由此推断代理是根因。UU xlog 为非明文，未读取账号凭据或解密日志。要确认修复，仍需手机在离开 Mac／锁屏息屏后进行实际连接，保留失败时间以关联网络和服务日志；不能把接电防睡眠设置称为已治愈 UU。
 
-公网方案已按**杭州、双方大陆、个人每日 4 小时**重写：[购买、部署、成本与扩容方案](../PUBLIC-NETWORK-PLAN.md)。先测直连，必要时用杭州 ECS 私有中转；不推荐被官方禁止用作流量穿透的阿里云轻量实例。按 10 Mbps 全程中继约 540 GB/月；流量计费和固定带宽应按实测比较。方案仍未部署，也未购买资源或改变现有地址校验。
+公网方案已按**杭州、双方大陆、个人每日 4 小时**重写：[购买、部署、成本与扩容方案](PUBLIC-NETWORK-PLAN.md)。先测直连，必要时用杭州 ECS 私有中转；不推荐被官方禁止用作流量穿透的阿里云轻量实例。按 10 Mbps 全程中继约 540 GB/月；流量计费和固定带宽应按实测比较。方案仍未部署，也未购买资源或改变现有地址校验。
 
 历史部署：**iPhone 1.12.1 / build 15 与 Mac 0.10.2 / build 15 已于 2026-10-28 安装启动**，实际设备版本查询确认。沿用原 Apple Development 签名和 `~/Applications/DuoWorkbench.app` 入口，当时两项控制权限有效、MAG 屏幕共享已恢复。以下保留该版行为与验证记录，手机当前部署见上文。
 
-本版移除本地输入栏，保留系统／第三方输入法与候选；键盘默认手动唤起，右下玻璃 Dock 提供 Ctrl、Cmd、Option 和键盘菜单。连接后按偏好自动启动相机背面场景，右上显示有效手指数。背面双指切换正面触屏／触控板；背面一指加正面双指上／下滑发送窗口总览指令，菜单也提供回退入口。操作方法见 [操作指南](../OPERATION-GUIDE.md)。
+本版移除本地输入栏，保留系统／第三方输入法与候选；键盘默认手动唤起，右下玻璃 Dock 提供 Ctrl、Cmd、Option 和键盘菜单。连接后按偏好自动启动相机背面场景，右上显示有效手指数。背面双指切换正面触屏／触控板；背面一指加正面双指上／下滑发送窗口总览指令，菜单也提供回退入口。操作方法见 [操作指南](../user/OPERATION-GUIDE.md)。
 
 用户在 build 14 真机复测确认切回触屏后轻点已恢复左键，但当时窗口总览的手势和菜单均无效。保留两指异步移动识别、旧触摸隔离和修饰键释放修复；build 15 改用独立、限定动作的总览指令，主机通过公开 `NSWorkspace` 启动系统 Mission Control 应用，退出仍发送 Esc，并加入主机能力协商。**2026-10-28 用户在 build 15 真机复测明确确认：总览菜单和背面一指＋正面双指上下滑均正常，可打开／退出总览。**这是用户现场反馈，不能扩展为全部手势、长期稳定性或延迟测量均通过。
 
 验证：58 项逻辑／真实 CGEvent 构造检查／TLS 回环测试全部通过，CGEvent 测试不向真实桌面发送输入；实体设备签名构建与两端严格签名校验通过。模拟器已确认隐藏输入桥接仍能唤出软件键盘，一项 UI 自动测试验证右侧三个修饰键、Cmd 一次性释放及长按键盘菜单；其余 UI runner 启动超时，未记为通过。总览菜单与指定跨屏组合已获用户真机确认；其他组合、第三方输入法及双屏恢复仍需本版回归。
 
-公网仅规划，详见 [公网准备方案](../PUBLIC-NETWORK-PLAN.md)：自用可先评估私有 VPN；原生公网产品需要固定域名、设备身份、会话发现与必要中继。Mac 不需要固定公网 IP；当前 App 尚未实现这些功能，也未开放公网端口。
+公网仅规划，详见 [公网准备方案](PUBLIC-NETWORK-PLAN.md)：自用可先评估私有 VPN；原生公网产品需要固定域名、设备身份、会话发现与必要中继。Mac 不需要固定公网 IP；当前 App 尚未实现这些功能，也未开放公网端口。
 
 ### 动态 IP 与公网连接预案 · 尚未开发
 
@@ -447,7 +453,7 @@ python3 -m http.server 8743 --bind 127.0.0.1 --directory showcase/dist
 - `Tests/DuoTransportTests`：仅使用回环网络，不捕获屏幕或注入系统输入的传输测试。
 - `showcase/dist/grip-scene.js`：Three.js 程序化网格与动画。
 - `showcase/dist/app.js`：网页本地交互。
-- `AGENTS.md`：九条布局规范与当前用户授权范围。
+- `docs/developer/AGENTS.md`：九条布局规范与当前用户授权范围。
 
 键盘按 QWERTY 行组织，不采用偶数列网格；Mac 调试设备边框和几何比例用于明确的概念演示。所有实际 App 内容以可用空间布局，不读取 UIScreen/nativeBounds 或真实开合状态。
 
@@ -932,7 +938,7 @@ Mac 0.17.0 / build 24 最终修正版已沿用稳定签名覆盖安装、启动�
 
 内嵌版包含 WireGuard／Go 加密实现；需要重新核对出口合规，不沿用旧“仅系统加密”问卷答案。同步公开隐私说明、App Store Connect 的隐私类型及第三方服务适用条款，然后再上传发行构建。用户当前倾向直接准备 App Store 送审，不先发另一轮 TestFlight；源代码集成与本地安装不等同于已发行或已获正式审核批准。
 
-操作与实现边界见 [TAILSCALE.md](TAILSCALE.md)。
+操作与实现边界见 [TAILSCALE.md](../user/TAILSCALE.md)。
 
 ## 1.23.1 / build 30：iPhone 设备绑定衔接
 
@@ -1221,7 +1227,7 @@ macOS SDK 明确：PreventUserIdleSystemSleep 对 Dark Wake 无效。新增公�
 - 原问题：相对触控板与图片共用缩放容器，键盘出现后图片黑边不属于接触范围。现将相对输入范围独立为键盘上方的可用空间；按实际测量的右侧栏起点排除整列，黑边可操作。直接触控继续与图片共用坐标。键盘、旋转、模式和范围变化仍释放旧输入；原生键盘及修饰键可正常操作。
 - 新增右侧显示器、操控模式、窗口总览的显示偏好。新偏好默认开启，已有操控模式按钮偏好保留。总览轻点发送打开，长按菜单可退出；不假设 Mac 总览状态，避免与其他入口操作后状态失配。栏仍可纵向滚动。
 - 主菜单为连接、四类设置和已连接时的断开：快捷键、背屏控制、远程传输画质、辅助功能。沿用普通 UIKit 短按列表、快照与正反面触摸隔离；未恢复 Context Menu 按压选择。
-- 操作手册按 0 / 1 / 2 指背面整理为动作与 Mac 效果，保留键盘和画质说明；同步 [公开速查](../OPERATION-GUIDE.md)。诊断页内有 HUD 显示开关与四角选择，保留已有显示偏好。
+- 操作手册按 0 / 1 / 2 指背面整理为动作与 Mac 效果，保留键盘和画质说明；同步 [公开速查](../user/OPERATION-GUIDE.md)。诊断页内有 HUD 显示开关与四角选择，保留已有显示偏好。
 - 用户确认暂时关闭音频功能。移除两端音频入口、手机录音提示与手册麦克风教程；共享产品开关禁止能力协商、手机采音启动、Mac 设备枚举与播放。旧自动开启偏好、旧对端请求都不能重新开启。保留实现供以后恢复，不安装驱动、不改变系统音频设备。
 - About 仅保留透明黑白 STLAND 文字标志，去掉彩色与白底品牌图展示，增加用户指定的“最终解释权归开发者本人所有”。SVG 为原黑白图形中文字的几何路径重绘；两端用相同路径原生绘制，可随明暗外观变为黑 / 白，无白底位图。
 - Chordesk 图标仍未替换。生成 A 通透 / B 雾面两份 SVG 与 iPhone 主屏幕、Mac Dock 模拟预览，用户选定 **B 雾面玻璃**。后续正式分层图标需使用 Icon Composer 并检查系统实际渲染，不能把本次模拟图称为系统截图。
@@ -1405,13 +1411,13 @@ IPv6 地址族不构成性能保证：Tailscale 原引擎已能自行选择底�
 
 以下为历史版本说明，不代表当前状态；以根目录 README 为准。
 
-<p align="center"><img src="Branding/Chordesk-dark.svg" width="180" alt="Chordesk：前后交叠的玻璃面与和弦触点"></p>
+<p align="center"><img src="../../ProjectFiles/Branding/Chordesk-dark.svg" width="180" alt="Chordesk：前后交叠的玻璃面与和弦触点"></p>
 
 # Chordesk
 
 **前后协作，像按和弦一样控制。** STLAND present · STLAND 出品
 
-已选定 B「前后双面」作为图标。[黑底 SVG](../Branding/Chordesk-dark.svg) · [透明 SVG](../Branding/Chordesk-transparent.svg) · [品牌素材说明](../Branding/README.md)。仓库现为 [STLAND-admin/Chordesk](https://github.com/STLAND-admin/Chordesk)，历史记录和私有权限保留。
+已选定 B「前后双面」作为图标。[黑底 SVG](../../ProjectFiles/Branding/Chordesk-dark.svg) · [透明 SVG](../../ProjectFiles/Branding/Chordesk-transparent.svg) · [品牌素材说明](../../ProjectFiles/Branding/README.md)。仓库现为 [STLAND-admin/Chordesk](https://github.com/STLAND-admin/Chordesk)，历史记录和私有权限保留。
 
 为 iPhone Duo 设计的远程控制实验：背面手指按住或切换控制模式，正面拇指完成直接触控、触控板、文字输入。仓库包含 **iOS 控制端** 和 **macOS 主机端**。
 
@@ -1480,13 +1486,13 @@ swift test --scratch-path /private/tmp/ChordeskTests
 
 ## 使用与发布
 
-已准备 Apple Silicon 同学试用包（未公证，接收者需手动允许），使用 `./scripts/package-macos-test.sh` 可在独立目录重建；不会安装或上传。首次安装步骤见 [说明](MAC-PEER-TEST.txt)。正式 Developer ID／公证流程继续使用原 release 脚本。
+已准备 Apple Silicon 同学试用包（未公证，接收者需手动允许），使用 `./scripts/package-macos-test.sh` 可在独立目录重建；不会安装或上传。首次安装步骤见 [说明](../user/MAC-PEER-TEST.txt)。正式 Developer ID／公证流程继续使用原 release 脚本。
 
-- [操作指南](../OPERATION-GUIDE.md)：手势、窗口总览、键盘、画质与重连。
-- [公网部署与成本规划](../PUBLIC-NETWORK-PLAN.md)：杭州、每日四小时的直连／中继与扩容方案；未购买或部署。
-- [Mac 安装包与 iOS TestFlight 准备](DISTRIBUTION.md)、[小范围试用清单](BETA-TESTING.md)。
+- [操作指南](../user/OPERATION-GUIDE.md)：手势、窗口总览、键盘、画质与重连。
+- [公网部署与成本规划](PUBLIC-NETWORK-PLAN.md)：杭州、每日四小时的直连／中继与扩容方案；未购买或部署。
+- [Mac 安装包与 iOS TestFlight 准备](DISTRIBUTION.md)、[小范围试用清单](../user/BETA-TESTING.md)。
 - [BetterDisplay 与虚拟音频依赖／许可](DEPENDENCIES.md)。
-- [开发历史](DEVELOPMENT-HISTORY.md)与 [AI 编码规范](../AGENTS.md)。
+- [开发历史](DEVELOPMENT-HISTORY.md)与 [AI 编码规范](AGENTS.md)。
 
 相机辅助外屏仍要求活动采集会话，帧不显示、不保存、不传输；不代表已获得通用外屏 API 或上架许可。画面是可变码率 JPEG，60／120／144 fps 为请求上限，不能当作实测帧率。输入通过公开鼠标／键盘事件兼容，不是 macOS 原生多点触摸注入。
 
@@ -1507,7 +1513,7 @@ swift test --scratch-path /private/tmp/ChordeskTests
 - 初次访问公开页仍提示不接受新测试者；在该组已批准构建处执行“通知测试员”启用后，重新读取公开页已出现 **View Chordesk Beta / View in TestFlight** 与 App 测试说明。核验的是公开邀请入口，不是新设备安装或硬件测试。
 - 官网中英文首页、双语 README 与试用说明同步此入口。测试者安装 TestFlight 后打开链接；需使用配套 Mac 主机、同一可互访局域网。设备条件、剩余名额及构建有效期以 Apple 页面为准。
 - 普通 iPhone 使用屏幕按钮，Duo 可使用背面和弦；公开 Beta 不等于全部机型已验证，也不是正式 App Store 上架或获得通用背屏 API。
-- 本轮未上传新构建、未提交正式 App Store 版本、未部署公网或改 App 采集行为。开发计划新增 P0 跨网络远控和 P1 后台耗能优化，见 [ROADMAP](../ROADMAP.md)。
+- 本轮未上传新构建、未提交正式 App Store 版本、未部署公网或改 App 采集行为。开发计划新增 P0 跨网络远控和 P1 后台耗能优化，见 [ROADMAP](ROADMAP.md)。
 
 以下保留首次送审过程，历史“等待审核／无公开链接”状态由本节取代。
 
@@ -1557,7 +1563,7 @@ Test QR pairing and saved-Mac reconnect, forgetting a Mac without connecting, di
 
 **Reviewer setup and disclosure**
 
-Use the [Mac 0.18.1 Apple Silicon host](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test). This host is a test build and is not notarized. The [installation instructions](https://github.com/STLAND-admin/Chordesk/blob/main/docs/MAC-PEER-TEST.txt) explain its setup. Put the Mac and iPhone on the same local network. On Mac, click “开始服务” and complete screen recording and control permission setup, then scan its current QR code from the iPhone. No cloud account or reviewer login is required. Use a disposable TextEdit document to test text entry and selection. The right-side menu contains the complete Duo operation manual and diagnostics. A right-side interaction-mode button offers a manual alternative to rear gestures.
+Use the [Mac 0.18.1 Apple Silicon host](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.18.1-test). This host is a test build and is not notarized. The [installation instructions](https://github.com/STLAND-admin/Chordesk/blob/main/docs/user/MAC-PEER-TEST.txt) explain its setup. Put the Mac and iPhone on the same local network. On Mac, click “开始服务” and complete screen recording and control permission setup, then scan its current QR code from the iPhone. No cloud account or reviewer login is required. Use a disposable TextEdit document to test text entry and selection. The right-side menu contains the complete Duo operation manual and diagnostics. A right-side interaction-mode button offers a manual alternative to rear gestures.
 
 The optional experimental Duo rear interface uses the public CameraCaptureAccessory API while a foreground camera capture session remains active. Camera frames are immediately discarded: no preview, recording, or camera-frame transmission. The rear interface is used to qualify gestures and switch the front interaction mode, rather than for photographic controls. This intended-use distinction must be disclosed to App Review; public API availability does not establish that Apple will accept this use. The camera also scans pairing QR codes. Optional microphone forwarding is off by default and requires a separately configured virtual audio input device on the Mac; basic remote control does not require that driver.
 

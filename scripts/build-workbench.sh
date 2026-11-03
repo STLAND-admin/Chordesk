@@ -19,7 +19,7 @@ if [[ "${1:-}" == "--install" ]]; then
     # Dock resolves symbolic launch links to the actual .app filename. Always
     # install a real Chordesk.app; do not silently create a second legacy host.
     if [[ -d "$legacy_bundle" && ! -L "$legacy_bundle" ]]; then
-        printf '%s\n' 'Quit the legacy host and migrate its signed bundle to Chordesk.app first; see docs/DEVELOPMENT.md.' >&2
+        printf '%s\n' 'Quit the legacy host and migrate its signed bundle to Chordesk.app first; see docs/developer/DEVELOPMENT.md.' >&2
         exit 1
     fi
     if [[ -L "$app_bundle" ]]; then

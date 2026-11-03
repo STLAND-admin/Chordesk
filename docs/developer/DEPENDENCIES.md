@@ -34,4 +34,4 @@ BlackHole 作者另外明确要求非 GPLv3 项目取得授权。Chordesk 当前
 
 新增必编译的官方 `tailscale.com/tsnet v1.104.1` 用户态引擎，运行时只在用户启用公网后启动。局域网仍无需账号；用户不安装外部 Tailscale App、VPN 扩展或系统服务。Go/C 桥接自行编写，节点状态存 Keychain。依赖版本与校验和在 `ProjectFiles/Native/Tailnet/`，许可随 App 保留，构建方法见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
-运行仍依赖 Tailscale 托管控制平面及必要中继，不能称作完全离线或自建服务。个人账号计划不自动等于免费商业 OEM 授权。正式分发前重新核对隐私和加密出口声明；详见 [TAILSCALE.md](TAILSCALE.md)。
+运行仍依赖 Tailscale 托管控制平面及必要中继，不能称作完全离线或自建服务。个人账号计划不自动等于免费商业 OEM 授权。正式分发前重新核对隐私和加密出口声明；详见 [TAILSCALE.md](../user/TAILSCALE.md)。

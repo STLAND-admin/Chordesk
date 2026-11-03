@@ -41,7 +41,7 @@ The app first stops remote control, restores display settings and disconnects it
 
 Files in Trash can be restored. Deleted credentials and reset permission decisions require signing in, pairing and granting access again. Removal does not delete nodes from your Tailscale account; manage those in your own admin console. A failed step reports partial cleanup. A privacy-settings row may remain after its permission decision is reset. Custom installation paths or redirected data paths require manual inspection.
 
-**0.26.1** bundled an exportable command tool; **0.26.0's public test installer did not**. The shell backend remains in [scripts/Chordesk-Maintenance.command](../scripts/Chordesk-Maintenance.command) for recovery and regression testing. Its interactive fallback supports read-only `--plan`, scoped permission reset, Tailscale rebind and the two uninstall scopes; quit Chordesk first and confirm the exact action.
+**0.26.1** bundled an exportable command tool; **0.26.0's public test installer did not**. The shell backend remains in [scripts/Chordesk-Maintenance.command](../../scripts/Chordesk-Maintenance.command) for recovery and regression testing. Its interactive fallback supports read-only `--plan`, scoped permission reset, Tailscale rebind and the two uninstall scopes; quit Chordesk first and confirm the exact action.
 
 ## Stable releases / 稳定升级与“仍要打开”
 
