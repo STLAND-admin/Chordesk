@@ -77,6 +77,17 @@ final class TouchpadInteractionUITests: XCTestCase {
             let mode = app.segmentedControls["pointer-mode-toggle"]
             XCTAssertTrue(menu.waitForExistence(timeout: 5))
             XCTAssertTrue(mode.exists)
+            let rearBadge = app.buttons["rear-status-badge"]
+            XCTAssertTrue(rearBadge.exists)
+            let clearStatus = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                !menu.frame.intersects(rearBadge.frame)
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [clearStatus], timeout: 5), .completed,
+                "The first menu control must remain below the independent status badge")
+            if #unavailable(iOS 27.1), app.statusBars.firstMatch.exists {
+                XCTAssertFalse(menu.frame.intersects(app.statusBars.firstMatch.frame),
+                    "The legacy layout must respect public system status-bar space")
+            }
             XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)
             XCTAssertEqual(menu.frame.midX, keyboard.frame.midX, accuracy: 2)
             XCTAssertEqual(menu.frame.midX, mode.frame.midX, accuracy: 2)

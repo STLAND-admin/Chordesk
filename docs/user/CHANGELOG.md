@@ -4,6 +4,11 @@
 
 Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.28.0 /43** is available, signed and notarized. iOS **1.31 /40** passed Beta App Review and was enabled for the existing groups on November 3, 2026, with testers notified. The original public invitation is unchanged. No formal App Store submission has been made.
 
+## iOS 1.32 /45 · Local compatibility candidate
+
+- Fix the pre-27.1 fallback on ordinary iPhone and iPad so the right rail stays below public system status space and the independent rear/network badge. The remote image remains full bleed; the 27.1 native bar keeps its system-provided alignment.
+- iPhone, iPad and Duo simulator layout regressions, keyboard/preview workflows and Release compilation passed. This candidate is not uploaded or installed on the physical phone; build 44 remains in Beta review.
+
 ## iOS 1.32 /44 · Awaiting Beta App Review
 
 - Integrate the approved native right rail: grouped menu / display / overview shortcuts, a two-section pointer-mode selector immediately below, and a single keyboard button at the bottom. The rail stays on the right in every orientation; Ctrl / Option / Cmd expand to the keyboard button's left.

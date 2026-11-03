@@ -255,6 +255,7 @@ struct ContentView: View {
             inputAllowed: client.acceptsInput, visible: !modalVisible,
             keyboardTop: customKeyboardShown && !customKeyboardFrame.isEmpty ? customKeyboardFrame.minY :
                 (nativeKeyboardVisible ? nativeKeyboardTop.map { workspaceFrame.minY + $0 } : nil),
+            statusBottom: rearBadgeFrame.maxY,
             topOffset: controlRailTop, bottomOffset: controlRailBottom,
             menuSections: controlMenuSections, keyboardSections: keyboardMenuSections,
             onMode: selectPointerMode, onKeyboard: { chooseInnerMode(keyboardShown ? .touchpad : .keyboard) },

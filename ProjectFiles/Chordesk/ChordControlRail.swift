@@ -14,6 +14,7 @@ struct ChordControlRail: UIViewControllerRepresentable {
     var inputAllowed: Bool
     var visible: Bool
     var keyboardTop: CGFloat?
+    var statusBottom: CGFloat
     var topOffset: Double
     var bottomOffset: Double
     var menuSections: [SystemMenuSection]
@@ -242,7 +243,14 @@ final class ChordRailController: UIViewController {
         if #available(iOS 27.1, *) {
             systemBar = view.convert(window.bounds.inset(by: window.edgeInsets(for: .bar(onEdge: .trailing, extent: preferred))), from: window)
         } else { systemBar = nil }
-        let column = ControlRailPosition.column(in: view.bounds, barRegion: systemBar,
+        // Older systems have no trailing-bar region. Keep the canvas full bleed,
+        // but derive the controls' vertical limits from the window's public guide.
+        let safeFrame = view.convert(window.safeAreaLayoutGuide.layoutFrame, from: window)
+        let fallbackTop = max(view.bounds.minY, safeFrame.minY)
+        let fallbackBottom = min(view.bounds.maxY, safeFrame.maxY)
+        let fallback = CGRect(x: view.bounds.minX, y: fallbackTop, width: view.bounds.width,
+                              height: max(0, fallbackBottom - fallbackTop))
+        let column = ControlRailPosition.column(in: fallback, barRegion: systemBar,
             margin: systemMinimumLayoutMargins.trailing, preferredWidth: preferred)
         let side = column.width, width = side
         let area = column
@@ -251,7 +259,8 @@ final class ChordRailController: UIViewController {
         let lower = min(area.maxY, keyboardY ?? area.maxY)
         let offset = keyboardY == nil ? view.bounds.height * ControlRailPosition.fraction(c.bottomOffset, maximum: 0.30) : 0
         keyboard.view.frame = CGRect(x: anchor - side / 2, y: max(area.minY, lower - side - 8 - offset), width: side, height: side)
-        let top = area.minY + 8 + view.bounds.height * ControlRailPosition.fraction(c.topOffset, maximum: 0.25)
+        let statusBottom = view.convert(CGPoint(x: 0, y: c.statusBottom), from: nil).y
+        let top = max(area.minY, statusBottom) + 8 + view.bounds.height * ControlRailPosition.fraction(c.topOffset, maximum: 0.25)
         let glassOutset = side / 2
         scroll.glassOutset = glassOutset
         scroll.frame = CGRect(x: anchor - width / 2 - glassOutset, y: top - glassOutset,
