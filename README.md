@@ -14,10 +14,10 @@ An iPhone remote desktop client and a Mac host. Use your thumbs for touch and ty
 
 | Platform | Public release |
 | --- | --- |
-| iPhone / iPhone Duo | [TestFlight 1.30 (39)](https://testflight.apple.com/join/WZDXKgvg) |
-| Apple Silicon Mac · macOS 15.2+ | [Mac 0.26.0 test release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.26.0-test) |
+| iPhone / iPhone Duo | [TestFlight public beta](https://testflight.apple.com/join/WZDXKgvg) |
+| Apple Silicon Mac · macOS 15.2+ | [Mac 0.27.1 · signed & notarized](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1) |
 
-Open the Mac DMG and drag Chordesk into Applications. This Mac test release is **not notarized**; follow macOS Privacy & Security prompts only if you trust the source. Approve screen recording and Mac control separately; after each permission, reopen the app if macOS asks. Start service once both are effective. [Installation details](docs/MAC-PEER-TEST.txt).
+Open the Mac DMG and drag Chordesk into Applications. The app and installer are **Developer ID signed and Apple notarized**. Approve screen recording and Mac control separately; after each permission, reopen the app if macOS asks. Start service once both are effective. For updates, quit and replace the app at the same location. [Installation details](docs/MAC-PEER-TEST.txt).
 
 Scan the Mac QR code once, then reconnect from your paired computers. LAN needs no account. For cross-network use, sign in to the same personal Tailscale network inside both Chordesk apps; no separate Tailscale app is required. Multiple Macs can be remembered. [Network setup and limits](docs/TAILSCALE.md).
 
@@ -35,7 +35,7 @@ Spaces require optional System Events permission and enabled macOS Control + arr
 
 ## Latest update
 
-**Mac 0.26.0 (39) is released; iOS 1.31 (40) is waiting for TestFlight Beta App Review.** Immediate rear-contact default; independent 480p–2160p, 15–120 fps and target bitrate controls; HEVC default with fallback; bounded connection test and recommendations; clearer buttons and permission steps; drag-to-install DMG; screen capture only while an authenticated viewer is connected. Existing explicitly saved preferences are retained. The iPhone invitation still provides 1.30 until 1.31 is approved and enabled. Independent stream controls and the new rear-contact default require iOS 1.31; existing 1.30 clients can still connect to the Mac host.
+**Mac 0.27.1 (42) is released; iOS 1.31 (40) has been submitted for TestFlight Beta App Review.** The Mac update adds stable signing/notarization, three-state permission checks, Keychain recovery and a fixed Help-menu uninstaller. iOS 1.31 adds immediate rear-contact defaults, independent 480p–2160p / 15–120 fps / target bitrate controls, HEVC defaults with fallback and bounded connection recommendations. Screen capture runs only while an authenticated viewer is connected. The invitation may still provide 1.30 until 1.31 is approved and enabled; check the actual version in TestFlight. Existing 1.30 clients can connect to the new Mac host.
 
 Audio is disabled. Closed-lid/system-sleep wake is not guaranteed. IPv4/IPv6 pairing is supported; IPv6-only/NAT64 hardware, ordinary-iPhone hardware and broader networks still need testing. Actual FPS/bitrate depends on hardware and content; HUD RTT is not end-to-end interaction latency. Duo rear input uses Apple's camera accessory API, with camera frames discarded. App Store review remains separate from TestFlight.
 

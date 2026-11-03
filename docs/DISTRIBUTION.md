@@ -1,12 +1,12 @@
 # Chordesk 分发准备
 
-## 当前状态 · 2026-11-02
+## 当前状态 · 2026-11-03
 
-- **公开 TestFlight：iOS 1.30 /39** 已通过 Beta Review，并经用户批准启用外部测试、通知测试员。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)保持不变。
-- **公开 Mac：0.26.0 /39**，Apple Silicon、macOS 15.2+ 的未公证 ad hoc 测试 DMG；[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.26.0-test)。接收者按系统提示为这一个 App 放行，不需要 Xcode；不关闭 Gatekeeper/SIP，不绕过受管理设备策略。
-- **iOS 1.31 /40：正在等待 TestFlight 外部审核**；已关联原三个组，自动通知关闭，公开邀请暂仍提供 1.30。Mac 0.26 已公开；独立画质控制与即时背面触发新默认需搭配 iOS 1.31。历史验证统一见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
+- **公开 TestFlight：最后核实 iOS 1.30 /39** 已通过并启用外部测试。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)不变；请核对 TestFlight 实际版本。
+- **公开 Mac：0.27.1 /42**，Apple Silicon、macOS 15.2+，[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1)。App 与最终 DMG 均已 Developer ID 签名、Apple 公证并装订票据，Gatekeeper 接受；匿名下载摘要与本地一致。普通更新退出后替换同一位置的 App，不要先完整卸载。
+- **iOS 1.31 /40 已上传并正式提交外部审核**；原三个组关联、自动通知关闭。11月2日最后确认等待审核；本轮刷新后台时登录过期，未把旧页面缓存当作当前结果。1.31 之后本地没有新增 iOS 功能，仅工程／入口类型更名与 Mac 条件编译修改，未重复上传相同功能构建。独立画质与即时背面触发新默认需 iOS 1.31。历史验证见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
 - 正式 App Store 尚未提交。此前草稿保留，用户手动最终提交；仅美港发行的建议不代表已更改后台供应地区。大陆备案接入方式仍待主管部门／接入商确认。
-- 用户已恢复 Mac Developer ID／公证授权：0.26.1 /40 的证书、签名及可信时间戳已完成，App 与最终 DMG 均已上传 Apple，当前仍在处理；本人已完成本机 notarytool 凭据配置，收尾进程会在 Accepted 后装订并校验。公开 0.26.0 包不变；不能把签名成功或上传成功称为公证通过。
+- 本轮已恢复读取原公证凭据，0.27.1 App 与 DMG 均获 Apple Accepted；本机已安装带票据的同版并通过 Gatekeeper。期间本机原 App 已完整卸载，重装界面两项未授权、Tailscale 未登录，需本人重新设置；这不是公证失败，也不代表普通覆盖升级必然失去授权。
 
 TestFlight 不是正式 App Store 的必经步骤。[Apple 提交流程](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app)。正式送审仍需完整元数据、截图、隐私标签、真实相机外屏用途与内嵌网络说明。内嵌 WireGuard／Go 使用外部标准加密，不能沿用旧版“仅系统加密”分类。Beta 通过不代表正式审核或各地区资质要求自动通过。
 
@@ -44,7 +44,7 @@ iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本�
 
 在干净 Mac 测试首次启动、屏幕录制／辅助功能申请、配对、断线释放和卸载流程。不要把本机开发证书、钥匙串、配对密钥或已有系统授权打进安装包。正式签名／ID 迁移需计划重新授权，不许悄悄退回 ad hoc。
 
-GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码仓库和 Mac 0.26.0 试用 Release 已公开，试用包仍为未公证的 ad hoc 签名；正式签名公证包、App Store 发行及自动发行流水线尚未完成。
+GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码和 Mac 0.27.1 已签名公证测试包公开；正式 App Store 发行及自动发行流水线仍未完成。
 
 ## 公网与扩容
 

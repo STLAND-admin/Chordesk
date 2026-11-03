@@ -2,7 +2,14 @@
 
 [English](CHANGELOG.md) · [操作指南](OPERATION-GUIDE.md) · [首次安装检查](docs/FIRST-RUN-CHECKLIST.md)
 
-范围：首个公开 TestFlight **iOS 1.22.1 /28** 之后的增量。当前公开版为 **iOS 1.30 /39、Mac 0.26.0 /39**；**iOS 1.31 /40 正在等待 TestFlight 外部审核**（2026-11-02）。正式 App Store 尚未提交。
+范围：首个公开 TestFlight **iOS 1.22.1 /28** 之后的增量。Mac **0.27.1 /42** 已签名公证发布；iOS **1.31 /40** 已提交外部审核，最后核实的公开版为1.30 /39，实际可下载构建以TestFlight显示为准。正式 App Store 尚未提交。
+
+## Mac 0.27.1 · 已签名公证测试版
+
+- 固定Developer ID签名、Hardened Runtime，App和最终DMG均通过Apple公证并装订票据。
+- 三态权限检查、明确的本机钥匙串恢复、Help内嵌卸载；修复临时路径别名误拒绝与卸载退出卡住。
+- 工程和测试集中到ProjectFiles，保留兼容bundle ID与配对命名空间。
+- 已上传的iOS1.31 /40之后没有新增手机功能，仅内部工程更名；不撤回原审核或重复提交。
 
 ## 1.31 / Mac 0.26.0 · Mac 已发布、iOS 待审核
 

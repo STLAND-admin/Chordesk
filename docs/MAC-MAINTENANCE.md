@@ -1,6 +1,6 @@
 # Mac updates, Keychain recovery and removal
 
-Mac 0.27.1 fixes the native Help-menu uninstaller introduced in 0.27.0. This is a local development update until the release record says otherwise. iOS 1.31 is unchanged.
+Mac 0.27.1 fixes the native Help-menu uninstaller introduced in 0.27.0 and is available as a [signed, notarized GitHub beta release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1). iOS 1.31 is unchanged.
 
 ## Upgrade failures / 升级后无法登录公网
 
@@ -51,6 +51,6 @@ The production route is **Developer ID Application signing → Hardened Runtime 
 
 Migrating from ad hoc to Developer ID can require one owner-confirmed permission/Keychain migration. Stable identity helps later versions retain trust; macOS upgrades, revoked permission or organizational policy can still require consent. Signing does not auto-grant Screen Recording or Accessibility. A notarized release should pass normal Gatekeeper assessment without relying on “Open Anyway”; a first-launch confirmation or system permission request can still occur.
 
-The owner resumed Developer ID/notarization on November 3, 2026. The **0.26.1 app and final DMG were accepted by Apple**, with stapled tickets, strict signature verification and Gatekeeper acceptance. The local 0.27.1 update is Developer ID signed; its new notarization is pending credential availability. No new GitHub release has been published in this maintenance task. The public 0.26.0 test package remains ad hoc and unnotarized. See the development history for later status; signing alone is not notarization.
+On November 3, 2026, **0.27.1's App and final DMG were both accepted by Apple**, with stapled tickets, strict signature verification and Gatekeeper acceptance. The public beta contains the verified installer, checksums, build information and installation notes; an anonymous download matched the local DMG hash. The installed copy also passed signature/ticket/Gatekeeper checks. Historical 0.26.0 downloads remain ad hoc and unnotarized; use the 0.27.1 link above.
 
 Sources: [Apple error definition](https://developer.apple.com/documentation/security/errsecauthfailed), [code requirements and ad hoc identities](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements), [Keychain identity tracking](https://developer.apple.com/library/archive/technotes/tn2206/_index.html), [Developer ID](https://developer.apple.com/developer-id/), [notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution). Permission reset scope follows the installed macOS `tccutil(1)` manual.

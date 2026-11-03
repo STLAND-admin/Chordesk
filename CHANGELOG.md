@@ -2,7 +2,14 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](docs/FIRST-RUN-CHECKLIST.md)
 
-Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Public downloads now provide **iOS 1.30 /39 and Mac 0.26.0 /39**. **iOS 1.31 /40 is waiting for TestFlight Beta App Review**, November 2, 2026. No formal App Store submission has been made.
+Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.27.1 /42** is now available, signed and notarized. iOS **1.31 /40** has been submitted for Beta App Review; the last verified public build was 1.30 /39. Check the actual build available in TestFlight. No formal App Store submission has been made.
+
+## Mac 0.27.1 · Signed and notarized beta
+
+- Stable Developer ID signatures, hardened runtime and stapled Apple notarization for both app and DMG.
+- Three-state permission checks, explicit local Keychain recovery and a native Help-menu uninstaller; fixes temporary-path alias rejection and the uninstall shutdown stall.
+- Source projects and tests grouped under ProjectFiles, with compatible bundle IDs and pairing namespaces preserved.
+- No new iOS features since the already uploaded 1.31 /40; internal project renaming only. Existing review was not withdrawn or duplicated.
 
 ## 1.31 / Mac 0.26.0 · Mac released, iOS in Beta Review
 

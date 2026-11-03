@@ -2,6 +2,16 @@
 
 这里集中保存历史验证、发行和早期原型记录。各节仅代表其当时状态；当前安装、操作与限制以 README、操作指南及本文件最上方最新记录为准。已删除的旧源文件可从 Git 历史恢复。
 
+## 2026-11-03 · Mac 0.27.1 Developer ID／公证发布与 iOS 核对
+
+- 用户要求最新Mac签名公证，并先比较iOS与TestFlight，存在新增功能再上传。原本机公证profile恢复可读，未创建新证书、未提取密码；沿用已授权Developer ID身份和Hardened Runtime。
+- 从源码`8ded464ee8a39faddb43f55a3d7d521b27b8f373`构建0.27.1 /42。App公证`409cf838-e7af-4024-a977-d12a74660ae4`、最终DMG公证`33be4a75-98a3-489a-b1c7-7af1ea5deb6d`均获Apple Accepted。票据装订与验证、App／DMG严格签名、Gatekeeper接受及镜像校验通过。
+- 发布公开[mac-v0.27.1](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1)，保留beta/prerelease标识。4个附件为DMG、SHA256、BUILD-INFO、INSTALL；创建草稿后逐项验证摘要与大小才发布，匿名重新下载DMG摘要再次匹配。未上传整个构建目录、凭据或审核草稿。GitHub连接器不提供Release附件能力，使用官方API和已有Git凭据完成。
+- 本机此前App已被移除；同一公证App重新安装到`/Applications/Chordesk.app`，已安装副本的签名／票据／Gatekeeper均通过，已启动。界面显示录屏与控制均未授权、公网登录关闭，符合完整卸载后的初始状态；未自动重授权限或恢复旧凭据。系统权限需本人按流程允许。
+- iOS对照已上传1.31 /40归档和原源码`7866cf2ae5031ca0c97b33fa1cdea181ff7a8dd9`：35个App源码／资源完全一致；入口仅`iPhoneDuoDemoApp`更名`ChordeskApp`，工程／产品内部名相应更新，稳定bundle ID和用户显示名Chordesk不变；网络文件差异限定Mac条件编译，其他修改也为Mac专用。未发现1.31之后新增的iOS功能，不增加版本／构建号或重复上传。
+- Apple已打开的旧页面显示1.31 /40等待审核；刷新后转到过期登录页，因此不把缓存视为实时确认。最后确证分发是1.30 /39，1.31此前正式提交；本轮已请求用户自行登录Edge后复核，未撤回、重新提交或启用未经确认状态的构建。iOS既有加密／隐私声明不改，不接受新协议或提交正式App Store。
+- README及活动分发说明更新Mac签名包入口；不把Apple公证说成App Store审核，也不把手机已安装开发版当作TestFlight已分发。
+
 ## 2026-11-03 · Mac 0.27.1 /42 内嵌卸载修复
 
 - 用户报告0.27.0完整卸载失败，Cocoa3587是应用在未获就绪回执时抛出的笼统错误，不能推断为签名或安装位置问题。增加只读预检／明确拒绝回执后，在实际Mac界面确认helperLocation：运行时返回`/tmp/ChordeskUninstaller.…`，旧路径条件只接受`/private/tmp/…`。
