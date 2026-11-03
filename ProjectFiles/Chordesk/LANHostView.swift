@@ -150,7 +150,9 @@ struct LANHostView: View {
                     Text(host.tailscaleMessage).font(.caption).foregroundStyle(.secondary)
                     Button("检测 Tailscale 地址") { host.refreshTailscale() }
                     Picker("局域网地址", selection: $host.selectedAddress) { ForEach(host.addresses, id: \.self) { Text($0).tag($0) } }.disabled(host.sharing)
-                    Button("刷新地址") { host.refreshAddresses() }.disabled(host.sharing)
+                    Button("刷新地址") { host.refreshAddresses() }
+                    Text("服务运行时自动跟随局域网地址变化；无需重启或重新授权。手机离线期间换网后，可先通过 Tailscale 重连同步地址，或重新扫码。")
+                        .font(.caption).foregroundStyle(.secondary)
                     if let pairing = displayedPairing {
                         LabeledContent("地址", value: LANAddress.label(host: pairing.host, port: pairing.port))
                         Button("复制配对信息") {
