@@ -15,7 +15,7 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 | 平台 | 当前公开版本 |
 | --- | --- |
 | iPhone / iPhone Duo | [TestFlight 公开测试](https://testflight.apple.com/join/WZDXKgvg) |
-| Apple Silicon Mac · macOS 15.2+ | [Mac 0.27.1 · 已签名公证](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.27.1) |
+| Apple Silicon Mac · macOS 15.2+ | [Mac 0.28.0 · 已签名公证](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.28.0) |
 
 打开 Mac DMG，将 Chordesk 拖进 Applications。App 和安装包均已 **Developer ID 签名、Apple 公证**。分别允许屏幕录制、控制 Mac，每项完成后按系统提示重开 App；两项生效后开启服务。普通升级请先退出，再替换同一位置的 App。[安装说明](docs/user/MAC-PEER-TEST.txt)。
 
@@ -35,7 +35,7 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 
 ## 最新进度
 
-**Mac 0.27.1（42）已发布；iOS 1.31（40）已开放 TestFlight 测试。** 2026 年 11 月 3 日已核实 Beta 审核通过、启用测试并通知现有测试员，原邀请链接不变。Mac 新增稳定签名与公证、三态权限检查、钥匙串恢复及修复后的 Help 内嵌卸载。iOS 1.31 提供背面双指接触立即切换、独立分辨率／帧率／码率、默认 HEVC 与回退、限量测速推荐；仅认证手机观看时采屏。可在 TestFlight 安装／更新至 1.31，原 1.30 客户端仍可连接新版 Mac。
+**Mac 0.28.0（43）已发布；iOS 1.31（40）已开放 TestFlight 测试。** 2026 年 11 月 3 日已核实 Beta 审核通过、启用测试并通知现有测试员，原邀请链接不变。Mac 0.28 修复换网后局域网仍绑定旧 IP，自动更新监听及配对地址，保留配对与 Tailscale 会话；继续提供稳定签名公证和 Help 内嵌卸载。iOS 1.31 提供背面双指接触立即切换、独立分辨率／帧率／码率、默认 HEVC 与回退、限量测速推荐；仅认证手机观看时采屏。可在 TestFlight 安装／更新至 1.31，原 1.30 客户端仍可连接新版 Mac。
 
 音频已关闭；不保证合盖／系统睡眠唤醒。支持 IPv4／IPv6 配对，纯 IPv6／NAT64、普通 iPhone 真机与更多网络仍需验证。帧率、码率受硬件与画面影响；HUD RTT 不等于操作到显示的完整延迟。Duo 背屏依赖相机辅助 API，相机帧丢弃。TestFlight 通过不等于正式 App Store 上架。
 

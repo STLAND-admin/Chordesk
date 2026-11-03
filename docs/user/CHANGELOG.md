@@ -2,7 +2,14 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](../developer/FIRST-RUN-CHECKLIST.md)
 
-Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.27.1 /42** is available, signed and notarized. iOS **1.31 /40** passed Beta App Review and was enabled for the existing groups on November 3, 2026, with testers notified. The original public invitation is unchanged. No formal App Store submission has been made.
+Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.28.0 /43** is available, signed and notarized. iOS **1.31 /40** passed Beta App Review and was enabled for the existing groups on November 3, 2026, with testers notified. The original public invitation is unchanged. No formal App Store submission has been made.
+
+## Mac 0.28.0 · LAN reconnection fix
+
+- Follow the current interface IP, withdraw stale endpoints and rebuild only affected exact-address listeners while preserving Tailscale and authenticated sessions.
+- Keep pairing credentials and update QR/authenticated host endpoints. After an offline network change, reconnect once through Tailscale or scan the current QR to learn the new LAN address; names are not authentication.
+- App and final DMG are Developer ID signed, Apple notarized and stapled. 197 regression checks passed, one production-port check was skipped, and real Duo LAN picture/input was confirmed.
+- iOS remains TestFlight 1.31 /40. The new Liquid Glass control rail is an independent preview, not part of the shipped iPhone app.
 
 ## Mac 0.27.1 · Signed and notarized beta
 
