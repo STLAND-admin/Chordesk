@@ -12,14 +12,46 @@ enum MacUninstallMode: String, CaseIterable, Identifiable {
 
 enum MacUninstallHelper {
     static let argument = "--chordesk-uninstall-helper"
+    static let probeArgument = "--chordesk-uninstall-probe"
+    enum Refusal: String, Codable { case arguments, parentProcess, parentApp, sourceLocation, helperLocation, missingBackend }
+    struct Reply: Codable, Equatable {
+        var ready: Bool
+        var refusal: Refusal?
+    }
+    enum Failure: LocalizedError {
+        case location, executable, refused(Refusal), handshake, timeout
+        var errorDescription: String? {
+            switch self {
+            case .location: "当前运行位置不支持内嵌卸载。请从 Applications 中打开 Chordesk。"
+            case .executable: "当前安装缺少卸载辅助程序。请重新安装完整 App。"
+            case .refused(let reason): "卸载辅助程序未通过安全检查（\(reason.rawValue)），尚未清理任何数据。"
+            case .handshake: "卸载辅助程序提前退出或回执无效，尚未清理任何数据。"
+            case .timeout: "卸载辅助程序启动超时，尚未清理任何数据。请重试。"
+            }
+        }
+    }
     static func mode(arguments: [String], bundleID: String?) -> MacUninstallMode? {
         guard ChordeskMaintenanceScope.permits(bundleID), arguments.count == 4,
-              arguments[1] == argument, let pid = Int32(arguments[2]), pid > 1 else { return nil }
+              [argument, probeArgument].contains(arguments[1]), let pid = Int32(arguments[2]), pid > 1 else { return nil }
         return MacUninstallMode(rawValue: arguments[3])
     }
     static func isStandardInstallation(_ url: URL, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> Bool {
         [URL(fileURLWithPath: "/Applications/Chordesk.app"), home.appendingPathComponent("Applications/Chordesk.app")]
-            .contains(url.standardizedFileURL)
+            .map { $0.resolvingSymlinksInPath().standardizedFileURL }
+            .contains(url.resolvingSymlinksInPath().standardizedFileURL)
+    }
+    static func isHelperLocation(_ url: URL) -> Bool {
+        // Foundation can return /tmp even when staging used /private/tmp.
+        // Resolve both sides, then require one exact, UUID-named child of tmp;
+        // a raw prefix check either rejects aliases or accepts nested siblings.
+        let canonical = url.resolvingSymlinksInPath().standardizedFileURL
+        let directory = canonical.deletingLastPathComponent()
+        let root = URL(fileURLWithPath: "/private/tmp").resolvingSymlinksInPath().standardizedFileURL
+        let prefix = "ChordeskUninstaller."
+        guard canonical.lastPathComponent == "ChordeskUninstaller.app",
+              directory.deletingLastPathComponent() == root,
+              directory.lastPathComponent.hasPrefix(prefix) else { return false }
+        return UUID(uuidString: String(directory.lastPathComponent.dropFirst(prefix.count))) != nil
     }
 
     /// Reuse the sealed maintenance backend after an explicit native GUI
@@ -53,9 +85,9 @@ enum MacUninstallHelper {
     }
 
     @MainActor
-    static func schedule(_ mode: MacUninstallMode) async throws {
-        guard ChordeskMaintenanceScope.supported, isStandardInstallation(Bundle.main.bundleURL),
-              let executable = Bundle.main.executableURL else { throw CocoaError(.featureUnsupported) }
+    static func schedule(_ mode: MacUninstallMode, probeOnly: Bool = false) async throws {
+        guard ChordeskMaintenanceScope.supported, isStandardInstallation(Bundle.main.bundleURL) else { throw Failure.location }
+        guard let executable = Bundle.main.executableURL else { throw Failure.executable }
         // A temporary, identically signed copy can finish after the installed
         // host exits, without counting itself as a still-running host.
         let directory = URL(fileURLWithPath: "/private/tmp/ChordeskUninstaller.\(UUID())", isDirectory: true)
@@ -65,31 +97,57 @@ enum MacUninstallHelper {
             try FileManager.default.copyItem(at: Bundle.main.bundleURL, to: copy)
             let child = Process(), ready = Pipe()
             child.executableURL = copy.appendingPathComponent("Contents/MacOS/" + executable.lastPathComponent)
-            child.arguments = [argument, String(getpid()), mode.rawValue]
+            child.arguments = [probeOnly ? probeArgument : argument, String(getpid()), mode.rawValue]
             child.currentDirectoryURL = directory
             child.standardOutput = ready; child.standardError = FileHandle.nullDevice
             try child.run()
-            let acknowledged = await Task.detached {
-                let data = ready.fileHandleForReading.readData(ofLength: 6)
-                return data == Data("READY\n".utf8)
-            }.value
-            guard acknowledged else { throw CocoaError(.executableLoad) }
+            let reply: Reply = try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let completed = DispatchSemaphore(value: 0)
+                    final class Result: @unchecked Sendable { var data = Data() }
+                    let result = Result()
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        while result.data.count < 1024 {
+                            let byte = ready.fileHandleForReading.readData(ofLength: 1)
+                            if byte.isEmpty || byte == Data([10]) { break }
+                            result.data.append(byte)
+                        }
+                        completed.signal()
+                    }
+                    guard completed.wait(timeout: .now() + 8) == .success else {
+                        if child.isRunning { child.terminate() }
+                        continuation.resume(throwing: Failure.timeout); return
+                    }
+                    guard let reply = try? JSONDecoder().decode(Reply.self, from: result.data) else {
+                        continuation.resume(throwing: Failure.handshake); return
+                    }
+                    continuation.resume(returning: reply)
+                }
+            }
+            if let refusal = reply.refusal { throw Failure.refused(refusal) }
+            guard reply.ready else { throw Failure.handshake }
         } catch { try? FileManager.default.removeItem(at: directory); throw error }
     }
 
     @MainActor
     static func run(arguments: [String]) {
+        func reply(_ refusal: Refusal? = nil) {
+            if let data = try? JSONEncoder().encode(Reply(ready: refusal == nil, refusal: refusal)) {
+                FileHandle.standardOutput.write(data + Data([10]))
+            }
+        }
         guard let mode = mode(arguments: arguments, bundleID: Bundle.main.bundleIdentifier),
-              let parent = Int32(arguments[2]), parent == getppid(),
-              let running = NSRunningApplication(processIdentifier: parent),
-              running.bundleIdentifier == ChordeskMaintenanceScope.bundleID,
-              let source = running.bundleURL, isStandardInstallation(source),
-              Bundle.main.bundleURL.lastPathComponent == "ChordeskUninstaller.app",
-              Bundle.main.bundleURL.deletingLastPathComponent().path.hasPrefix("/private/tmp/ChordeskUninstaller."),
-              let script = Bundle.main.url(forResource: "Chordesk-Maintenance", withExtension: "command") else { return }
-        let directory = Bundle.main.bundleURL.deletingLastPathComponent()
+              let parent = Int32(arguments[2]) else { reply(.arguments); return }
+        guard parent == getppid() else { reply(.parentProcess); return }
+        guard let running = NSRunningApplication(processIdentifier: parent),
+              running.bundleIdentifier == ChordeskMaintenanceScope.bundleID else { reply(.parentApp); return }
+        guard let source = running.bundleURL, isStandardInstallation(source) else { reply(.sourceLocation); return }
+        guard isHelperLocation(Bundle.main.bundleURL) else { reply(.helperLocation); return }
+        guard let script = Bundle.main.url(forResource: "Chordesk-Maintenance", withExtension: "command") else { reply(.missingBackend); return }
+        let directory = Bundle.main.bundleURL.resolvingSymlinksInPath().deletingLastPathComponent()
         defer { try? FileManager.default.removeItem(at: directory) }
-        FileHandle.standardOutput.write(Data("READY\n".utf8))
+        reply()
+        if arguments[1] == probeArgument { return }
         for _ in 0..<300 {
             if kill(parent, 0) != 0 && errno == ESRCH {
                 let result: (Int32, String)
@@ -114,10 +172,13 @@ enum MacUninstallHelper {
 struct HostUninstallSheet: View {
     @ObservedObject var host: LANHost
     let prepare: () -> Void
+    let finish: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var mode = MacUninstallMode.appOnly
     @State private var busy = false
     @State private var error = ""
+    @State private var checking = true
+    @State private var progress = "正在停止远控并恢复显示模式…"
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("卸载 Chordesk", systemImage: "trash").font(.title2)
@@ -127,13 +188,19 @@ struct HostUninstallSheet: View {
             Text("先停止远控并恢复显示模式，再退出并卸载。App 与本地文件移入废纸篓；完整卸载删除的登录密钥和系统授权需要重新设置。不会卸载其他软件或重置整个钥匙串。")
                 .font(.callout).foregroundStyle(.secondary)
             if !error.isEmpty { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            if busy { ProgressView("正在停止服务并准备卸载…") }
+            if checking { ProgressView("正在检查卸载准备…") }
+            if busy { ProgressView(progress) }
             HStack {
                 Spacer()
                 Button("取消", role: .cancel) { dismiss() }.disabled(busy)
-                Button("卸载并退出", role: .destructive) { uninstall() }.disabled(busy)
+                Button("卸载并退出", role: .destructive) { uninstall() }.disabled(busy || checking || !error.isEmpty)
             }
         }.padding().fixedSize(horizontal: false, vertical: true)
+            .task {
+                do { try await MacUninstallHelper.schedule(.appOnly, probeOnly: true) }
+                catch { self.error = error.localizedDescription }
+                checking = false
+            }
     }
     private func uninstall() {
         busy = true
@@ -141,9 +208,16 @@ struct HostUninstallSheet: View {
         Task {
             await host.stopAndRestore()
             guard !host.restoreFailed else { error = "请先恢复原显示模式，再卸载。"; busy = false; return }
+            progress = "正在断开公网连接…"
             await EmbeddedTailnet.shared.disconnectAndWait(preservePreference: true)
-            do { try await MacUninstallHelper.schedule(mode); NSApp.terminate(nil) }
-            catch { self.error = "未开始卸载：" + error.localizedDescription + "。请从 Applications 中打开正式版。"; busy = false }
+            progress = "正在准备卸载辅助程序…"
+            do {
+                try await MacUninstallHelper.schedule(mode)
+                progress = "正在退出 Chordesk…"
+                dismiss()
+                finish()
+            }
+            catch { self.error = "未开始卸载：" + error.localizedDescription; busy = false }
         }
     }
 }

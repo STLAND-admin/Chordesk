@@ -1,6 +1,6 @@
 # Mac updates, Keychain recovery and removal
 
-Mac 0.27.0 adds a native Help-menu uninstaller and three-state permission checks. This is a local development update until the release record says otherwise. iOS 1.31 is unchanged.
+Mac 0.27.1 fixes the native Help-menu uninstaller introduced in 0.27.0. This is a local development update until the release record says otherwise. iOS 1.31 is unchanged.
 
 ## Upgrade failures / 升级后无法登录公网
 
@@ -28,7 +28,7 @@ A new-process check can distinguish a cached denial from a grant that is visible
 
 ## Uninstall / 内嵌卸载
 
-In **Mac 0.27.0**, use the top menu **Help（帮助）→ 卸载 Chordesk…**. No Terminal or exported tool is needed. Choose a scope and confirm **卸载并退出**:
+Use **Mac 0.27.1 or later**, then the top menu **Help（帮助）→ 卸载 Chordesk…**. No Terminal or exported tool is needed. A read-only helper preflight runs first; choose a scope and confirm **卸载并退出**:
 
 | Choice | Effect |
 | --- | --- |
@@ -36,6 +36,8 @@ In **Mac 0.27.0**, use the top menu **Help（帮助）→ 卸载 Chordesk…**. 
 | Full / 完整卸载 | Reset only Chordesk's system permissions; delete its listed pairing and Tailscale login records; back up preferences and move App, support data, cache and saved-window state to Trash. |
 
 The app first stops remote control, restores display settings and disconnects its embedded node. A temporary, identically signed helper waits for normal app exit before running the bundled maintenance backend. Failed restoration or a host that remains running prevents removal. No elevated privileges, TCC database edits or global resets are used. Other products and isolated First Run identities are excluded.
+
+**0.27.0 / Cocoa error 3587:** the old helper rejected macOS's `/tmp` alias for `/private/tmp` and hid its actual refusal. Update to 0.27.1. The fix resolves aliases before checking the exact helper directory, adds explicit refusal/timeout reporting, and closes the uninstall sheet before one completed shutdown. App-only removal and same-path reinstall were exercised on the developer's Mac; the new GUI full-cleanup path still requires its own user confirmation.
 
 Files in Trash can be restored. Deleted credentials and reset permission decisions require signing in, pairing and granting access again. Removal does not delete nodes from your Tailscale account; manage those in your own admin console. A failed step reports partial cleanup. A privacy-settings row may remain after its permission decision is reset. Custom installation paths or redirected data paths require manual inspection.
 
@@ -49,6 +51,6 @@ The production route is **Developer ID Application signing → Hardened Runtime 
 
 Migrating from ad hoc to Developer ID can require one owner-confirmed permission/Keychain migration. Stable identity helps later versions retain trust; macOS upgrades, revoked permission or organizational policy can still require consent. Signing does not auto-grant Screen Recording or Accessibility. A notarized release should pass normal Gatekeeper assessment without relying on “Open Anyway”; a first-launch confirmation or system permission request can still occur.
 
-The owner resumed Developer ID/notarization on November 3, 2026. The **0.26.1 app and final DMG were accepted by Apple**, with stapled tickets, strict signature verification and Gatekeeper acceptance. The local 0.27.0 update is Developer ID signed; its new notarization is pending credential availability. No new GitHub release has been published in this maintenance task. The public 0.26.0 test package remains ad hoc and unnotarized. See the development history for later status; signing alone is not notarization.
+The owner resumed Developer ID/notarization on November 3, 2026. The **0.26.1 app and final DMG were accepted by Apple**, with stapled tickets, strict signature verification and Gatekeeper acceptance. The local 0.27.1 update is Developer ID signed; its new notarization is pending credential availability. No new GitHub release has been published in this maintenance task. The public 0.26.0 test package remains ad hoc and unnotarized. See the development history for later status; signing alone is not notarization.
 
 Sources: [Apple error definition](https://developer.apple.com/documentation/security/errsecauthfailed), [code requirements and ad hoc identities](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements), [Keychain identity tracking](https://developer.apple.com/library/archive/technotes/tn2206/_index.html), [Developer ID](https://developer.apple.com/developer-id/), [notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution). Permission reset scope follows the installed macOS `tccutil(1)` manual.

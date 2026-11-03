@@ -8,7 +8,14 @@ final class ChordeskHostLifecycle: NSObject, NSApplicationDelegate {
     private var monitorTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
     private let shutdown = HostShutdownCoordinator()
+    private var maintenanceCleanupFinished = false
     func pauseAutomaticTasks() { monitorTask?.cancel(); startupTask?.cancel() }
+    func exitAfterMaintenance() {
+        // The uninstall flow has already stopped/restored the host and node.
+        // Do not start the same asynchronous cleanup again during termination.
+        maintenanceCleanupFinished = true
+        DispatchQueue.main.async { NSApp.terminate(nil) }
+    }
     func attach(_ host: LANHost, setup: HostPermissionSetup) {
         self.host = host
         guard monitorTask == nil else { return }
@@ -32,6 +39,7 @@ final class ChordeskHostLifecycle: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         monitorTask?.cancel(); startupTask?.cancel()
+        if maintenanceCleanupFinished { return .terminateNow }
         guard let host else { return .terminateNow }
         let ready = shutdown.request(cleanup: {
             await host.stopAndRestore()
@@ -68,14 +76,16 @@ private struct HostScene: View {
         LANHostView(host: host, permissionSetup: setup).onAppear {
             lifecycle.reopenWindow = { openWindow(id: "lan-host") }
             lifecycle.attach(host, setup: setup)
-        }.sheet(isPresented: $showingUninstall) { HostUninstallSheet(host: host, prepare: lifecycle.pauseAutomaticTasks) }
+        }.sheet(isPresented: $showingUninstall) {
+            HostUninstallSheet(host: host, prepare: lifecycle.pauseAutomaticTasks, finish: lifecycle.exitAfterMaintenance)
+        }
     }
 }
 
 @main
 enum ChordeskEntry {
     static func main() {
-        if CommandLine.arguments.dropFirst().first == MacUninstallHelper.argument {
+        if [MacUninstallHelper.argument, MacUninstallHelper.probeArgument].contains(CommandLine.arguments.dropFirst().first ?? "") {
             MacUninstallHelper.run(arguments: CommandLine.arguments)
             return
         }

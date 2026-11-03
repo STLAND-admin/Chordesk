@@ -42,4 +42,30 @@ final class PermissionAndUninstallTests: XCTestCase {
             XCTAssertTrue(result.1.contains(expected), result.1)
         }
     }
+
+    func testHelperLocationAcceptsSystemTmpAliasButRejectsPrefixLookalikes() {
+        let id = UUID().uuidString
+        let helper = URL(fileURLWithPath: "/private/tmp/ChordeskUninstaller.\(id)/ChordeskUninstaller.app")
+        // Foundation resolves aliases of existing paths, as in the real copy.
+        XCTAssertNoThrow(try FileManager.default.createDirectory(at: helper, withIntermediateDirectories: true))
+        defer { try? FileManager.default.removeItem(at: helper.deletingLastPathComponent()) }
+        for root in ["/tmp", "/private/tmp"] {
+            XCTAssertTrue(MacUninstallHelper.isHelperLocation(URL(fileURLWithPath: "\(root)/ChordeskUninstaller.\(id)/ChordeskUninstaller.app")), root)
+        }
+        for path in ["/private/tmp/ChordeskUninstaller.bad/ChordeskUninstaller.app",
+                     "/private/tmp/ChordeskUninstaller.\(id)/nested/ChordeskUninstaller.app",
+                     "/private/tmp/ChordeskUninstaller.\(id)/Other.app",
+                     "/private/tmp/Other.\(id)/ChordeskUninstaller.app",
+                     "/Applications/ChordeskUninstaller.\(id)/ChordeskUninstaller.app"] {
+            XCTAssertFalse(MacUninstallHelper.isHelperLocation(URL(fileURLWithPath: path)), path)
+        }
+    }
+
+    func testPreflightIsNonDestructiveAndRefusalIsAnExplicitReply() throws {
+        XCTAssertEqual(MacUninstallHelper.mode(arguments: ["app", MacUninstallHelper.probeArgument, "123", "app-only"], bundleID: ChordeskMaintenanceScope.bundleID), .appOnly)
+        let refusal = MacUninstallHelper.Reply(ready: false, refusal: .helperLocation)
+        XCTAssertEqual(try JSONDecoder().decode(MacUninstallHelper.Reply.self, from: JSONEncoder().encode(refusal)), refusal)
+        XCTAssertTrue(MacUninstallHelper.Failure.refused(.parentProcess).localizedDescription.contains("parentProcess"))
+        XCTAssertFalse(MacUninstallHelper.Failure.refused(.parentProcess).localizedDescription.contains("Applications"))
+    }
 }
