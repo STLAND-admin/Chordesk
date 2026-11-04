@@ -33,6 +33,12 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 
 切换桌面需要可选 System Events 权限与 macOS Control＋方向键快捷键。支持原生／第三方 iPhone 输入法。[完整手册](docs/user/OPERATION-GUIDE.md)。
 
+### “直接触控”如何实现
+
+“直接触控”指通过触摸远程桌面画面来操作 Mac。手势识别和坐标映射由 Chordesk 实现，再通过 Apple 公开的 Core Graphics `CGEvent` 接口发送鼠标和像素滚轮事件。滚动惯性曲线也由 Chordesk 生成；这条输入路径并未向被控 Mac 应用传入原生多点触摸。
+
+**公开接口核查 · 2026 年 11 月 4 日：**截至本次查询，尚未找到 Apple 公开提供的、允许第三方远控向任意 Mac 应用注入原生多点触摸的通用接口。Apple 的 [Touch on Mac 资料](https://developer.apple.com/touch-on-mac/)与 [AppKit／Sidecar 触控文档](https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support)说明的是 Mac 应用如何接收和处理系统提供的触摸，不等于提供了远程触摸注入 SDK。这是当前文档核查结论，不代表此类接口永远不会提供。
+
 ## 最新进度
 
 **Mac 0.28.0（43）已发布；iOS 1.31（40）已开放 TestFlight 测试。** 2026 年 11 月 3 日已核实 Beta 审核通过、启用测试并通知现有测试员，原邀请链接不变。Mac 0.28 修复换网后局域网仍绑定旧 IP，自动更新监听及配对地址，保留配对与 Tailscale 会话；继续提供稳定签名公证和 Help 内嵌卸载。iOS 1.31 提供背面双指接触立即切换、独立分辨率／帧率／码率、默认 HEVC 与回退、限量测速推荐；仅认证手机观看时采屏。可在 TestFlight 安装／更新至 1.31，原 1.30 客户端仍可连接新版 Mac。

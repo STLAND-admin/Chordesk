@@ -33,6 +33,12 @@ Scan the Mac QR code once, then reconnect from your paired computers. LAN needs 
 
 Spaces require optional System Events permission and enabled macOS Control + arrow shortcuts. Native and third-party iPhone keyboards are supported. [Full guide](docs/user/OPERATION-GUIDE.md).
 
+### How direct touch works
+
+“Direct touch” describes touching the remote desktop image to control the Mac. Chordesk implements gesture recognition and coordinate mapping, then sends mouse and pixel-scroll events through Apple's public Core Graphics `CGEvent` APIs. Chordesk also generates the scroll-inertia curve; this path does not deliver native multi-touch contacts to the controlled Mac app.
+
+**Public API check — November 4, 2026:** We have not found a documented public Apple API that lets third-party remote-control apps inject native multi-touch input into arbitrary Mac apps. Apple's [Touch on Mac resources](https://developer.apple.com/touch-on-mac/) and [AppKit / Sidecar touch guidance](https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support) describe how Mac apps receive and handle system-provided touch input. That is different from providing a remote touch-injection SDK. This is the result of the current documentation check, not a claim that such an API can never be provided.
+
 ## Latest update
 
 **Mac 0.28.0 (43) is released; iOS 1.31 (40) is now available through TestFlight.** On November 3, 2026, Beta App Review approval was verified, testing was enabled and existing testers were notified. Mac 0.28 follows local IP changes without restarting the service, preserves pairing and Tailscale sessions, and withdraws stale endpoints. Stable signing/notarization and the Help-menu uninstaller remain. iOS 1.31 adds immediate rear-contact defaults, independent 480p–2160p / 15–120 fps / target bitrate controls, HEVC defaults with fallback and bounded connection recommendations. Screen capture runs only while an authenticated viewer is connected. Use the same invitation link to install or update to 1.31. Existing 1.30 clients can connect to the new Mac host.
