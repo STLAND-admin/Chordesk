@@ -231,6 +231,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var captureInterrupted = false
     private var displayPresence = HostDisplayPresence()
     private var captureRepair: Task<Void, Never>?
+    private var captureRepairBudget = CaptureRepairBudget()
     private var displaySleeping = false
     private var systemSleeping = false
 
@@ -261,6 +262,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     }
     private func captureResumed() {
         guard captureRecovery.paused else { return }
+        captureInterrupted = false
+        captureRepairBudget.receivedFrame()
         refreshInputPermissions()
         let resume = captureRecovery.receivedFrame(revision: controlRevision,
             eligible: connected && sharing && accessibilityAllowed && eventPostingAllowed && !switchingDisplay && !scaleBusy)
@@ -288,20 +291,24 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
 
     private func retryInterruptedCapture() {
         guard sharing, connected, viewerCapture.lease != nil, !systemSleeping, !displaySleeping, !switchingDisplay, !scaleBusy,
-              captureInterrupted, captureRepair == nil, let id = displayID else { return }
+              captureInterrupted, captureRepair == nil, viewerCaptureTask == nil,
+              captureRepairBudget.remaining > 0, let id = displayID else { return }
         guard CGPreflightScreenCaptureAccess() else { stop(); status = "屏幕录制权限已撤销，请在设置中重新授权"; return }
-        let token = generation, lease = viewerCapture.lease
+        let token = generation, lease = viewerCapture.lease, repairEpoch = captureRepairBudget.epoch
         captureRepair = Task { [weak self] in
             guard let self else { return }
-            defer { if self.viewerCapture.accepts(lease) { self.captureRepair = nil } }
+            defer { if self.captureRepairBudget.epoch == repairEpoch { self.captureRepair = nil } }
             for delay in [1, 2, 4] {
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
                 guard !Task.isCancelled, self.generation == token, self.sharing, self.connected, self.viewerCapture.lease != nil, !self.systemSleeping,
-                      !self.displaySleeping, !self.scaleBusy, !self.switchingDisplay else { return }
+                      self.viewerCapture.accepts(lease), self.captureInterrupted,
+                      !self.displaySleeping, !self.scaleBusy, !self.switchingDisplay,
+                      self.captureRepairBudget.claim(repairEpoch) else { return }
                 guard CGPreflightScreenCaptureAccess() else { self.stop(); return }
                 do {
-                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                    let content = try await HostCaptureContent.request()
                     guard !Task.isCancelled, self.generation == token, self.viewerCapture.accepts(lease), self.connected,
+                          self.captureRepairBudget.epoch == repairEpoch, !self.systemSleeping, !self.displaySleeping,
                           let display = content.displays.first(where: { $0.displayID == id }) else { return }
                     try await self.installCapture(SCContentFilter(display: display, excludingWindows: []), display: display,
                         sessionToken: token, preserveRecovery: true)
@@ -310,6 +317,18 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 } catch { self.availabilityMessage = "捕获恢复尚未成功；可重新连接后再试" }
             }
         }
+    }
+
+    private func resumeOriginalCaptureAfterWake() {
+        displaySleeping = false; systemSleeping = false
+        input.resetEventSource()
+        // No viewer means no capture. Never switch displays or restore a control
+        // grant revoked by session resignation merely because the Mac woke up.
+        guard connected, sharing, viewerCapture.lease != nil else { return }
+        captureRepair?.cancel(); captureRepair = nil
+        captureRepairBudget.reset()
+        capturePaused(); captureInterrupted = true
+        retryInterruptedCapture()
     }
 
     override init() {
@@ -351,6 +370,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 guard let self else { return }
                 self.displaySleeping = true
                 self.capturePaused()
+                self.captureInterrupted = self.connected
+                self.captureRepair?.cancel(); self.captureRepair = nil; self.captureRepairBudget.reset()
                 self.availabilityMessage = "显示器已息屏；保留共享与许可，捕获暂停时等待新画面"
             }
         })
@@ -358,9 +379,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
-                    self.displaySleeping = false; self.systemSleeping = false
-                    self.input.resetEventSource()
-                    self.retryInterruptedCapture()
+                    self.resumeOriginalCaptureAfterWake()
                 }
             })
         }
@@ -380,6 +399,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             Task { @MainActor in
                 guard let self else { return }
                 self.input.resetEventSource()
+                self.resumeOriginalCaptureAfterWake()
                 self.availabilityMessage = "用户会话已恢复；请重连，控制不会因会话恢复自动开启"
             }
         })
@@ -860,6 +880,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private func stopIdleCapture() {
         viewerCapture.end(); viewerCaptureTask?.cancel(); viewerCaptureTask = nil
         captureRepair?.cancel(); captureRepair = nil; captureInterrupted = false
+        captureRepairBudget.reset()
         pendingAutomaticPeer = nil; captureRecovery = CaptureRecovery()
         captureGeneration = UUID(); captureRevision = UUID().uuidString
         let previous = stream; stream = nil; frames = nil; captureRunning = false
@@ -879,13 +900,20 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
         capturePaused()
         viewerCaptureTask = Task { [weak self, weak peer] in
             guard let self, let peer else { return }
-            defer { if self.viewerCapture.accepts(lease) { self.viewerCaptureTask = nil } }
+            defer {
+                if self.viewerCapture.accepts(lease) {
+                    self.viewerCaptureTask = nil
+                    // A failed initial capture used to ask for repair while this
+                    // task was still active. Retry after relinquishing the slot.
+                    if self.captureInterrupted { self.retryInterruptedCapture() }
+                }
+            }
             await self.idleCaptureStop?.value
             await self.scaleRestoreTask?.value
             guard !Task.isCancelled, self.generation == sessionToken, self.viewerCapture.accepts(lease), self.link === peer else { return }
             guard CGPreflightScreenCaptureAccess() else { self.stop(); self.status = "屏幕录制权限未生效，请在 Mac 重新授权"; return }
             do {
-                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                let content = try await HostCaptureContent.request()
                 guard !Task.isCancelled, self.generation == sessionToken, self.viewerCapture.accepts(lease),
                       self.link === peer, self.displayID == id else { return }
                 guard let display = content.displays.first(where: { $0.displayID == id }) else {
@@ -938,6 +966,8 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 guard let self, self.generation == sessionToken, self.captureGeneration == token else { return }
                 guard !self.scaleBusy else { return }
                 self.capturePaused()
+                self.captureInterrupted = true
+                self.retryInterruptedCapture()
             }
         }, stopped: { [weak self] error in
             Task { @MainActor in

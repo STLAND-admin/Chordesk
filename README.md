@@ -41,7 +41,7 @@ Audio is disabled. Closed-lid/system-sleep wake is not guaranteed. IPv4/IPv6 pai
 
 ## Develop and contribute
 
-The [`v2` branch](https://github.com/STLAND-admin/Chordesk/tree/v2) evaluates RDP/VNC, a locally rendered cursor, connection startup and weak-network recovery while preserving the v1 controls. It currently contains the source checkpoint and [evaluation plan](docs/developer/V2-REMOTE-ENGINE-PLAN.md); no replacement engine has shipped.
+The [`v2` branch](https://github.com/STLAND-admin/Chordesk/tree/v2) preserves the v1 controls and adds a local candidate for direct-path diagnostics, bounded discovery and screen-capture recovery. [Implementation status and RDP/VNC evaluation](docs/developer/V2-REMOTE-ENGINE-PLAN.md). No replacement engine or new public release has shipped; physical screen-saver recovery still needs confirmation.
 
 [Documentation](docs/README.md): [user guides](docs/README.md#users) · [developer guides](docs/README.md#developers).
 

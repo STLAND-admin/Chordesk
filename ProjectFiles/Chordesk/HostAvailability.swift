@@ -29,9 +29,50 @@ struct CaptureRecovery {
     }
 }
 
+/// One pause/wake episode has a bounded repair budget. Resetting its epoch also
+/// invalidates cancelled work, so an old task cannot consume or clear a new one.
+struct CaptureRepairBudget {
+    private(set) var epoch = UUID()
+    private(set) var remaining = 3
+    mutating func claim(_ epoch: UUID) -> Bool {
+        guard epoch == self.epoch, remaining > 0 else { return false }
+        remaining -= 1; return true
+    }
+    mutating func reset() { epoch = UUID(); remaining = 3 }
+    mutating func receivedFrame() { remaining = 3 }
+}
+
 #if os(macOS)
 import IOKit.pwr_mgt
 import IOKit.ps
+import ScreenCaptureKit
+
+/// ScreenCaptureKit can stall while the WindowServer changes sessions. Resolve
+/// the caller once; a late callback cannot revive expired viewer work.
+final class CaptureLookupCompletion<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var completion: ((Result<Value, Error>) -> Void)?
+    init(_ completion: @escaping (Result<Value, Error>) -> Void) { self.completion = completion }
+    func finish(_ result: Result<Value, Error>) {
+        lock.lock(); let reply = completion; completion = nil; lock.unlock()
+        reply?(result)
+    }
+}
+enum HostCaptureContent {
+    static func request() async throws -> SCShareableContent {
+        try await withCheckedThrowingContinuation { continuation in
+            let reply = CaptureLookupCompletion<SCShareableContent> { continuation.resume(with: $0) }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 4) {
+                reply.finish(.failure(NSError(domain: "Chordesk.CaptureLookup", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "屏幕会话暂未响应，将在原显示器上重试"])))
+            }
+            SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { content, error in
+                if let content { reply.finish(.success(content)) }
+                else { reply.finish(.failure(error ?? NSError(domain: "Chordesk.CaptureLookup", code: 2))) }
+            }
+        }
+    }
+}
 
 /// Unlike the idle-only lease, this public assertion can keep CPU/network work
 /// available in Dark Wake on AC. It does not promise a framebuffer or lid wake.

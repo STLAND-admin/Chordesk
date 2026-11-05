@@ -2,6 +2,27 @@ import XCTest
 @testable import ChordeskHost
 
 final class HostAvailabilityTests: XCTestCase {
+    func testCaptureLookupTimeoutCannotBeOverwrittenByLateWindowServerReply() {
+        var replies: [String] = []
+        let reply = CaptureLookupCompletion<String> { result in
+            replies.append((try? result.get()) ?? "timeout")
+        }
+        reply.finish(.failure(NSError(domain: "test-timeout", code: 1)))
+        reply.finish(.success("expired display metadata"))
+        XCTAssertEqual(replies, ["timeout"])
+    }
+    func testCaptureRepairIsBoundedUntilNewFrameOrWake() {
+        var budget = CaptureRepairBudget()
+        let old = budget.epoch
+        for _ in 0..<3 { XCTAssertTrue(budget.claim(old)) }
+        XCTAssertFalse(budget.claim(old), "A blank/suspended stream must not cause an endless restart loop")
+        budget.receivedFrame()
+        XCTAssertTrue(budget.claim(old))
+        budget.reset()
+        XCTAssertFalse(budget.claim(old), "Cancelled pre-wake work must not consume the new episode's attempts")
+        XCTAssertEqual(budget.remaining, 3)
+        XCTAssertTrue(budget.claim(budget.epoch))
+    }
     func testNetworkLeaseRequiresAuthenticatedViewerACAndOptIn() {
         var starts = 0, ends = 0
         let lease = HostNetworkLease(begin: { starts += 1; return 42 }, end: { _ in ends += 1 })

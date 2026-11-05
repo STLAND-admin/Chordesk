@@ -9,6 +9,47 @@ import AppKit
 import Security
 #endif
 
+struct TailnetNetworkSnapshot: Decodable, Equatable {
+    struct Region: Decodable, Equatable { var code: String; var name: String }
+    struct Path: Decodable, Equatable {
+        var address: String; var kind: String; var region: String?
+        var latencyMS: Double?; var checkedAt: Int64?
+        var title: String {
+            switch kind { case "direct": "直连"; case "derp": "DERP 中继"; case "peer-relay": "Peer Relay"; default: "尚未确定" }
+        }
+    }
+    struct Probe: Decodable, Equatable {
+        var udp: Bool; var ipv4: Bool; var ipv6: Bool
+        var natVaries: String?; var nearest: Region?; var checkedAt: Int64
+    }
+    var homeDERP: String?
+    var regions: [Region]?
+    var paths: [Path]?
+    var checking: Bool?
+    var probe: Probe?
+    var error: String?
+    func regionTitle(_ code: String) -> String {
+        let common = ["hkg": "香港", "sin": "新加坡", "tok": "东京"]
+        return (common[code] ?? regions?.first(where: { $0.code == code })?.name ?? code) + " (\(code))"
+    }
+    var homeTitle: String {
+        guard let homeDERP, !homeDERP.isEmpty else { return "默认 DERP 地区：等待探测" }
+        return "默认 DERP 地区：" + regionTitle(homeDERP)
+    }
+}
+
+/// Polling and manual refresh share one in-flight query. A cancelled generation
+/// cannot release a newer generation's slot.
+struct TailnetStatusQueryGate {
+    private var pending: UUID?
+    mutating func begin() -> UUID? {
+        guard pending == nil else { return nil }
+        let id = UUID(); pending = id; return id
+    }
+    mutating func finish(_ id: UUID) { if pending == id { pending = nil } }
+    mutating func reset() { pending = nil }
+}
+
 struct TailnetSnapshot: Decodable, Equatable {
     var state: String?
     var authURL: String?
@@ -17,6 +58,7 @@ struct TailnetSnapshot: Decodable, Equatable {
     var port: UInt16?
     var identifier: Int32?
     var health: [String]?
+    var network: TailnetNetworkSnapshot?
     var ready: Bool { error == nil && state == "Running" && (addresses?.contains(where: LANPairing.isTailscaleHost) == true) }
     // Browser completion is not evidence of enrollment. Only the engine's
     // authenticated Running state and an assigned tailnet address count.
@@ -50,13 +92,15 @@ final class EmbeddedTailnet: ObservableObject {
     @Published private(set) var enabled = false
     @Published var showLogin = false
     @Published private(set) var authenticationNotice: String?
+    @Published private(set) var networkCheckRequested = false
 #if os(iOS)
     private var authenticationBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var authenticationGraceTimer: Task<Void, Never>?
 #endif
     private let queue = DispatchQueue(label: "dev.chordesk.embedded-tailnet", qos: .userInitiated)
     private var polling: Task<Void, Never>?
-    private var generation = UUID()
+    private var statusQuery = TailnetStatusQueryGate()
+    private var generation = UUID() { didSet { statusQuery.reset(); networkCheckRequested = false } }
     private var requestLoginPresentation = false
     var ready: Bool { enabled && snapshot.ready }
     var addresses: [String] { ready ? (snapshot.addresses ?? []).filter(LANPairing.isTailscaleHost) : [] }
@@ -205,8 +249,7 @@ final class EmbeddedTailnet: ObservableObject {
         guard enabled, !busy else { return }
         let token = generation
         Task {
-            let value = await call { CRStatus() }
-            guard token == generation, enabled else { return }
+            guard let value = await readStatus(token) else { return }
             update(value)
             if value.canAuthorize, !showLogin {
 #if os(iOS)
@@ -217,15 +260,34 @@ final class EmbeddedTailnet: ObservableObject {
             }
         }
     }
+    private func readStatus(_ token: UUID) async -> TailnetSnapshot? {
+        guard token == generation, enabled, !busy, let request = statusQuery.begin() else { return nil }
+        defer { statusQuery.finish(request) }
+        let value = await call { CRStatus() }
+        guard token == generation, enabled else { return nil }
+        return value
+    }
+    func inspectNetwork() {
+        guard ready, !busy, !networkCheckRequested, snapshot.network?.checking != true else { return }
+        networkCheckRequested = true
+        let token = generation
+        Task {
+            let result = await call { CRInspectNetwork() }
+            guard token == generation, enabled else { return }
+            networkCheckRequested = false
+            if result.error != nil { authenticationNotice = "网络检测未能开始，请稍后重试。" }
+            refreshStatus()
+        }
+    }
     private func beginPolling(_ token: UUID) {
         polling?.cancel()
         polling = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, self.generation == token, self.enabled else { return }
-                let value = await self.call { CRStatus() }
+                let value = await self.readStatus(token)
                 guard !Task.isCancelled, self.generation == token else { return }
-                self.update(value)
-                do { try await Task.sleep(for: .seconds(value.ready ? 5 : 2)) } catch { return }
+                if let value { self.update(value) }
+                do { try await Task.sleep(for: .seconds(value?.ready == true ? 5 : 2)) } catch { return }
             }
         }
     }
@@ -381,6 +443,34 @@ struct EmbeddedTailnetControls: View {
 #endif
             if tailnet.ready {
                 Text(tailnet.addresses.joined(separator: " · ")).font(.caption.monospaced()).textSelection(.enabled)
+                if let network = tailnet.snapshot.network {
+                    Text(network.homeTitle).font(.caption).accessibilityIdentifier("tailscale-home-derp")
+                    Text("默认地区不代表画面经中继转发。下列为近期节点路径，可能随网络变化。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(network.paths ?? [], id: \.address) { path in
+                        HStack {
+                            Text(path.title + (path.region.map { " · " + network.regionTitle($0) } ?? ""))
+                            if let latency = path.latencyMS, path.checkedAt != nil {
+                                Text(String(format: "%.0f ms（探测值）", latency))
+                            }
+                        }.font(.caption)
+                    }
+                    if let probe = network.probe {
+                        Text("网络探测：UDP \(probe.udp ? "可达" : "未探测到") · IPv6 \(probe.ipv6 ? "可达" : "未探测到")")
+                            .font(.caption)
+                        if let nearest = probe.nearest { Text("探测推荐地区：" + network.regionTitle(nearest.code)).font(.caption) }
+                        Text("\(Date(timeIntervalSince1970: Double(probe.checkedAt)).formatted(date: .omitted, time: .standard)) 的独立探测；不保证当前会话已直连。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let error = network.error { Text(error).font(.caption).foregroundStyle(.secondary) }
+                }
+                Button(tailnet.networkCheckRequested || tailnet.snapshot.network?.checking == true ? "正在检测网络…" : "检测直连与中继") {
+                    invoke("network-check") { tailnet.inspectNetwork() }
+                }.buttonStyle(.bordered)
+                    .disabled(tailnet.busy || tailnet.networkCheckRequested || tailnet.snapshot.network?.checking == true)
+                    .accessibilityIdentifier("tailscale-network-check")
+                Text("优先尝试直连，保留官方 DERP 回退；中继地区由私人网络配置与探测决定，不保证中国大陆节点。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if let diagnostic = tailnet.snapshot.loginDiagnostic { Text(diagnostic).font(.caption).foregroundStyle(.secondary) }
             if let notice = tailnet.authenticationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }

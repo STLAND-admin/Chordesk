@@ -1,6 +1,19 @@
 # v2 · Remote engine evaluation / 远控引擎评估
 
-2026-11-05 · Status: research and implementation plan; no new engine shipped.
+2026-11-05 · Status: connection/recovery candidate implemented locally; RDP/VNC engines not yet integrated or shipped.
+
+## 本地连接与屏保修复候选 · 1.33 /47、Mac 0.29.0 /44
+
+- 保留现有 H.264／HEVC 引擎及交互；VNC 的效率优势仍待同场景对照，未将其假定为已验证结论。
+- 内嵌 tsnet 在正常拨号同时进行有界 Disco 探测，尝试促进 UDP 直连；不等待穿透结果才连接，不删除 DERP 回退，不新增 Peer Relay、服务器、系统 VPN 或路由／防火墙设置。网络不允许穿透时仍可能中继，不承诺强制直连。
+- 两端 Tailscale 区域新增默认 DERP、近期节点路径，以及手动 UDP／IPv4／IPv6 与推荐地区探测。默认 DERP 不等于视频正走中继；Disco 的延迟是采样，独立 STUN 探测也不是特定会话直连证明。诊断不输出登录令牌、节点密钥或公网端点；本轮不上传这些结果。
+- 状态轮询与手动刷新合并为单个在途查询，旧代回调不能释放新查询。原生状态读取不再持有全局控制锁等待 LocalAPI。
+- 屏幕息屏／会话恢复后，对已认证观看者重建原显示器捕获；blank／suspended 后会有界重试。显示器信息查询有 4 秒超时，避免系统会话转换时永久等待；取消的旧任务不能占用新一轮恢复。每次暂停最多 3 次恢复尝试，新帧或新唤醒重置预算。
+- 原权限撤销、用户／系统主动停止共享、断开释放和会话失活撤销控制的边界保留；不会自动解锁或保证合盖／真正睡眠可用。无人连接时仍不采屏。
+
+**本机观测（11 月 5 日）：**旧主机与官方香港 DERP 20b 保持 TCP 连接；新版在 UI 显示 home DERP `hkg`。手动探测确认 UDP、IPv6 可达，推荐地区为香港。无活动手机会话，因此没有把这一结果标成手机视频已直连。官方当日 DERP 表无中国大陆节点；用户暂时没有服务器，未新增或强制指定大陆节点。
+
+**验证：**8 项 Go 测试含竞态检测通过；原生库四个平台构建通过；Swift 全量 209 项中 208 通过、固定生产端口占用跳过 1；最后异步修正后 19 项相关回归通过。iOS 模拟器与实体架构编译通过，1.33 /47 已装入 Duo 模拟器；实体 Duo 不可用，未安装。Mac 0.29.0 /44 已沿用原 Developer ID 本地安装，未公证或公开发行。用户本轮不方便做动态屏保实测，该项仍待真机确认。
 
 ## Baseline and decision
 
@@ -10,7 +23,7 @@ The checkpoint includes reviewed build-46 UI changes and subsequent source-only 
 
 **建议：保留 Chordesk 交互层，在 v2 试做可替换的远控引擎。RDP 是主要实验候选，macOS 自带 VNC 是对照／兼容候选；在测量前不替换现有 H.264／HEVC 路径。先补齐链路诊断、建连和屏保恢复，再比较协议。** 本地光标独立开发，不以 RDP 迁移为前提。
 
-本轮完成源码审查和方案，不代表已修复用户报告的弱网／屏保问题，也没有安装或运行 macrdp、开启系统 VNC、改变端口或安全设置。
+协议评估本身不代表弱网／屏保问题已验收；已实施的本地候选与限制见上节。本轮没有安装或运行 macrdp、开启系统 VNC 或更改系统安全设置。
 
 ## RDP、VNC、现有路径的区别
 

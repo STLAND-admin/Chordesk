@@ -3,6 +3,7 @@
 // Returned JSON strings are owned by the caller; release with free().
 char *CRStart(char *directory, char *hostname);
 char *CRStatus(void);
+char *CRInspectNetwork(void);
 char *CRLogin(void);
 char *CRStop(void);
 char *CRLogout(void);

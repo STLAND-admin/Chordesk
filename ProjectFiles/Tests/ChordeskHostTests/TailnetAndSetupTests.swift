@@ -2,6 +2,25 @@ import XCTest
 @testable import ChordeskHost
 
 final class TailnetAndSetupTests: XCTestCase {
+    func testManualAndPollingStatusQueriesShareOneSlotAcrossGenerations() throws {
+        var gate = TailnetStatusQueryGate()
+        let old = try XCTUnwrap(gate.begin())
+        XCTAssertNil(gate.begin())
+        gate.reset()
+        let new = try XCTUnwrap(gate.begin())
+        gate.finish(old)
+        XCTAssertNil(gate.begin(), "Completion of a cancelled query must not release a newer query")
+        gate.finish(new)
+        XCTAssertNotNil(gate.begin())
+    }
+    func testRegionAndPathLabelsKeepHomeRelaySeparateFromMeasuredRoute() throws {
+        let data = Data(#"{"state":"Running","addresses":["100.64.1.2"],"network":{"homeDERP":"hkg","paths":[{"address":"100.64.1.3","kind":"direct"}],"checking":false}}"#.utf8)
+        let value = try JSONDecoder().decode(TailnetSnapshot.self, from: data)
+        XCTAssertTrue(value.ready)
+        XCTAssertEqual(value.network?.homeTitle, "默认 DERP 地区：香港 (hkg)")
+        XCTAssertEqual(value.network?.paths?.first?.title, "直连")
+        XCTAssertNil(value.network?.probe, "A connected node is not evidence that network checks have run")
+    }
     private let key = "00112233445566778899aabbccddeeff"
     func testModeIsRequiredAndCannotBroadenLANPairingValidation() throws {
         for value in ["100.64.0.1", "100.100.10.20", "100.127.255.254"] {

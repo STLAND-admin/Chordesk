@@ -88,6 +88,7 @@ func (s *secureStore) WriteState(key ipn.StateKey, value []byte) error {
 
 type engine struct {
 	server      *tsnet.Server
+	paths       *pathDiagnostics
 	forward     *byteBridge
 	forwardPort int
 	dials       map[int]*byteBridge
@@ -124,16 +125,19 @@ func requireEngine() error {
 	return nil
 }
 func snapshot() *C.char {
-	if active == nil {
+	return engineSnapshot(active)
+}
+func engineSnapshot(e *engine) *C.char {
+	if e == nil {
 		return result(map[string]any{"state": "Stopped"})
 	}
-	lc, err := active.server.LocalClient()
+	lc, err := e.server.LocalClient()
 	if err != nil {
 		return failure(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	status, err := lc.StatusWithoutPeers(ctx)
+	status, err := lc.Status(ctx)
 	if err != nil {
 		return failure(err)
 	}
@@ -143,7 +147,7 @@ func snapshot() *C.char {
 			addresses = append(addresses, ip.String())
 		}
 	}
-	return result(map[string]any{"state": status.BackendState, "authURL": status.AuthURL, "addresses": addresses, "health": safeHealth(status.Health)})
+	return result(map[string]any{"state": status.BackendState, "authURL": status.AuthURL, "addresses": addresses, "health": safeHealth(status.Health), "network": e.paths.snapshot(status)})
 }
 
 //export CRStart
@@ -174,12 +178,29 @@ func CRStart(directory, hostname *C.char) *C.char {
 		server.Close()
 		return failure(err)
 	}
-	active = &engine{server: server, dials: map[int]*byteBridge{}}
+	active = &engine{server: server, paths: newPathDiagnostics(server), dials: map[int]*byteBridge{}}
 	return snapshot()
 }
 
 //export CRStatus
-func CRStatus() *C.char { apiMu.Lock(); defer apiMu.Unlock(); return snapshot() }
+func CRStatus() *C.char {
+	apiMu.Lock()
+	e := active
+	apiMu.Unlock()
+	// A slow status read must not hold up login, stop, or a new dial.
+	return engineSnapshot(e)
+}
+
+//export CRInspectNetwork
+func CRInspectNetwork() *C.char {
+	apiMu.Lock()
+	defer apiMu.Unlock()
+	if err := requireEngine(); err != nil {
+		return failure(err)
+	}
+	active.paths.inspect()
+	return success()
+}
 
 //export CRLogin
 func CRLogin() *C.char {
@@ -203,6 +224,7 @@ func stop() {
 	if active == nil {
 		return
 	}
+	active.paths.close()
 	if active.forward != nil {
 		active.forward.close()
 	}
@@ -357,7 +379,13 @@ func CRForward(localhostPort C.int) *C.char {
 	if err != nil {
 		return failure(err)
 	}
-	active.forward = serveBridge(ln, false, func(ctx context.Context) (net.Conn, error) {
+	paths := active.paths
+	observed := &observedListener{Listener: ln, accepted: func(c net.Conn) {
+		if host, _, err := net.SplitHostPort(c.RemoteAddr().String()); err == nil {
+			paths.prewarm(host)
+		}
+	}}
+	active.forward = serveBridge(observed, false, func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(p)))
 	})
 	active.forwardPort = p
@@ -396,6 +424,9 @@ func CRDial(host *C.char, port C.int) *C.char {
 	}
 	ln.SetDeadline(time.Now().Add(15 * time.Second))
 	server := active.server
+	// Prime UDP discovery concurrently with the ordinary TCP connection. Never
+	// wait for a direct route or disable DERP: difficult networks retain fallback.
+	active.paths.prewarm(address)
 	b := serveBridge(ln, true, func(ctx context.Context) (net.Conn, error) {
 		return server.Dial(ctx, "tcp", net.JoinHostPort(address, strconv.Itoa(p)))
 	})

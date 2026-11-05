@@ -41,7 +41,7 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 
 ## 开发与贡献
 
-[`v2` 分支](https://github.com/STLAND-admin/Chordesk/tree/v2)保留 v1 操作方式，评估 RDP／VNC、本地光标、建连与弱网恢复。当前是源码基线及[评估计划](docs/developer/V2-REMOTE-ENGINE-PLAN.md)，尚未发布替代引擎。
+[`v2` 分支](https://github.com/STLAND-admin/Chordesk/tree/v2)保留 v1 操作方式，新增直连诊断、并行穿透探测及捕获恢复的本地候选。[实现状态与 RDP／VNC 评估](docs/developer/V2-REMOTE-ENGINE-PLAN.md)。尚未发布替代引擎或新公开安装包，动态屏保恢复仍待真机确认。
 
 [文档索引](docs/README.md)：[用户指南](docs/README.md#users) · [开发者文档](docs/README.md#developers)。
 
