@@ -33,6 +33,7 @@ Build, test and distribute Chordesk, or follow the development plans. / 构建�
 | [Distribution / 分发准备](developer/DISTRIBUTION.md) | TestFlight, App Store and signed/notarized Mac releases / 双端发行与审核 |
 | [Dependencies / 依赖](developer/DEPENDENCIES.md) | Native display scaling and third-party boundaries / 显示适配及第三方依赖边界 |
 | [Roadmap / 开发计划](developer/ROADMAP.md) | Priorities, completed work and remaining tests / 优先级、已完成工作与待验证项目 |
+| [v2 remote engines / v2 远控引擎](developer/V2-REMOTE-ENGINE-PLAN.md) | RDP/VNC comparison, local cursor, weak-network and screen-saver investigation / 协议比较、本地光标、弱网与屏保恢复计划 |
 | [Network planning / 公网方案](developer/PUBLIC-NETWORK-PLAN.md) | Embedded Tailscale decision and historical hosting estimates / Tailscale 路线与历史自建成本备选 |
 | [Wake and latency / 合盖与延迟](developer/HOST-WAKE-LATENCY.md) | Evidence, known limits and future measurements / 已有证据、已知限制与测量计划 |
 | [Development history / 开发与验证历史](developer/DEVELOPMENT-HISTORY.md) | Consolidated validation and historical release/prototype notes / 合并的验证、旧发行和原型记录 |

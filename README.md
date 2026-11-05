@@ -35,11 +35,13 @@ Spaces require optional System Events permission and enabled macOS Control + arr
 
 ## Latest update
 
-**Mac 0.28.0 (43) is released; iOS 1.31 (40) is now available through TestFlight.** On November 3, 2026, Beta App Review approval was verified, testing was enabled and existing testers were notified. Mac 0.28 follows local IP changes without restarting the service, preserves pairing and Tailscale sessions, and withdraws stale endpoints. Stable signing/notarization and the Help-menu uninstaller remain. iOS 1.31 adds immediate rear-contact defaults, independent 480p–2160p / 15–120 fps / target bitrate controls, HEVC defaults with fallback and bounded connection recommendations. Screen capture runs only while an authenticated viewer is connected. Use the same invitation link to install or update to 1.31. Existing 1.30 clients can connect to the new Mac host.
+**The v1 baseline is Mac 0.28.0 (43) and iOS 1.32 (46).** The iOS build is available through the existing TestFlight invitation and was submitted for formal App Store review on November 5, 2026; submission does not mean approval or public App Store availability. iOS 1.32 adds the native Liquid Glass control rail and improves status-area placement and contrast. Mac 0.28 follows local IP changes without restarting the service and preserves pairing and Tailscale sessions. Screen capture runs only while an authenticated viewer is connected; signed/notarized Mac installation and the Help-menu uninstaller remain. [Development and release history](docs/developer/DEVELOPMENT-HISTORY.md).
 
 Audio is disabled. Closed-lid/system-sleep wake is not guaranteed. IPv4/IPv6 pairing is supported; IPv6-only/NAT64 hardware, ordinary-iPhone hardware and broader networks still need testing. Actual FPS/bitrate depends on hardware and content; HUD RTT is not end-to-end interaction latency. Duo rear input uses Apple's camera accessory API, with camera frames discarded. App Store review remains separate from TestFlight.
 
 ## Develop and contribute
+
+The [`v2` branch](https://github.com/STLAND-admin/Chordesk/tree/v2) evaluates RDP/VNC, a locally rendered cursor, connection startup and weak-network recovery while preserving the v1 controls. It currently contains the source checkpoint and [evaluation plan](docs/developer/V2-REMOTE-ENGINE-PLAN.md); no replacement engine has shipped.
 
 [Documentation](docs/README.md): [user guides](docs/README.md#users) · [developer guides](docs/README.md#developers).
 
