@@ -10,7 +10,13 @@ enum ControlRailPosition {
                        preferredWidth: CGFloat, minimumWidth: CGFloat = 44) -> CGRect {
         if let region = barRegion, !region.isNull, !region.isInfinite,
            region.width > 0, region.height > 0 {
-            return region
+            // A native trailing column can still extend behind a horizontal
+            // status bar. Preserve its horizontal anchor, constrain its height.
+            let top = max(bounds.minY, region.minY)
+            let bottom = min(bounds.maxY, region.maxY)
+            if bottom > top {
+                return CGRect(x: region.minX, y: top, width: region.width, height: bottom - top)
+            }
         }
         let width = max(minimumWidth, preferredWidth)
         return CGRect(x: bounds.maxX - max(0, margin) - width, y: bounds.minY,
@@ -111,6 +117,10 @@ struct SystemMenuSection: Equatable {
 /// Normalize native SF Symbols to one optical box; wide glyphs such as display.2
 /// must not dominate the narrower pointer-mode icons.
 enum RailSymbol {
+    // A neutral, nonsemantic gray stays readable over both bright and dark
+    // desktop pixels; clear glass can vibrantly reinterpret semantic label colors.
+    static let foreground = UIColor(white: 0.55, alpha: 1)
+    static let highlightedForeground = UIColor(white: 0.72, alpha: 1)
     static var extent: CGFloat { ceil(UIFont.preferredFont(forTextStyle: .body).lineHeight) }
     static func image(_ name: String, rotated: Bool = false) -> UIImage? {
         let font = UIFont.preferredFont(forTextStyle: .body)
@@ -200,14 +210,17 @@ final class StableMenuController: UIViewController, UIPopoverPresentationControl
             buttonDiameter = ceil(diameter)
             let sidePadding = max(0, diameter - (image?.size.width ?? 0)) / 2
             let verticalPadding = max(0, diameter - (image?.size.height ?? 0)) / 2
-            config.baseForegroundColor = .secondaryLabel
+            config.baseForegroundColor = glass ? .secondaryLabel : RailSymbol.foreground
             config.image = image
             config.contentInsets = NSDirectionalEdgeInsets(top: verticalPadding, leading: sidePadding, bottom: verticalPadding, trailing: sidePadding)
             button.configuration = config
             button.configurationUpdateHandler = glass ? nil : { button in
                 guard var config = button.configuration else { return }
-                config.baseForegroundColor = button.isHighlighted ? .label : .secondaryLabel
-                config.background.backgroundColor = button.isHighlighted ? .tertiarySystemFill : .clear
+                config.baseForegroundColor = button.isHighlighted ? RailSymbol.highlightedForeground : RailSymbol.foreground
+                // The shared interactive glass supplies press feedback. These
+                // action buttons highlight their symbols without a gray disc.
+                config.background = .clear()
+                config.background.backgroundColorTransformer = UIConfigurationColorTransformer { _ in .clear }
                 button.configuration = config
             }
             if #available(iOS 26.0, *), glass { button.cornerConfiguration = .capsule() }

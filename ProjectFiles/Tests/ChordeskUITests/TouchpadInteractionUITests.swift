@@ -2,6 +2,42 @@ import XCTest
 
 final class TouchpadInteractionUITests: XCTestCase {
     @MainActor
+    func testRailOnBrightAndDarkDesktops() {
+        let app = XCUIApplication()
+        defer { XCUIDevice.shared.orientation = .portrait }
+        for background in ["white", "black"] {
+            for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+                app.terminate()
+                XCUIDevice.shared.orientation = orientation
+                app.launchEnvironment = ["DUO_UI_FIXTURE": "1", "DUO_UI_RESET_CONTROLS": "1",
+                    "DUO_UI_BACKGROUND": background,
+                    orientation == .portrait ? "DUO_UI_TALL_REMOTE" : "DUO_UI_WIDE_REMOTE": "1"]
+                app.launchArguments = ["-primaryPointerMode", "direct", "-phoneKeyboardStyle", "system",
+                    "-keyboardInvocationV1", "manual", "-showStreamMetadataV1", "NO"]
+                app.launch()
+                let menu = app.buttons["remote-options"], badge = app.buttons["rear-status-badge"]
+                XCTAssertTrue(menu.waitForExistence(timeout: 8))
+                let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    menu.frame.minY - 6 >= badge.frame.maxY + menu.frame.width / 2
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+                let mode = app.segmentedControls["pointer-mode-toggle"]
+                XCTAssertTrue(mode.exists)
+                let name = background + (orientation == .portrait ? "-portrait" : "-landscape")
+                let direct = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                direct.name = name + "-direct"; direct.lifetime = .keepAlways; add(direct)
+                mode.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).press(forDuration: 0.05)
+                XCTAssertTrue(app.otherElements["grip-front-touchpad"].waitForExistence(timeout: 5))
+                let trackpad = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                trackpad.name = name + "-trackpad"; trackpad.lifetime = .keepAlways; add(trackpad)
+                shortPress(menu)
+                XCTAssertTrue(app.tables["remote-action-list"].waitForExistence(timeout: 5))
+                shortPress(app.buttons["完成"])
+                XCTAssertTrue(mode.exists)
+            }
+        }
+    }
+    @MainActor
     func testIndependentStreamSettings() {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_UI_FIXTURE"] = "1"
@@ -84,6 +120,8 @@ final class TouchpadInteractionUITests: XCTestCase {
             }, object: nil)
             XCTAssertEqual(XCTWaiter.wait(for: [clearStatus], timeout: 5), .completed,
                 "The first menu control must remain below the independent status badge")
+            XCTAssertGreaterThanOrEqual(menu.frame.minY - 6, rearBadge.frame.maxY + menu.frame.width / 2,
+                "The glass capsule needs room to stretch below the independent status strip")
             if #unavailable(iOS 27.1), app.statusBars.firstMatch.exists {
                 XCTAssertFalse(menu.frame.intersects(app.statusBars.firstMatch.frame),
                     "The legacy layout must respect public system status-bar space")

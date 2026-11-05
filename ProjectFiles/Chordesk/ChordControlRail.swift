@@ -74,7 +74,10 @@ private final class PointerModeSegments: UIVisualEffectView {
         control.accessibilityLabel = "操控模式"
         control.selectedSegmentIndex = 0
         control.addTarget(self, action: #selector(changed), for: .valueChanged)
-        control.tintColor = .secondaryLabel
+        control.tintColor = RailSymbol.foreground
+        control.selectedSegmentTintColor = RailSymbol.foreground
+        control.setTitleTextAttributes([.foregroundColor: RailSymbol.foreground], for: .normal)
+        control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
         if #available(iOS 26.0, *) { control.cornerConfiguration = .capsule() }
         control.layer.cornerCurve = .circular
         let extent = control.intrinsicContentSize.height * 1.5
@@ -89,8 +92,13 @@ private final class PointerModeSegments: UIVisualEffectView {
             // without stacking a second regular blur behind that control.
             let glass = UIGlassEffect(style: .clear)
             glass.isInteractive = true
+            glass.tintColor = UIColor.systemGray.withAlphaComponent(0.12)
             effect = glass
-        } else { effect = nil }
+            backgroundColor = .clear
+        } else {
+            effect = nil
+            backgroundColor = .secondarySystemBackground
+        }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var intrinsicContentSize: CGSize {
@@ -196,7 +204,7 @@ final class ChordRailController: UIViewController {
             actionsGlass.effect = nil; actionsGlass.backgroundColor = .secondarySystemBackground
             modifierContainer.effect = nil
         } else if #available(iOS 26.0, *) {
-            let effect = UIGlassEffect(style: .regular)
+            let effect = UIGlassEffect(style: .clear)
             // Apple owns press scaling, elastic dragging and spring-back.
             // Do not add a custom transform, shader or competing pan recognizer.
             effect.isInteractive = true
@@ -260,8 +268,10 @@ final class ChordRailController: UIViewController {
         let offset = keyboardY == nil ? view.bounds.height * ControlRailPosition.fraction(c.bottomOffset, maximum: 0.30) : 0
         keyboard.view.frame = CGRect(x: anchor - side / 2, y: max(area.minY, lower - side - 8 - offset), width: side, height: side)
         let statusBottom = view.convert(CGPoint(x: 0, y: c.statusBottom), from: nil).y
-        let top = max(area.minY, statusBottom) + 8 + view.bounds.height * ControlRailPosition.fraction(c.topOffset, maximum: 0.25)
         let glassOutset = side / 2
+        // Reserve the elastic material's breathing room as well as the resting
+        // button frame, so a press cannot grow into the status strip above it.
+        let top = max(area.minY, statusBottom) + glassOutset + 8 + view.bounds.height * ControlRailPosition.fraction(c.topOffset, maximum: 0.25)
         scroll.glassOutset = glassOutset
         scroll.frame = CGRect(x: anchor - width / 2 - glassOutset, y: top - glassOutset,
                               width: width + glassOutset * 2,

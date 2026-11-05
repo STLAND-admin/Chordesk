@@ -374,10 +374,18 @@ final class LANClient: ObservableObject {
         // Synthetic pixels for simulator UI checks; never captures or controls a Mac.
         if ProcessInfo.processInfo.environment["DUO_UI_FIXTURE"] == "1" {
             let fixtureSize = ProcessInfo.processInfo.environment["DUO_UI_TALL_REMOTE"] == "1"
-                ? CGSize(width: 1000, height: 1600) : CGSize(width: 1600, height: 1000)
+                ? CGSize(width: 1000, height: 1600)
+                : (ProcessInfo.processInfo.environment["DUO_UI_WIDE_REMOTE"] == "1"
+                    ? CGSize(width: 4000, height: 1000) : CGSize(width: 1600, height: 1000))
             let renderer = UIGraphicsImageRenderer(size: fixtureSize)
             image = renderer.image { context in
-                UIColor.systemBackground.setFill(); context.fill(CGRect(origin: .zero, size: fixtureSize))
+                let background: UIColor
+                switch ProcessInfo.processInfo.environment["DUO_UI_BACKGROUND"] {
+                case "white": background = .white
+                case "black": background = .black
+                default: background = .systemBackground
+                }
+                background.setFill(); context.fill(CGRect(origin: .zero, size: fixtureSize))
                 ("Duo Preview\nRemote text selection\nHigh quality desktop" as NSString).draw(at: CGPoint(x: 100, y: 140), withAttributes: [.font: UIFont.systemFont(ofSize: 48), .foregroundColor: UIColor.label])
             }.cgImage
             if ProcessInfo.processInfo.environment["DUO_UI_PAIRED_MACS"] == "1" {

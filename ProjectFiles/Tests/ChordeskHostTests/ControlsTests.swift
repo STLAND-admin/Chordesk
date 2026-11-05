@@ -67,4 +67,23 @@ final class ControlsTests: XCTestCase {
         XCTAssertEqual(column.width, 44)
     }
 
+    func testNativeColumnCannotExtendIntoHorizontalSystemBars() {
+        let usable = CGRect(x: 0, y: 62, width: 430, height: 836)
+        let native = CGRect(x: 370, y: 0, width: 44, height: 932)
+        let result = ControlRailPosition.column(in: usable, barRegion: native, margin: 16, preferredWidth: 44)
+        XCTAssertEqual(result.minY, usable.minY)
+        XCTAssertEqual(result.maxY, usable.maxY)
+        XCTAssertEqual(result.midX, native.midX)
+        XCTAssertEqual(result.width, native.width)
+    }
+
+    func testNativeColumnOutsideVisibleVerticalSpaceUsesFallback() {
+        let usable = CGRect(x: 0, y: 62, width: 430, height: 836)
+        let result = ControlRailPosition.column(in: usable,
+            barRegion: CGRect(x: 370, y: -100, width: 44, height: 20), margin: 16, preferredWidth: 44)
+        XCTAssertEqual(result.minY, usable.minY)
+        XCTAssertEqual(result.maxY, usable.maxY)
+        XCTAssertEqual(result.maxX, usable.maxX - 16)
+    }
+
 }
