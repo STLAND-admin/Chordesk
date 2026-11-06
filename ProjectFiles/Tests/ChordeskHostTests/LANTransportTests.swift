@@ -18,17 +18,68 @@ final class LANTransportTests: XCTestCase {
 
     private func keep(_ link: LANLink) { lock.lock(); links.append(link); lock.unlock() }
 
-    private func listen(port: NWEndpoint.Port = .any, pairingSecret: String? = nil, accepted: @escaping (LANLink) -> Void, ready: @escaping (NWEndpoint.Port) -> Void, failed: @escaping (NWError) -> Void = { _ in }) throws {
+    private func listen(port: NWEndpoint.Port = .any, pairingSecret: String? = nil, handshakeTimeout: Double = 12, accepted: @escaping (LANLink) -> Void, ready: @escaping (NWEndpoint.Port) -> Void, failed: @escaping (NWError) -> Void = { _ in }) throws {
         let server = try LANTransport.listener(secret: pairingSecret ?? secret, localAddress: "127.0.0.1", port: port)
         listener = server
         server.newConnectionHandler = { [weak self] connection in
-            let link = LANLink(connection); self?.keep(link); accepted(link); link.start()
+            let link = LANLink(connection); self?.keep(link); accepted(link); link.start(timeout: handshakeTimeout)
         }
         server.stateUpdateHandler = { state in
             if case .ready = state, let port = server.port { ready(port) }
             if case .failed(let error) = state { failed(error) }
         }
         server.start(queue: DispatchQueue(label: "duo-test-listener"))
+    }
+
+    func testPublicTLSHandshakeSurvivesDelayBeyondOldTwelveSecondBudget() throws {
+        // A transparent loopback proxy delays the first server TLS flight. It
+        // never decrypts packets, changes credentials, or touches the live host.
+        let echoed = expectation(description: "paired TLS survives 12.5 seconds of relay delay")
+        let queue = DispatchQueue(label: "chordesk-delayed-tls-test")
+        let connectionsLock = NSLock()
+        var rawConnections: [NWConnection] = []
+        let params = NWParameters.tcp
+        params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        let proxy = try NWListener(using: params)
+        defer {
+            proxy.cancel()
+            connectionsLock.lock(); let current = rawConnections; connectionsLock.unlock()
+            current.forEach { $0.cancel() }
+        }
+        func copy(_ source: NWConnection, _ target: NWConnection, firstDelay: Double) {
+            source.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, complete, error in
+                guard let data, !data.isEmpty, error == nil else { source.cancel(); target.cancel(); return }
+                queue.asyncAfter(deadline: .now() + firstDelay) {
+                    target.send(content: data, completion: .contentProcessed { error in
+                        if error == nil && !complete { copy(source, target, firstDelay: 0) }
+                        else { source.cancel(); target.cancel() }
+                    })
+                }
+            }
+        }
+        try listen(handshakeTimeout: RemoteConnectionPolicy.transport(.tailscale), accepted: { server in
+            server.onPacket = { kind, data in server.send(kind, data: data) }
+        }, ready: { port in
+            proxy.newConnectionHandler = { inbound in
+                let outbound = NWConnection(host: "127.0.0.1", port: port, using: .tcp)
+                connectionsLock.lock(); rawConnections += [inbound, outbound]; connectionsLock.unlock()
+                inbound.start(queue: queue); outbound.start(queue: queue)
+                copy(inbound, outbound, firstDelay: 0)
+                copy(outbound, inbound, firstDelay: 12.5)
+            }
+            proxy.stateUpdateHandler = { state in
+                guard case .ready = state, let port = proxy.port else { return }
+                let client = LANLink(NWConnection(host: "127.0.0.1", port: port, using: LANTransport.parameters(secret: self.secret)))
+                self.keep(client)
+                client.onReady = { client.send(.ping, data: Data("delayed-but-authenticated".utf8)) }
+                client.onPacket = { kind, data in
+                    XCTAssertEqual(kind, .ping); XCTAssertEqual(data, Data("delayed-but-authenticated".utf8)); echoed.fulfill()
+                }
+                client.start(timeout: RemoteConnectionPolicy.transport(.tailscale))
+            }
+            proxy.start(queue: queue)
+        })
+        wait(for: [echoed], timeout: 22)
     }
 
     func testProductionFixedPortStartsAndAuthenticates() throws {

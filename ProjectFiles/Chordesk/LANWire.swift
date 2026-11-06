@@ -14,6 +14,62 @@ enum RemoteNetwork: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Public-network discovery/TLS may take several round trips. Keep the input
+/// safety deadline separate from the time allowed for an authenticated link.
+enum RemoteConnectionPolicy {
+    static let engineReadiness: Double = 12
+    static func transport(_ network: RemoteNetwork) -> Double { network == .tailscale ? 30 : 12 }
+    static func probe(_ network: RemoteNetwork) -> Double { network == .tailscale ? 40 : 12 }
+    static func request(_ network: RemoteNetwork) -> Double { network == .tailscale ? 15 : 12 }
+    static func hostSilence(_ network: RemoteNetwork) -> Double { network == .tailscale ? 30 : 4 }
+    static func clientSilence(_ network: RemoteNetwork) -> Double { network == .tailscale ? 30 : 6 }
+    static let releaseInputsAfter: Double = 4
+}
+
+/// Advance only on authenticated progress, never on arbitrary bytes or repeated
+/// probes. A route offer receives its own finite window for the selected hello.
+struct LANAdmissionDeadline {
+    enum Phase { case transport, request, offered }
+    private(set) var phase = Phase.transport
+    private(set) var expiresAt: Double
+    let network: RemoteNetwork
+    init(network: RemoteNetwork, now: Double) {
+        self.network = network; expiresAt = now + RemoteConnectionPolicy.transport(network)
+    }
+    func expired(at now: Double) -> Bool { !now.isFinite || now >= expiresAt }
+    mutating func authenticated(at now: Double) {
+        guard !expired(at: now), phase == .transport else { return }
+        phase = .request; expiresAt = now + RemoteConnectionPolicy.request(network)
+    }
+    mutating func offered(at now: Double) {
+        guard !expired(at: now), phase == .request else { return }
+        phase = .offered; expiresAt = now + RemoteConnectionPolicy.request(network)
+    }
+    var timeoutMessage: String {
+        switch phase {
+        case .transport: "网络／TLS 配对认证超时，尚未发起显示器唤醒"
+        case .request: "TLS 已建立，但等待手机的认证请求超时"
+        case .offered: "在线探测已响应，但未及时收到正式远控请求"
+        }
+    }
+}
+
+struct RemoteSessionWatchdog {
+    enum Action { case none, releaseInputs, disconnect }
+    private var lastPacket: Double = 0
+    private var released = false
+    mutating func received(at now: Double) { lastPacket = now; released = false }
+    mutating func check(at now: Double, network: RemoteNetwork) -> Action {
+        let silence = now - lastPacket
+        guard now.isFinite, silence >= 0 else { return .disconnect }
+        if silence > RemoteConnectionPolicy.hostSilence(network) { return .disconnect }
+        if !released && silence > RemoteConnectionPolicy.releaseInputsAfter {
+            released = true; return .releaseInputs
+        }
+        return .none
+    }
+}
+
 /// An interface address is a routing hint, never proof of login or identity.
 /// Keep the existing pairing PSK mandatory even on a private tailnet.
 struct RemoteInterfaceAddress: Equatable {
@@ -486,28 +542,43 @@ final class LANPresenceProbe {
     private let nonce = UUID()
     private let hostID: String
     private let wantsSession: Bool
+    private let network: RemoteNetwork
     private let completion: (LANPresenceResponse?) -> Void
     private var link: LANLink?
     private var timeout: Task<Void, Never>?
     private(set) var finished = false
+    private(set) var failureReason: String?
+    private(set) var phase = "等待网络通道"
+    var onProgress: ((String) -> Void)?
     var cleanup: (() -> Void)? { didSet { if finished { let action = cleanup; cleanup = nil; action?() } } }
 
-    init(hostID: String, wantsSession: Bool = false, completion: @escaping (LANPresenceResponse?) -> Void) {
-        self.hostID = hostID; self.wantsSession = wantsSession; self.completion = completion
+    init(hostID: String, wantsSession: Bool = false, network: RemoteNetwork = .lan, completion: @escaping (LANPresenceResponse?) -> Void) {
+        self.hostID = hostID; self.wantsSession = wantsSession; self.network = network; self.completion = completion
     }
-    func start(timeout seconds: Double = 12) {
+    func reportProgress(_ value: String) {
+        guard !finished else { return }; phase = value; onProgress?(value)
+    }
+    func start(timeout seconds: Double? = nil) {
         guard timeout == nil, !finished else { return }
         timeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
+            guard let self else { return }
+            try? await Task.sleep(for: .seconds(seconds ?? RemoteConnectionPolicy.probe(self.network)))
             guard !Task.isCancelled else { return }
-            self?.finish(nil)
+            self.finish(nil, failure: "\(self.phase)超时；尚未建立正式远控会话")
         }
     }
     func attach(_ connection: NWConnection) {
         guard !finished, link == nil else { connection.cancel(); return }
         let wire = LANLink(connection); link = wire
         let request = LANPresenceRequest(nonce: nonce, wantsSession: wantsSession ? true : nil)
-        wire.onReady = { [weak wire] in wire?.send(.presenceRequest, value: request) }
+        reportProgress("等待网络通道与 TLS 配对认证")
+        wire.onReady = { [weak self, weak wire] in
+            Task { @MainActor in
+                guard let self, !self.finished else { return }
+                self.reportProgress("TLS 已建立，等待 Mac 在线响应")
+                wire?.send(.presenceRequest, value: request)
+            }
+        }
         wire.onPacket = { [weak self] kind, data in
             Task { @MainActor in
                 guard let self, !self.finished else { return }
@@ -515,14 +586,16 @@ final class LANPresenceProbe {
                       let reply = try? JSONDecoder().decode(LANPresenceResponse.self, from: data),
                       reply.version == 1, reply.nonce == self.nonce,
                       UUID(uuidString: reply.hostID) == UUID(uuidString: self.hostID),
-                      UUID(uuidString: self.hostID) != nil else { self.finish(nil); return }
+                      UUID(uuidString: self.hostID) != nil else { self.finish(nil, failure: "Mac 身份／在线响应验证失败"); return }
                 self.finish(reply)
             }
         }
-        wire.onClose = { [weak self] _ in Task { @MainActor in self?.finish(nil) } }
-        wire.start()
+        wire.onClose = { [weak self] reason in Task { @MainActor in
+            guard let self else { return }; self.finish(nil, failure: self.phase + "：" + reason)
+        } }
+        wire.start(timeout: RemoteConnectionPolicy.transport(network))
     }
-    func fail() { finish(nil) }
+    func fail(_ reason: String = "公网节点或连接通道尚未就绪") { finish(nil, failure: reason) }
     func cancel() { finish(nil); closeTransport() }
     /// Must be taken before cancelling the losing route attempts.
     func takeTransport() -> (link: LANLink, cleanup: (() -> Void)?)? {
@@ -534,8 +607,9 @@ final class LANPresenceProbe {
         link?.close(); link = nil
         let action = cleanup; cleanup = nil; action?()
     }
-    private func finish(_ response: LANPresenceResponse?) {
+    private func finish(_ response: LANPresenceResponse?, failure: String? = nil) {
         guard !finished else { return }
+        failureReason = failure
         finished = true; timeout?.cancel(); timeout = nil
         if !(wantsSession && response?.canJoin == true && response?.busy == false) { closeTransport() }
         completion(response)
@@ -682,7 +756,7 @@ final class LANLink {
 
     init(_ connection: NWConnection) { self.connection = connection }
 
-    func start() {
+    func start(timeout: Double = 12) {
         connection.stateUpdateHandler = { [weak self] state in
             guard let self, !self.closed else { return }
             switch state {
@@ -693,9 +767,9 @@ final class LANLink {
             }
         }
         connection.start(queue: queue)
-        queue.asyncAfter(deadline: .now() + 12) { [weak self] in
-            guard let self, self.connection.state != .ready else { return }
-            self.finish("连接超时，请检查地址、配对密钥及 Mac 服务；公网模式还需两端 Tailscale 在线且允许互访")
+        queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self, !self.closed, self.connection.state != .ready else { return }
+            self.finish("网络通道／TLS 配对认证未在 \(Int(timeout)) 秒内完成；请检查网络、配对及 Mac 服务")
         }
     }
 
@@ -730,7 +804,7 @@ final class LANLink {
         }
     }
 
-    func close() { queue.async { self.finish("连接已结束") } }
+    func close(reason: String = "连接已结束") { queue.async { self.finish(reason) } }
 
     deinit { connection.cancel() }
 

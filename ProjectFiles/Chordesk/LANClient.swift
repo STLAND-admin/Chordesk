@@ -15,6 +15,7 @@ final class LANClient: ObservableObject {
     private var routeCandidates: [UUID: LANPresenceProbe] = [:]
     private var routePending: [RemoteNetwork: Int] = [:]
     private var winningPairings: [RemoteNetwork: LANPairing] = [:]
+    private var routeFailures: [RemoteNetwork: String] = [:]
     private var routeFallbackTask: Task<Void, Never>?
     private var retainedRouteCleanup: (() -> Void)?
     private var connectionStartedAt: TimeInterval = 0
@@ -29,7 +30,7 @@ final class LANClient: ObservableObject {
         routeGeneration = UUID(); autoRetryTask?.cancel(); autoRetryTask = nil
         routeFallbackTask?.cancel(); routeFallbackTask = nil
         let probes = Array(routeCandidates.values) + Array(routeProbes.values)
-        routeCandidates.removeAll(); routeProbes.removeAll(); routePending.removeAll(); winningPairings.removeAll()
+        routeCandidates.removeAll(); routeProbes.removeAll(); routePending.removeAll(); winningPairings.removeAll(); routeFailures.removeAll()
         probes.forEach { $0.cancel() }
         autoTargetID = nil; autoRetryCount = 0
     }
@@ -71,7 +72,7 @@ final class LANClient: ObservableObject {
         routePending = Dictionary(grouping: candidates, by: \.connectionNetwork).mapValues(\.count)
         for pairing in candidates {
             let candidateID = UUID()
-            let probe = LANPresenceProbe(hostID: identity, wantsSession: true) { [weak self] reply in
+            let probe = LANPresenceProbe(hostID: identity, wantsSession: true, network: pairing.connectionNetwork) { [weak self] reply in
                 guard let self, self.routeGeneration == token else { return }
                 let network = pairing.connectionNetwork
                 self.routePending[network, default: 1] -= 1
@@ -80,11 +81,18 @@ final class LANClient: ObservableObject {
                 if reachable {
                     self.winningPairings[network] = pairing
                     self.routeProbes[network] = self.routeCandidates[candidateID]
-                } else if self.routePending[network, default: 0] > 0 { return }
+                } else {
+                    self.routeFailures[network] = reply?.busy == true ? "Mac 正被其他设备使用"
+                        : self.routeCandidates[candidateID]?.failureReason ?? "未收到经过验证的 Mac 响应"
+                    if self.routePending[network, default: 0] > 0 { return }
+                }
                 if self.routeRace.complete(network, reachable: reachable) {
                     self.useWinningRoute(saved: saved, routes: routes, retry: retry)
                 } else if self.routeRace.exhausted {
-                    self.connectionLost("自动连接未成功：检查 Mac 服务、是否被其他设备占用及 Tailscale 状态；已保留配对")
+                    let reasons = [RemoteNetwork.tailscale, .lan].compactMap { path in
+                        self.routeFailures[path].map { path.title + "：" + $0 }
+                    }.joined(separator: "；")
+                    self.connectionLost("自动连接未成功 · " + reasons)
                 } else if pairing.connectionNetwork == .lan, reply != nil, reply?.busy != true {
                     self.routeFallbackTask = Task { [weak self] in
                         try? await Task.sleep(for: .milliseconds(350))
@@ -92,6 +100,11 @@ final class LANClient: ObservableObject {
                         if self.routeRace.allowFallback() { self.useWinningRoute(saved: saved, routes: routes, retry: retry) }
                     }
                 }
+            }
+            probe.onProgress = { [weak self] phase in
+                guard let self, self.routeGeneration == token else { return }
+                self.connectionTiming = pairing.connectionNetwork.title + " · " + phase
+                self.status = "正在连接：" + self.connectionTiming
             }
             routeCandidates[candidateID] = probe; probe.start()
             Task { await self.attachProbe(probe, pairing: pairing) }
@@ -108,21 +121,30 @@ final class LANClient: ObservableObject {
     }
     private func attachProbe(_ probe: LANPresenceProbe, pairing: LANPairing) async {
         if pairing.connectionNetwork == .tailscale {
+            probe.reportProgress("正在准备内嵌 Tailscale 节点")
             if !EmbeddedTailnet.shared.ready, EmbeddedTailnet.shared.shouldResume {
                 EmbeddedTailnet.shared.resumeIfNeeded()
-                for _ in 0..<20 {
-                    guard !probe.finished else { return }
+                let deadline = ProcessInfo.processInfo.systemUptime + RemoteConnectionPolicy.engineReadiness
+                while ProcessInfo.processInfo.systemUptime < deadline {
+                    guard !Task.isCancelled, !probe.finished else { return }
                     if EmbeddedTailnet.shared.ready { break }
-                    try? await Task.sleep(for: .milliseconds(200))
+                    do { try await Task.sleep(for: .milliseconds(200)) } catch { probe.cancel(); return }
                 }
             }
             do {
                 guard !probe.finished else { return }
+                guard EmbeddedTailnet.shared.ready else {
+                    let state = EmbeddedTailnet.shared.snapshot
+                    probe.fail(state.canAuthorize ? "公网节点尚未完成授权，请检查 Chordesk 的 Tailscale 状态"
+                        : state.state == "NeedsMachineAuth" ? "此 Duo 正等待 Tailscale 设备审批"
+                        : "等待内嵌 Tailscale 节点就绪超时，尚未拨号到 Mac")
+                    return
+                }
                 let route = try await EmbeddedTailnet.shared.dial(pairing)
                 probe.cleanup = { EmbeddedTailnet.shared.closeDial(route.identifier) }
                 guard !probe.finished else { return }
                 probe.attach(NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: route.port)!, using: LANTransport.parameters(secret: pairing.secret)))
-            } catch { probe.fail() }
+            } catch { probe.fail("Tailscale 连接通道未就绪：" + error.localizedDescription) }
         } else {
             guard let host = LANAddress.connectionHosts(pairing.host).first else { probe.fail(); return }
             probe.attach(NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: pairing.port)!, using: LANTransport.parameters(secret: pairing.secret)))
@@ -203,7 +225,7 @@ final class LANClient: ObservableObject {
     private func checkPresence(_ saved: RememberedMac, pairing: LANPairing, token: UUID) async -> Bool {
         presence[saved.id] = .init(network: pairing.connectionNetwork, message: "正在检查…", checkedAt: nil)
         return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            let probe = LANPresenceProbe(hostID: saved.hostID ?? "") { [weak self] reply in
+            let probe = LANPresenceProbe(hostID: saved.hostID ?? "", network: pairing.connectionNetwork) { [weak self] reply in
                 if let self, self.presenceGeneration == token {
                     self.presenceProbes.removeValue(forKey: saved.id)
                     let message: String
@@ -506,11 +528,14 @@ final class LANClient: ObservableObject {
                 self.currentPairing = pairing
                 self.connected = true; self.connecting = false; self.lastPacket = Date()
                 self.status = "已通过\(pairing.connectionNetwork.title)建立加密连接，等待屏幕画面"
+                self.connectionTiming = "TLS 配对认证已完成，正在请求 Mac 唤醒与远控会话"
                 wire?.send(.hello, value: LANHello(name: name, videoCodecs: LANVideoCodec.allCases.map(\.rawValue), preferredVideoCodec: self.preferredVideoCodec.rawValue))
                 let heartbeat = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                     Task { @MainActor in
                         guard let self else { return }
-                        if Date().timeIntervalSince(self.lastPacket) > 6 { self.connectionLost("连接中断，控制已释放") }
+                        if Date().timeIntervalSince(self.lastPacket) > RemoteConnectionPolicy.clientSilence(pairing.connectionNetwork) {
+                            self.connectionLost("加密连接已建立，但等待 Mac 响应超时；请区分主机网络、息屏与系统睡眠")
+                        }
                         else {
                             if self.pingNonce == nil || ProcessInfo.processInfo.systemUptime - self.pingSentAt > 6 {
                                 let nonce = Data(UUID().uuidString.utf8)
@@ -578,6 +603,7 @@ final class LANClient: ObservableObject {
                     guard let state = try? JSONDecoder().decode(LANStatus.self, from: data), state.version == 1 else {
                         self.disconnect(); self.status = "主机协议版本不兼容"; return
                     }
+                    if !self.firstFrameTimed { self.connectionTiming = "Mac 已响应远控请求，等待新画面" }
                     if self.captureRevision != state.captureRevision { self.image = nil }
                     self.captureRevision = state.captureRevision
                     self.selectedDisplayID = state.selectedDisplayID
@@ -645,7 +671,7 @@ final class LANClient: ObservableObject {
                     ? reason + "。请确认两端 Tailscale 在线且 Mac 入口开启。" : reason)
             }
         }
-        if alreadyReady { wire.onReady?() } else { wire.start() }
+        if alreadyReady { wire.onReady?() } else { wire.start(timeout: RemoteConnectionPolicy.transport(pairing.connectionNetwork)) }
     }
 
     func touchpad(_ event: TouchpadEvent, origin: String = "inner") {

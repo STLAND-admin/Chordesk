@@ -1,8 +1,16 @@
 # v2 · Remote engine evaluation / 远控引擎评估
 
-2026-11-05 · Status: connection/recovery candidate implemented locally; RDP/VNC engines not yet integrated or shipped.
+2026-11-06 · Status: connection/recovery candidates deployed locally; RDP/VNC engines not yet integrated or shipped.
 
-## 本地连接与屏保修复候选 · 1.33 /47、Mac 0.29.0 /44
+## 当前本地候选 · 1.33.1 /48、Mac 0.29.1 /45
+
+11 月 6 日，用户确认失败为“Duo 宿舍 Wi-Fi 下始终连接超时、无远程画面”，Mac 一直保持校园网，换成 Duo 蜂窝后表现不同。Mac 实测 UDP／IPv6 可达，因此不能简单断言校园网屏蔽 UDP；DERP 路径与显示器唤醒要分别诊断。
+
+修正旧固定 12 秒候选清理与公网短超时：TLS 成功、正式 route offer 分别获得新的有限窗口；公网通道／TLS 为 30 秒、认证后等待请求／offer 各 15 秒，手机整个公网探测最多 40 秒。内嵌节点就绪最多等 12 秒，延长等待不重新登录、不跳过认证。公网通信停顿 4 秒释放输入与队列，30 秒才关闭会话；LAN 原 4／6 秒边界保持。手机显示具体停留阶段及验证错误。
+
+真实加密 TLS 测试在本机转发链路延迟 12.5 秒后仍通过；全量 Swift 214 项中 213 通过、1 项端口占用跳过，Go 8 项含竞态与双端构建通过。两端已严格签名核验、覆盖安装和启动；用户暂不方便现场测试，**未将宿舍 Wi-Fi／息屏问题标记为已验收**。没有修改网络、防火墙、锁屏或电源设置，也未公开发布候选。
+
+## 11 月 5 日连接与屏保修复候选 · 1.33 /47、Mac 0.29.0 /44
 
 - 保留现有 H.264／HEVC 引擎及交互；VNC 的效率优势仍待同场景对照，未将其假定为已验证结论。
 - 内嵌 tsnet 在正常拨号同时进行有界 Disco 探测，尝试促进 UDP 直连；不等待穿透结果才连接，不删除 DERP 回退，不新增 Peer Relay、服务器、系统 VPN 或路由／防火墙设置。网络不允许穿透时仍可能中继，不承诺强制直连。

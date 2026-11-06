@@ -187,7 +187,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
     private var generation = UUID()
     private var pickerRegistered = false
     private var displayID: CGDirectDisplayID?
-    private var lastPing = Date()
+    private var sessionWatchdog = RemoteSessionWatchdog()
     var automaticPairing: LANPairing? {
         guard var invitation = pairing ?? tailscalePairings.first else { return nil }
         invitation.invitationHostID = hostIdentity
@@ -1025,12 +1025,30 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             }
         }
         var admission = LANAdmission()
+        var deadline = LANAdmissionDeadline(network: network, now: ProcessInfo.processInfo.systemUptime)
+        candidate.onReady = { [weak self, weak candidate] in
+            Task { @MainActor in
+                guard let self, let candidate, self.generation == token, self.candidates[id] === candidate else { return }
+                let now = ProcessInfo.processInfo.systemUptime
+                guard !deadline.expired(at: now) else { candidate.close(reason: deadline.timeoutMessage); return }
+                deadline.authenticated(at: now)
+            }
+        }
         candidate.onPacket = { [weak self, weak candidate] kind, data in
             Task { @MainActor in
                 guard let self, let candidate, self.generation == token else { return }
                 guard network == .lan || (self.allowsTailscale && self.tailnet.ready && self.tailnetListener != nil) else { candidate.close(); return }
+                if self.candidates[id] === candidate {
+                    let now = ProcessInfo.processInfo.systemUptime
+                    guard !deadline.expired(at: now) else { candidate.close(reason: deadline.timeoutMessage); return }
+                    // TLS has completed before an application packet can arrive.
+                    deadline.authenticated(at: now)
+                }
                 switch admission.receive(kind, data: data, busy: self.link != nil) {
                 case .probe(let request):
+                    if request.wantsSession == true && self.link == nil {
+                        deadline.offered(at: ProcessInfo.processInfo.systemUptime)
+                    }
                     let session = CGSessionCopyCurrentDictionary() as? [String: Any]
                     candidate.send(.presenceResponse, value: LANPresenceResponse(nonce: request.nonce,
                         hostID: self.hostIdentity, busy: self.link != nil,
@@ -1044,7 +1062,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     self.candidates.removeValue(forKey: id)
                     self.candidateNetworks.removeValue(forKey: id)
                     self.peerNetwork = network
-                    self.connected = true; self.lastPing = Date(); self.configuredPeer = nil
+                    self.connected = true; self.sessionWatchdog.received(at: ProcessInfo.processInfo.systemUptime); self.configuredPeer = nil
                     self.traffic = VideoTrafficMeter(); self.videoMbps = 0; self.videoFPS = 0
                     self.status = self.autoConfigurePairing ? "手机已安全配对 · 正在准备自动控制与显示设置" : "手机已安全配对 · 仅查看"
                     if let frame = self.latestFrame { candidate.send(.frame, data: frame, droppable: true) }
@@ -1052,7 +1070,7 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                     guard self.link === candidate else { candidate.close(); return }
                 case .reject: candidate.close(); return
                 }
-                self.lastPing = Date()
+                self.sessionWatchdog.received(at: ProcessInfo.processInfo.systemUptime)
                 switch kind {
                 case .hello:
                     if let hello = try? JSONDecoder().decode(LANHello.self, from: data) {
@@ -1160,13 +1178,16 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
                 }
             }
         }
-        candidate.start()
-        // Includes TLS and first application packet. Probes remain candidates;
-        // closing them never restores a desktop or changes the real peer.
+        candidate.start(timeout: RemoteConnectionPolicy.transport(network))
+        // Separate bounded TLS, request, and route-offer windows. Read-only
+        // queries still cannot wake, capture, claim control, or extend forever.
         Task { @MainActor [weak self, weak candidate] in
-            try? await Task.sleep(for: .seconds(12))
-            guard let self, let candidate, self.generation == token, self.candidates[id] === candidate else { return }
-            candidate.close()
+            while !Task.isCancelled {
+                guard let self, let candidate, self.generation == token, self.candidates[id] === candidate else { return }
+                let remaining = deadline.expiresAt - ProcessInfo.processInfo.systemUptime
+                if remaining <= 0 { candidate.close(reason: deadline.timeoutMessage); return }
+                do { try await Task.sleep(for: .seconds(min(1, remaining))) } catch { return }
+            }
         }
     }
 
@@ -1207,7 +1228,17 @@ final class LANHost: NSObject, ObservableObject, SCContentSharingPickerObserver 
             videoMbps = sample.mbps; videoFPS = sample.fps
         }
         refreshInputPermissions()
-        if connected && Date().timeIntervalSince(lastPing) > 4 { input.release(); link?.close() }
+        if connected {
+            switch sessionWatchdog.check(at: ProcessInfo.processInfo.systemUptime, network: peerNetwork) {
+            case .none: break
+            case .releaseInputs:
+                // A relayed link can recover without a second login. Stuck
+                // buttons/drag and queued input still release after four seconds.
+                releaseQueuedInput()
+            case .disconnect:
+                releaseQueuedInput(); link?.close(reason: "等待手机通信超时，远程输入已释放")
+            }
+        }
         if connected, let displayID, !scaleBusy {
             let online = CGDisplayIsOnline(displayID) != 0
             let change = displayPresence.update(online: online)

@@ -152,11 +152,15 @@ final class PresenceTests: XCTestCase {
         let probe = LANPresenceProbe(hostID: UUID().uuidString) { reply in
             XCTAssertNil(reply); callbacks += 1; done.fulfill()
         }
+        probe.reportProgress("TLS 已建立，等待 Mac 在线响应")
         probe.start(timeout: 0.03)
         await fulfillment(of: [done], timeout: 1)
+        XCTAssertTrue(probe.failureReason?.contains("等待 Mac 在线响应") == true)
+        let failure = probe.failureReason
         probe.cleanup = { cleaned += 1 }
         probe.cancel(); probe.fail()
         XCTAssertTrue(probe.finished); XCTAssertEqual(callbacks, 1); XCTAssertEqual(cleaned, 1)
+        XCTAssertEqual(probe.failureReason, failure, "Cancellation must not replace the actionable timeout stage")
     }
     @MainActor
     func testCancellationReleasesRouteWithoutWaitingForHandshake() {

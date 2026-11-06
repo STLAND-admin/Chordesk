@@ -97,6 +97,9 @@ type engine struct {
 var apiMu sync.Mutex
 var active *engine
 var nextDial int
+
+const tailnetDialTimeout = 30 * time.Second
+
 var diagnosticURL = regexp.MustCompile(`https?://[^\s<>]+`)
 
 func safeHealth(values []string) []string {
@@ -322,7 +325,7 @@ func serveBridge(ln net.Listener, once bool, dial func(context.Context) (net.Con
 			}
 			go func() {
 				defer func() { b.untrack(in); <-slots }()
-				dialCtx, finish := context.WithTimeout(ctx, 12*time.Second)
+				dialCtx, finish := context.WithTimeout(ctx, tailnetDialTimeout)
 				out, err := dial(dialCtx)
 				finish()
 				if err != nil {
@@ -422,7 +425,7 @@ func CRDial(host *C.char, port C.int) *C.char {
 	if err != nil {
 		return failure(err)
 	}
-	ln.SetDeadline(time.Now().Add(15 * time.Second))
+	ln.SetDeadline(time.Now().Add(tailnetDialTimeout + 5*time.Second))
 	server := active.server
 	// Prime UDP discovery concurrently with the ordinary TCP connection. Never
 	// wait for a direct route or disable DERP: difficult networks retain fallback.
