@@ -1,10 +1,16 @@
 # Chordesk 分发准备
 
-## 当前状态 · 2026-11-03
+## 当前正式下载 · 2026-11-12
+
+- **iOS 1.34 已正式上架**：Apple 公开商品接口已核实中国大陆、香港、美国、日本均提供 1.34。统一下载入口：[App Store](https://apps.apple.com/app/id6828753865)，由 Apple 按用户商店地区展示；无需 TestFlight。
+- 配套 Mac 继续从 [0.28.0 /43 GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.28.0) 下载已签名公证包。本次仅更新公开下载入口与说明，不发布新的应用构建。
+- 下列旧日期仅为历史状态，当前下载以本节和 README 为准。
+
+## 历史状态 · 2026-11-03
 
 - **iOS 1.32 /44 已提交外部 Beta 审核**：2026-11-03 实查后台“正在等待审核”，详情存在“从审核中移除”。原内部验证／Duo／iPhone三组均已关联，提交时“自动通知测试员”已勾选，获批后由 Apple 自动分发／通知；尚不能称已外部可安装或通知已送达。中英测试说明与 Mac0.28.0 审核指引已保存，标准非专有加密分类／不在法国发行按原批准申报。发行归档与IPA严格校验通过，Duo真机确认三组玻璃均能拉伸且外框正常。43虽已上传，但在送审前被44取代，不作为本轮外部候选。正式App Store未提交。
 
-- **公开 TestFlight：iOS 1.31 /40** 已通过并于 2026-11-03 启用外部测试、通知现有测试员，后台已核实“正在测试”。[原邀请链接](https://testflight.apple.com/join/WZDXKgvg)不变；请在 TestFlight 安装／更新并核对版本。
+- **公开 TestFlight：iOS 1.31 /40** 已通过并于 2026-11-03 启用外部测试、通知现有测试员，后台已核实“正在测试”。当时使用公开邀请；现请从 [App Store 正式版](https://apps.apple.com/app/id6828753865) 安装／更新。
 - **公开 Mac：0.28.0 /43**，Apple Silicon、macOS 15.2+，[GitHub Release](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.28.0)。App 与最终 DMG 均已 Developer ID 签名、Apple 公证并装订票据，Gatekeeper 接受；匿名下载摘要与本地一致。普通更新退出后替换同一位置的 App，不要先完整卸载。
 - **iOS 1.31 /40 分发已启用**；本次先核实“已批准”，按用户授权点击“通知测试员”，随后核实“正在测试”且通知按钮消失。原内部验证／Duo／iPhone三组保持关联；未新增测试员或修改公开链接、人数上限。中英测试说明及审核备注保留Mac0.27.1已公证下载入口。1.31后的工程内部更名没有重复上传；此后新增原生侧栏和系统放大镜的1.32候选，见上项，不能把旧“无iOS功能差异”结论套用到1.32。独立画质与即时背面触发新默认需 iOS 1.31。历史验证见 [开发与验证历史](DEVELOPMENT-HISTORY.md)。
 - 正式 App Store 尚未提交。此前草稿保留，用户手动最终提交；仅美港发行的建议不代表已更改后台供应地区。大陆备案接入方式仍待主管部门／接入商确认。
@@ -16,7 +22,7 @@ TestFlight 不是正式 App Store 的必经步骤。[Apple 提交流程](https:/
 
 Mac：打开 DMG → 将 Chordesk 拖进 Applications → 从应用程序打开 → 允许屏幕录制并按提示重开 → 允许控制 Mac 并按提示重开 → 两项生效后开启服务。
 
-iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本。源码版本从 Xcode 用自己的 Team 签名；覆盖安装保持原 Bundle ID 和 Team。公网在两端 App 内登录用户自己的同一 Tailscale 私人网络。测试清单见 [BETA-TESTING.md](../user/BETA-TESTING.md)，安装细节见 [MAC-PEER-TEST.txt](../user/MAC-PEER-TEST.txt)。
+iPhone：打开 [App Store](https://apps.apple.com/app/id6828753865) → 安装／更新 Chordesk 并核对版本，无需 TestFlight。源码版本从 Xcode 用自己的 Team 签名；覆盖安装保持原 Bundle ID 和 Team。公网在两端 App 内登录用户自己的同一 Tailscale 私人网络。测试清单见 [BETA-TESTING.md](../user/BETA-TESTING.md)，安装细节见 [MAC-PEER-TEST.txt](../user/MAC-PEER-TEST.txt)。
 
 ## 当前验证范围与后续机型
 
@@ -30,7 +36,7 @@ iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本�
 
 正式公开发行前，继续补足可下载机型的适配／验证。不能以“主要为 Duo 设计”替代[Apple 对可下载设备的兼容要求](https://developer.apple.com/help/app-review/before-submitting-for-review/test-compatible-devices)。当前 IPA 声明 iPhone／iPad family；本轮测试范围不等于已验证全部可下载设备。
 
-其他 Duo／iPhone 用户属于外部测试者，首个外部 TestFlight 构建需要 Beta App Review，通过后才能向这些测试者分发；不必先上架 App Store。少量指定设备也可用 [Ad Hoc](https://developer.apple.com/help/account/provisioning-profiles/create-an-ad-hoc-provisioning-profile/) 分发，但需预先登记设备并重新签名，不是可任意安装的 IPA。现有公开试用采用 TestFlight，不授予测试者 App Store Connect 管理权限；新版发行方向见上文。
+其他 Duo／iPhone 用户属于外部测试者，首个外部 TestFlight 构建需要 Beta App Review，通过后才能向这些测试者分发；不必先上架 App Store。少量指定设备也可用 [Ad Hoc](https://developer.apple.com/help/account/provisioning-profiles/create-an-ad-hoc-provisioning-profile/) 分发，但需预先登记设备并重新签名，不是可任意安装的 IPA。正式下载使用 App Store；后续 Beta 如通过 TestFlight 分发，仍须遵循相应审核规则，不授予测试者 App Store Connect 管理权限。
 
 ## iOS → App Store Connect
 
@@ -46,7 +52,7 @@ iPhone：安装 TestFlight → 打开邀请 → 安装／更新并核对版本�
 
 在干净 Mac 测试首次启动、屏幕录制／辅助功能申请、配对、断线释放和卸载流程。不要把本机开发证书、钥匙串、配对密钥或已有系统授权打进安装包。正式签名／ID 迁移需计划重新授权，不许悄悄退回 ad hoc。
 
-GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码和 Mac 0.28.0 已签名公证测试包公开；正式 App Store 发行及自动发行流水线仍未完成。
+GitHub Releases 可承载 Mac 包和版本说明；不能替代 iOS TestFlight／App Store 签名分发。当前源码与 Mac 0.28.0 已签名公证包公开，iOS 正式版已在 App Store 上架。
 
 ## 公网与扩容
 

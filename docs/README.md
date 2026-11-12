@@ -14,7 +14,7 @@ Install Chordesk, connect your devices and learn the controls. / 安装、连接
 | [Operation guide / 操作指南](user/OPERATION-GUIDE.md) | Touch, trackpad, rear chords, keyboard and quality / 直接触控、触控板、背面和弦、键盘与画质 |
 | [Tailscale connection / 公网连接](user/TAILSCALE.md) | LAN and cross-network setup, account binding and limits / 局域网、公网绑定与连接边界 |
 | [Mac maintenance / Mac 维护与卸载](user/MAC-MAINTENANCE.md) | Updates, Keychain recovery, permissions and removal / 升级、钥匙串修复、权限与卸载 |
-| [Beta testing / 测试与反馈](user/BETA-TESTING.md) | TestFlight, downloads and reporting problems / 测试入口、下载与反馈 |
+| [Downloads and feedback / 下载与反馈](user/BETA-TESTING.md) | App Store, Mac downloads and reporting problems / 正式下载、Mac 安装与反馈 |
 | [What's new / 更新记录](user/CHANGELOG.md) · [中文](user/CHANGELOG.zh-CN.md) | Changes since the first TestFlight beta / 首个 TestFlight 版本以来的更新 |
 | [Privacy policy / 隐私政策](user/PRIVACY-POLICY-1.30.md) | Adopted policy; also available on the website and in the apps / 已采用的政策，官网与 App 内亦可查看 |
 

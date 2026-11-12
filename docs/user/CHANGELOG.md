@@ -2,7 +2,11 @@
 
 [简体中文](CHANGELOG.zh-CN.md) · [Operation guide](OPERATION-GUIDE.md) · [First-run checklist](../developer/FIRST-RUN-CHECKLIST.md)
 
-Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. Mac **0.28.0 /43** is available, signed and notarized. iOS **1.31 /40** passed Beta App Review and was enabled for the existing groups on November 3, 2026, with testers notified. The original public invitation is unchanged. No formal App Store submission has been made.
+Baseline: the first public TestFlight **iOS 1.22.1 /28**, with **Mac 0.18.1 /26**. The dated entries below preserve their status at the time.
+
+## Current public download · November 12, 2026
+
+iOS **1.34** is available [on the App Store](https://apps.apple.com/app/id6828753865) in China mainland, Hong Kong, the United States and Japan. TestFlight is not required. The public Mac companion is **0.28.0 /43**, signed and notarized; see [installation and release details](../developer/DISTRIBUTION.md).
 
 ## iOS 1.32 /44 · Awaiting Beta App Review
 

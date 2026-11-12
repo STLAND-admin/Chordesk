@@ -14,7 +14,7 @@ An iPhone remote desktop client and a Mac host. Use your thumbs for touch and ty
 
 | Platform | Public release |
 | --- | --- |
-| iPhone / iPhone Duo | [TestFlight public beta](https://testflight.apple.com/join/WZDXKgvg) |
+| iPhone / iPhone Duo | [Download on the App Store](https://apps.apple.com/app/id6828753865) |
 | Apple Silicon Mac · macOS 15.2+ | [Mac 0.28.0 · signed & notarized](https://github.com/STLAND-admin/Chordesk/releases/tag/mac-v0.28.0) |
 
 Open the Mac DMG and drag Chordesk into Applications. The app and installer are **Developer ID signed and Apple notarized**. Approve screen recording and Mac control separately; after each permission, reopen the app if macOS asks. Start service once both are effective. For updates, quit and replace the app at the same location. [Installation details](docs/user/MAC-PEER-TEST.txt).
@@ -35,9 +35,9 @@ Spaces require optional System Events permission and enabled macOS Control + arr
 
 ## Latest update
 
-**Mac 0.28.0 (43) is released; iOS 1.31 (40) is now available through TestFlight.** On November 3, 2026, Beta App Review approval was verified, testing was enabled and existing testers were notified. Mac 0.28 follows local IP changes without restarting the service, preserves pairing and Tailscale sessions, and withdraws stale endpoints. Stable signing/notarization and the Help-menu uninstaller remain. iOS 1.31 adds immediate rear-contact defaults, independent 480p–2160p / 15–120 fps / target bitrate controls, HEVC defaults with fallback and bounded connection recommendations. Screen capture runs only while an authenticated viewer is connected. Use the same invitation link to install or update to 1.31. Existing 1.30 clients can connect to the new Mac host.
+**iOS 1.34 is available on the App Store**, including China mainland, Hong Kong, the United States and Japan. Install or update directly from the store; TestFlight is not required. Mac 0.28.0 remains the signed and notarized companion release. Screen capture runs only while an authenticated viewer is connected. [Release and installation details](docs/developer/DISTRIBUTION.md).
 
-Audio is disabled. Closed-lid/system-sleep wake is not guaranteed. IPv4/IPv6 pairing is supported; IPv6-only/NAT64 hardware, ordinary-iPhone hardware and broader networks still need testing. Actual FPS/bitrate depends on hardware and content; HUD RTT is not end-to-end interaction latency. Duo rear input uses Apple's camera accessory API, with camera frames discarded. App Store review remains separate from TestFlight.
+Audio is disabled. Closed-lid/system-sleep wake is not guaranteed. IPv4/IPv6 pairing is supported; IPv6-only/NAT64 hardware, ordinary-iPhone hardware and broader networks still need testing. Actual FPS/bitrate depends on hardware and content; HUD RTT is not end-to-end interaction latency. Duo rear input uses Apple's camera accessory API, with camera frames discarded.
 
 ## Develop and contribute
 

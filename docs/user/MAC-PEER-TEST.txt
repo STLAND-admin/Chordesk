@@ -1,6 +1,6 @@
 Chordesk · Mac 主机 — 同学试用版
-本安装包：Mac 0.27.1 / build 42；建议搭配 iOS 1.31 / build 40。
-iOS 1.30 仍可使用基础远控；独立画质控制需要 iOS 1.31，实际可安装版本以 TestFlight 为准。
+当前公开安装包：Mac 0.28.0 / build 43；iOS 正式版从 App Store 安装。
+iPhone / Duo 下载：https://apps.apple.com/app/id6828753865（无需 TestFlight，实际版本以商店为准）。
 
 这是什么
 这是 Apple Silicon（M1／M2／M3 等 M 系列）Mac 的已签名公证测试版。

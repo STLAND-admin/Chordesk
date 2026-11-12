@@ -2,7 +2,11 @@
 
 [English](CHANGELOG.md) · [操作指南](OPERATION-GUIDE.md) · [首次安装检查](../developer/FIRST-RUN-CHECKLIST.md)
 
-范围：首个公开 TestFlight **iOS 1.22.1 /28** 之后的增量。Mac **0.28.0 /43** 已签名公证发布；iOS **1.31 /40** 已通过 Beta 审核，并于 2026-11-03 对原测试组启用、通知测试员，公开邀请不变。正式 App Store 尚未提交。
+范围：首个公开 TestFlight **iOS 1.22.1 /28** 之后的增量。下文按日期保留各版当时的发行与验证状态。
+
+## 当前正式下载 · 2026-11-12
+
+iOS **1.34** 已在中国大陆、香港、美国和日本 [App Store 正式上架](https://apps.apple.com/app/id6828753865)，无需 TestFlight。配套 Mac 公开版为已签名公证的 **0.28.0 /43**；见[安装与发行说明](../developer/DISTRIBUTION.md)。
 
 ## iOS 1.32 /44 · 等待 Beta 审核
 

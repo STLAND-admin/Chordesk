@@ -2,6 +2,11 @@
 
 这里集中保存历史验证、发行和早期原型记录。各节仅代表其当时状态；当前安装、操作与限制以 README、操作指南及本文件最上方最新记录为准。已删除的旧源文件可从 Git 历史恢复。
 
+## 2026-11-12 · 正式下载入口更新
+
+- Apple 公开商品接口确认中国大陆、香港、美国和日本均为 iOS 1.34；README 和安装／反馈／分发文档统一使用 [App Store 正式下载](https://apps.apple.com/app/id6828753865)，不再把旧 TestFlight 邀请作为当前安装入口。
+- 历史 Beta 状态保留，邀请只保留为历史标识。本次不改应用代码、Mac 安装包、商店供应范围、隐私政策或许可证。
+
 ## 2026-11-03 · iOS 1.32 /44 外部 Beta 审核提交
 
 - 用户确认菜单／模式／键盘三组原生玻璃均可拉伸且外框正常后，沿用其 TestFlight 及通知测试员授权。以源码`13108a5`独立归档、导出并上传44；严格签名、App Store profile、稳定bundle ID、1.32 /44、隐私清单及停用麦克风检查通过。上传日志明确Upload succeeded，Apple完成处理后才继续后台配置；不重复上传或选择已被取代的43。
@@ -1339,7 +1344,7 @@ macOS SDK 明确：PreventUserIdleSystemSleep 对 Dark Wake 无效。新增公�
 
 - 用户报告同学仍安装旧版。通过 Edge 的 App Store Connect 真实界面核对：1.30 /39 为“已批准”，仍有“通知测试员”按钮；1.22.1 /28 为“正在测试”。因此此前上传和送审并未自动开始新版外部测试。
 - 用户明确回复“启用新版并通知测试员”后，点击 1.30 /39 的“通知测试员”。重新进入构建列表后，后台已显示 **正在测试**，关联 `Chordesk 内部验证`、`Duo 手势体验`、`iPhone 兼容性测试` 原三个群组。
-- 官网使用的公开链接仍为 https://testflight.apple.com/join/WZDXKgvg （iPhone 兼容性测试）；Duo 手势体验的链接仍为 https://testflight.apple.com/join/f2kMA29t 。没有更换链接、扩大人数上限、添加测试员或停止旧版测试。
+- 官网使用的公开链接仍为 `WZDXKgvg`（历史 TestFlight 邀请） （iPhone 兼容性测试）；Duo 手势体验的链接仍为 `f2kMA29t`（历史 TestFlight 邀请） 。没有更换链接、扩大人数上限、添加测试员或停止旧版测试。
 - 本次仅确认 Apple 后台已启用新版并提交通知请求；没有代替测试者在 iPhone 上下载或确认通知实际送达。已安装用户应在 TestFlight 中检查更新并核对 1.30 (39)。正式 App Store 审核未提交，Mac Developer ID /公证仍暂停。
 - 下方“正在等待审核”保留为早先提交记录，由本节最新状态覆盖。
 
@@ -1576,7 +1581,7 @@ swift test --scratch-path /private/tmp/ChordeskTests
 
 ## 2026-10-31：Beta 已批准，公开邀请已可用
 
-- App Store Connect 核对 **1.22.1 / build 28 已批准**。用户提供并要求发布的邀请为 [加入 Chordesk TestFlight](https://testflight.apple.com/join/WZDXKgvg)，对应 `iPhone 兼容性测试` 外部组；本次查看时公开链接已启用、上限 100、测试员 0，没有另加邮箱或修改人数上限。
+- App Store Connect 核对 **1.22.1 / build 28 已批准**。用户提供并要求发布的邀请为 历史 TestFlight 邀请 `WZDXKgvg`，对应 `iPhone 兼容性测试` 外部组；本次查看时公开链接已启用、上限 100、测试员 0，没有另加邮箱或修改人数上限。
 - 初次访问公开页仍提示不接受新测试者；在该组已批准构建处执行“通知测试员”启用后，重新读取公开页已出现 **View Chordesk Beta / View in TestFlight** 与 App 测试说明。核验的是公开邀请入口，不是新设备安装或硬件测试。
 - 官网中英文首页、双语 README 与试用说明同步此入口。测试者安装 TestFlight 后打开链接；需使用配套 Mac 主机、同一可互访局域网。设备条件、剩余名额及构建有效期以 Apple 页面为准。
 - 普通 iPhone 使用屏幕按钮，Duo 可使用背面和弦；公开 Beta 不等于全部机型已验证，也不是正式 App Store 上架或获得通用背屏 API。
