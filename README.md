@@ -21,6 +21,8 @@ Open the Mac DMG and drag Chordesk into Applications. The app and installer are 
 
 Scan the Mac QR code once, then reconnect from your paired computers. LAN needs no account. For cross-network use, sign in to the same personal Tailscale network inside both Chordesk apps; no separate Tailscale app is required. Multiple Macs can be remembered. [Network setup and limits](docs/user/TAILSCALE.md).
 
+Recommended first-time setup: iPhone keyboard, automatic keyboard presentation, fit the desktop above the keyboard, H.265, 1080p / 30 fps and a 1.5–2 Mbps target bitrate. Reduce quality on weaker connections. [Settings and network presets](docs/user/OPERATION-GUIDE.md#recommended-settings).
+
 ## Controls
 
 | Gesture | Mac action |

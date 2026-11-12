@@ -21,6 +21,8 @@ iPhone 远程桌面客户端与 Mac 主机。拇指负责正面触控和输入�
 
 手机首次扫码绑定，以后点已配对电脑重连。局域网免账号；跨网时在两端 Chordesk 内登录同一 Tailscale 私人网络，无需另装 Tailscale。可记忆多台 Mac。[网络设置与边界](docs/user/TAILSCALE.md)。
 
+首次使用建议：iPhone 输入法、自动唤起、键盘弹出时适配远程画面；画质从 H.265、1080p／30 fps、目标码率 1.5–2 Mbps 起步，弱网下调。[推荐设置与网络档位](docs/user/OPERATION-GUIDE.md#recommended-settings)。
+
 ## 操作速查
 
 | 手势 | Mac 操作 |
